@@ -56,7 +56,7 @@ Berikut adalah perintah wajib yang akan sering kita pakai selama pengerjaan proy
 ### 1. Pertama Kali Clone (Mengambil Repo)
 Jalankan ini sekali saja saat baru diundang ke repositori:
 ```bash
-git clone https://github.com/USERNAME/os-scape.git
+git clone https://github.com/Raivan777/os-scape.git
 cd os-scape
 npm install
 ```
