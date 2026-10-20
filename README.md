@@ -36,7 +36,7 @@ Karena proyek ini dibangun menggunakan **Next.js**, pastikan komputermu sudah te
 ## 👥 Anggota Tim INFINITY
 | No | Nama | NPM | Peran | Kontribusi |
 |----|------|-----|-------|------------|
-| 1  |      |     |       |            |
+| 1  |   Rama   |  088   |  Gatau     |       Belum ada     |
 | 2  |      |     |       |            |
 | 3  |      |     |       |            |
 | 4  |      |     |       |            |
