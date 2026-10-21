@@ -1,4 +1,4 @@
-// @ts-expect-error CSS imports are handled by the Next.js bundler.
+// @ts-ignore CSS is loaded by the framework bundler; it has no TypeScript module declaration.
 import "./globals.css";
 
 export default function RootLayout({
@@ -8,8 +8,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      {/* Tailwind’s `bg-gray-100` gives a light gray background, `p-4` adds padding */}
-      <body className="bg-gray-100 p-4 text-gray-900">{children}</body>
+      <body className="bg-black text-gray-100 min-h-screen antialiased" data-theme="dark">
+        {children}
+      </body>
     </html>
   );
 }

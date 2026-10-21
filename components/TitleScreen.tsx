@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Chakra_Petch, IBM_Plex_Mono } from "next/font/google";
 
-// Font dimuat dari komponen ini (bukan layout.tsx) supaya tidak menyentuh file global.
+// Font dimuat dari komponen ini supaya tidak menyentuh file global.
 const display = Chakra_Petch({ subsets: ["latin"], weight: ["600", "700"] });
 const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"] });
 
@@ -32,6 +32,17 @@ const TONE_CLASS: Record<Tone, string> = {
 
 const LINE_DELAY_MS = 420;
 const LAUNCH_DELAY_MS = 800;
+
+// Daftar partikel bintang luar angkasa statis & berkelap-kelip
+const STARS = Array.from({ length: 60 }, (_, i) => ({
+  id: i,
+  top: `${((i * 17.7) % 96) + 2}%`,
+  left: `${((i * 23.3 + 7) % 96) + 2}%`,
+  size: (i % 3) + 1,
+  duration: 2.2 + (i % 4) * 0.9,
+  delay: (i % 6) * 0.5,
+  opacity: 0.25 + (i % 4) * 0.2,
+}));
 
 type Props = {
   /** Tujuan setelah tombol Start ditekan. Ganti ke rute cutscene bila sudah ada. */
@@ -91,26 +102,54 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
 
   return (
     <main
-      className={`${mono.className} relative min-h-screen overflow-hidden bg-[#140b2e] text-[#e9e4ff]`}
+      className={`${mono.className} relative min-h-screen overflow-hidden bg-black text-[#e9e4ff] select-none`}
       data-launching={launching}
       onClick={phase === "boot" ? skipBoot : undefined}
     >
-      <div className="mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-6 py-12 md:grid-cols-[1.1fr_0.9fr]">
-        {/* Kolom kiri: judul, boot log, tombol */}
+      {/* Background Taburan Partikel Bintang Luar Angkasa */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        {/* Layer 1: Starfield bergerak halus */}
+        <div className="absolute inset-0 starfield opacity-60" />
+        
+        {/* Layer 2: Bintang putih individual yang berkelap-kelip */}
+        {STARS.map((star) => (
+          <span
+            key={star.id}
+            className="twinkle-star absolute rounded-full bg-white shadow-[0_0_5px_rgba(255,255,255,0.9)]"
+            style={{
+              top: star.top,
+              left: star.left,
+              width: `${star.size}px`,
+              height: `${star.size}px`,
+              opacity: star.opacity,
+              animationDuration: `${star.duration}s`,
+              animationDelay: `${star.delay}s`,
+            }}
+          />
+        ))}
+
+        {/* Akses nebula kosmik halus untuk memberikan kedalaman angkasa */}
+        <div className="absolute -top-32 left-1/4 h-96 w-96 rounded-full bg-purple-900/20 blur-[120px]" />
+        <div className="absolute -bottom-32 right-1/4 h-96 w-96 rounded-full bg-cyan-900/15 blur-[120px]" />
+      </div>
+
+      <div className="relative z-10 mx-auto grid min-h-screen max-w-6xl items-center gap-10 px-6 py-12 md:grid-cols-[1.1fr_0.9fr]">
+        {/* Kolom kiri: judul, terminal log kaca, tombol */}
         <section className="order-2 md:order-1">
           <h1
-            className={`${display.className} text-6xl font-bold leading-none tracking-tight md:text-8xl`}
+            className={`${display.className} text-6xl font-bold leading-none tracking-tight text-white drop-shadow-[0_0_30px_rgba(185,174,240,0.3)] md:text-8xl`}
           >
             OS-Scape
           </h1>
-          <p className={`${display.className} mt-3 text-xl text-[#ffb347] md:text-2xl`}>
+          <p className={`${display.className} mt-3 text-xl text-[#ffb347] drop-shadow-[0_0_15px_rgba(255,179,71,0.35)] md:text-2xl`}>
             The Alien Abduction
           </p>
 
+          {/* Kotak Log Boot Sistem dengan Efek Kaca Futuristik (Glass Terminal) */}
           <div
             role="log"
             aria-label="Log boot sistem OMNI"
-            className="mt-8 h-[17rem] overflow-hidden rounded-sm border border-[#3a2f6b] bg-[#1b1140]/80 p-4 text-sm leading-relaxed"
+            className="glass-panel mt-8 h-[17rem] overflow-hidden rounded-xl p-5 text-sm leading-relaxed"
           >
             {BOOT_LINES.slice(0, visible).map((line) => (
               <p key={line.text} className={TONE_CLASS[line.tone]}>
@@ -122,16 +161,18 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
 
           <div className="mt-6 min-h-[5.5rem]">
             {phase === "boot" ? (
-              <p className="text-sm text-[#8d84b8]">
-                Tekan tombol apa saja untuk melewati boot.
-              </p>
+              <div className="glass-box inline-block rounded-lg px-4 py-2">
+                <p className="text-sm text-[#b9aef0]">
+                  Tekan tombol apa saja / klik layar untuk melewati boot.
+                </p>
+              </div>
             ) : (
               <>
                 <button
                   type="button"
                   onClick={start}
                   disabled={launching}
-                  className={`${display.className} rounded-sm bg-[#ffb347] px-8 py-3 text-lg font-semibold text-[#140b2e] transition hover:bg-[#ffc774] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#c9f2ff] disabled:opacity-70`}
+                  className={`${display.className} cursor-pointer rounded-lg bg-[#ffb347] px-8 py-3 text-lg font-bold text-[#140b2e] shadow-[0_0_20px_rgba(255,179,71,0.5)] transition hover:bg-[#ffc774] hover:scale-105 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#c9f2ff] disabled:opacity-70`}
                 >
                   {launching ? "Menyalakan beam..." : "Mulai kabur"}
                 </button>
@@ -143,8 +184,8 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
           </div>
         </section>
 
-        {/* Kolom kanan: UFO + tractor beam (dekoratif) */}
-        <section className="order-1 md:order-2" aria-hidden="true">
+        {/* Kolom kanan: UFO + tractor beam (Melayang bebas di angkasa) */}
+        <section className="order-1 flex justify-center md:order-2" aria-hidden="true">
           <div className="scene">
             <div className="dome" />
             <div className="saucer" />
@@ -166,9 +207,25 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
           vertical-align: text-bottom;
           animation: blink 1s steps(2, start) infinite;
         }
+        .twinkle-star {
+          animation-name: twinkle;
+          animation-timing-function: ease-in-out;
+          animation-iteration-count: infinite;
+        }
+        @keyframes twinkle {
+          0%, 100% {
+            opacity: 0.2;
+            transform: scale(0.7);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.3);
+          }
+        }
         .scene {
           position: relative;
           height: 26rem;
+          width: 18rem;
           max-width: 20rem;
           margin: 0 auto;
         }
@@ -190,8 +247,8 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
           height: 2.5rem;
           transform: translateX(-50%);
           border-radius: 50%;
-          background: linear-gradient(#4b3d8f, #2b2250);
-          box-shadow: 0 0 2.5rem rgba(201, 242, 255, 0.25);
+          background: linear-gradient(#5a4aab, #2b2250);
+          box-shadow: 0 0 3rem rgba(201, 242, 255, 0.4);
         }
         .beam {
           position: absolute;
@@ -204,9 +261,9 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
           background: linear-gradient(
             to bottom,
             rgba(201, 242, 255, 0.85),
-            rgba(201, 242, 255, 0)
+            rgba(201, 242, 255, 0.05)
           );
-          opacity: 0.8;
+          opacity: 0.85;
           transition: filter 0.6s, opacity 0.6s;
           animation: shimmer 4s ease-in-out infinite;
         }
@@ -224,7 +281,7 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
           height: 0.75rem;
           margin: 0 auto;
           border-radius: 50%;
-          background: #140b2e;
+          background: #000000;
         }
         .body {
           display: block;
@@ -232,7 +289,7 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
           height: 2rem;
           margin: 0.1rem auto 0;
           border-radius: 0.5rem 0.5rem 0.2rem 0.2rem;
-          background: #140b2e;
+          background: #000000;
         }
         [data-launching="true"] .beam {
           opacity: 1;
@@ -265,7 +322,8 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
         @media (prefers-reduced-motion: reduce) {
           .cursor,
           .beam,
-          .figure {
+          .figure,
+          .twinkle-star {
             animation: none;
           }
           [data-launching="true"] .figure {
