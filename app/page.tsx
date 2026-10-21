@@ -1,5 +1,5 @@
 import TitleScreen from "../components/TitleScreen";
 
-export default function HomePage() {
-  return <TitleScreen nextHref="/stage/stage1" />;
+export default function Home() {
+  return <TitleScreen />;
 }
