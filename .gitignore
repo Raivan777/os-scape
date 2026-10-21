@@ -1,1 +1,25 @@
-node_modules
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next.js build output
+/.next/
+/out/
+
+# production & cache
+/build
+tsconfig.tsbuildinfo
+
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files (variabel rahasia)
+.env*.local
+.env
+
+# OS system files
+.DS_Store
+Thumbs.db
