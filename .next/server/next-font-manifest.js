@@ -1,1 +1,0 @@
-self.__NEXT_FONT_MANIFEST="{\"pages\":{},\"app\":{\"/home/raivan/Documents/Scape/app/page\":[\"static/media/4c7c43bdd7a35c63-s.p.woff2\",\"static/media/84f090e3b62fb9e3-s.p.woff2\",\"static/media/d3ebbfd689654d3a-s.p.woff2\",\"static/media/98e207f02528a563-s.p.woff2\"]},\"appUsingSizeAdjust\":true,\"pagesUsingSizeAdjust\":false}"
