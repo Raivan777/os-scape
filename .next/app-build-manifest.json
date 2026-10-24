@@ -16,11 +16,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/stage/stage1/page.js"
-    ],
-    "/stage/stage1/materi/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/stage/stage1/materi/page.js"
     ]
   }
 }
