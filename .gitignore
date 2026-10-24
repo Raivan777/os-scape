@@ -3,6 +3,7 @@
 /.pnp
 .pnp.js
 
+<<<<<<< HEAD
 # testing
 /coverage
 
@@ -18,10 +19,31 @@
 *.pem
 
 # debug
+=======
+# next.js build output
+/.next/
+/out/
+
+# production & cache
+/build
+tsconfig.tsbuildinfo
+
+# debug logs
+>>>>>>> 0dcd152f6ddec0b35660550182388bf3a767a2fe
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+<<<<<<< HEAD
 # local env files
 .env*.local
 .env
+=======
+# local env files (variabel rahasia)
+.env*.local
+.env
+
+# OS system files
+.DS_Store
+Thumbs.db
+>>>>>>> 0dcd152f6ddec0b35660550182388bf3a767a2fe
