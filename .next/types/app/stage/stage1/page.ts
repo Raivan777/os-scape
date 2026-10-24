@@ -1,4 +1,4 @@
-// File: /home/raivan/Documents/Scape/app/stage/stage1/page.tsx
+// File: D:\MK SO\os-scape\app\stage\stage1\page.tsx
 import * as entry from '../../../../../app/stage/stage1/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
