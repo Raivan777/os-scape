@@ -3,97 +3,150 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+// ──────────────────────────────────────────────────────────────
+// OS-SCAPE Stage 1 — 2D Platformer (Kanvas Tetap 1024×576 16:9)
+// ──────────────────────────────────────────────────────────────
+
 export default function Stage1Platformer() {
   const router = useRouter();
 
-  // Dimensi dasar game arena
-  const GAME_WIDTH = 1000;
-  const GAME_HEIGHT = 600;
-  const GROUND_Y = 520; // Garis lantai dasar
+  // ─── KONSTANTA KANVAS (16:9 Fixed) ─────────────────────────
+  const GAME_WIDTH = 1024;
+  const GAME_HEIGHT = 576;
+  const GROUND_Y = 540; // Lantai dasar di paling bawah
 
-  // Dimensi Karakter Pemain
-  const PLAYER_W = 48;
-  const PLAYER_H = 68;
+  // ─── KONSTANTA PEMAIN ──────────────────────────────────────
+  const PLAYER_W = 44;
+  const PLAYER_H = 54;
   const MOVE_SPEED = 4.5;
-  const JUMP_POWER = -12.5;
-  const GRAVITY = 0.6;
+  const JUMP_POWER = -12;
+  const GRAVITY = 0.55;
 
-  // Dimensi Batu Kargo (Pushable Box)
-  const BOX_W = 56;
-  const BOX_H = 56;
+  // ─── KONSTANTA KOTAK KARGO ─────────────────────────────────
+  const BOX_W = 45;
+  const BOX_H = 45;
 
-  // Titik Awal Pemain
-  const SPAWN_X = 60;
-  const SPAWN_Y = GROUND_Y - PLAYER_H;
-
-  // 1. State Pemain & Fisika Dasar
-  const [playerX, setPlayerX] = useState(SPAWN_X);
-  const [playerY, setPlayerY] = useState(SPAWN_Y);
+  // ─── STATE PEMAIN & FISIKA ─────────────────────────────────
+  const [playerX, setPlayerX] = useState(60);
+  const [playerY, setPlayerY] = useState(GROUND_Y - PLAYER_H);
   const [velocityY, setVelocityY] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
 
-  // 2. State Objek Batu Kargo (Pushable Box)
-  const [boxX, setBoxX] = useState(250);
+  // ─── STATE PEMICU ──────────────────────────────────────────
+  const [isLaserDoorOpen, setIsLaserDoorOpen] = useState(false);
+
+  // ─── STATE KOTAK KARGO ─────────────────────────────────────
+  const [boxX, setBoxX] = useState(460);
   const [boxY, setBoxY] = useState(GROUND_Y - BOX_H);
   const [boxVelocityY, setBoxVelocityY] = useState(0);
 
-  // 3. State Interaksi & Modal
+  // ─── STATE MODAL & EDUKASI ─────────────────────────────────
   const [showMaterial, setShowMaterial] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [isQuizSubmitted, setIsQuizSubmitted] = useState(false);
   const [isQuizCorrect, setIsQuizCorrect] = useState(false);
   const [isNearTerminal, setIsNearTerminal] = useState(false);
+  const [isNearLever, setIsNearLever] = useState(false);
+  const [showMiniGame, setShowMiniGame] = useState(false);
 
-  // Daftar Platform Pijakan Melayang
-  const platforms = [
-    { x: 0, y: GROUND_Y, w: 380, h: 80 }, // Lantai Kiri
-    { x: 540, y: GROUND_Y, w: 460, h: 80 }, // Lantai Kanan
-    { x: 260, y: 390, w: 150, h: 20 }, // Pijakan 1
-    { x: 480, y: 290, w: 180, h: 20 }, // Pijakan 2 (Ada Terminal)
-    { x: 740, y: 200, w: 180, h: 20 }, // Pijakan 3 (Arah Portal)
-    { x: 920, y: 150, w: 80, h: 20 }, // Pijakan Portal
+  // ──────────────────────────────────────────────────────────
+  // HITBOX DEFINITIONS (Relatif terhadap kanvas 1024×576)
+  // Semua posisi dikalibrasi terhadap stage1bg.jpg 16:9
+  // ──────────────────────────────────────────────────────────
+
+  // 1. Lantai dasar — platform panjang di bagian paling bawah
+  const groundPlatform = { x: 0, y: GROUND_Y, w: GAME_WIDTH, h: GAME_HEIGHT - GROUND_Y };
+
+  // 2. Kotak Garis Polisi (Kanan Bawah) — kotak kuning-hitam
+  const policeBox = { x: 726, y: 435, w: 98, h: 106 };
+
+  // Solid body ramp bawah (mencegah pemain masuk ke dalam ramp)
+  const rampBody = { x: 240, y: 465, w: 490, h: GROUND_Y - 465 };
+
+
+  // 4. Cahaya/Simbol Neon (Kiri Tengah) — trigger materi
+  // Dua dinding kecil di sisi kiri & kanan area cahaya
+  const materialTrigger = { x: 30, y: 340, w: 120, h: 90 };
+  const materialWallLeft = { x: 39, y: 135, w: 25, h: 151 };
+  const materialWallRight = { x: 115, y: 135, w: 25, h: 151 };
+
+  // Platform kecil di depan area cahaya (rak/pijakan di kiri)
+  const leftShelfPlatform = { x: 43, y: 257, w: 90, h: 17 };
+
+  // 5. Tuas/Lever Hijau (Kanan Atas) — trigger mini-game
+  // Meja konsol dengan monitor hologram
+  const leverTrigger = { x: 679, y: 78, w: 66, h: 50 };
+  // Platform di bawah lever (meja konsol)
+  const leverPlatform = { x: 672, y: 132, w: 134, h: 19 };
+
+  // Platform tambahan di atas area kiri (lantai level 2 kiri)
+  const upperLeftPlatform = { x: 215, y: 258, w: 386, h: 18 };
+
+  // Platform tambahan di tengah area kiri (lantai level 2 kiri)
+  const midLeftPlatform = { x: 651, y: 313, w: 56, h: 16 };
+
+  // Platform tambahan di tengah area kiri (lantai level 2 kiri)
+  const lowerLeftPlatform = { x: 693, y: 389, w: 102, h: 18 };
+
+  // Dinding kanan atas (panel dinding)
+  const rightWall = { x: 990, y: 0, w: 34, h: 460 };
+
+  // Pintu laser (penghalang vertikal tengah-bawah)
+  const laserDoor = { x: 500, y: GROUND_Y - 120, w: 16, h: 120 };
+
+  // Tombol lantai (kiri bawah, dekat area spawn)
+  const floorButton = { x: 150, y: GROUND_Y - 8, w: 50, h: 8 };
+
+  // Terminal komputer (di atas upper left platform)
+  const terminalObj = { x: 65, y: 200, w: 45, h: 46 };
+
+  // Portal akhir (di pojok kanan atas, dekat lever)
+  const portalObj = { x: 910, y: 44, w: 60, h: 80 };
+
+  // Semua platform statis untuk collision
+  const allPlatforms = [
+    leftShelfPlatform,
+    upperLeftPlatform,
+    midLeftPlatform,
+    lowerLeftPlatform,
+    leverPlatform,
+    { x: policeBox.x, y: policeBox.y, w: policeBox.w, h: 18 }, // pijakan atas kotak polisi
   ];
 
-  // Rintangan Maut: Lubang Listrik (Electric Hazard Pit)
-  const hazardPit = { x: 380, y: 530, w: 160, h: 70 };
+  // Semua dinding statis untuk collision
+  const allWalls = [
+    materialWallLeft,
+    materialWallRight,
+    rightWall,
+    { x: policeBox.x, y: policeBox.y, w: 10, h: policeBox.h }, // sisi kiri kotak polisi
+    { x: policeBox.x + policeBox.w - 10, y: policeBox.y, w: 10, h: policeBox.h }, // sisi kanan kotak polisi
+  ];
 
-  // Objek Terminal Materi (di atas Platform 2)
-  const terminalObj = { x: 550, y: 290 - 55, w: 45, h: 55 };
-
-  // Objek Portal Akhir Stage (di Pijakan Terakhir)
-  const portalObj = { x: 935, y: 150 - 90, w: 55, h: 90 };
-
-  // Refs untuk Game Loop 60fps yang presisi
+  // ─── REFS GAME LOOP ────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
   const boxRef = useRef({ x: boxX, y: boxY, vy: boxVelocityY });
+  const laserOpenRef = useRef(isLaserDoorOpen);
 
-  // Sinkronisasi ref dengan state
   playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
   boxRef.current = { x: boxX, y: boxY, vy: boxVelocityY };
+  laserOpenRef.current = isLaserDoorOpen;
 
-  // Reset Posisi Pemain jika Jatuh ke Rintangan Maut
-  const resetPlayerToSpawn = () => {
-    setPlayerX(SPAWN_X);
-    setPlayerY(SPAWN_Y);
-    setVelocityY(0);
-    setIsJumping(false);
-    setIsWalking(false);
-    playerRef.current = { x: SPAWN_X, y: SPAWN_Y, vy: 0, jumping: false };
-  };
-
-  // Keyboard Event Listeners (W, A, S, D, Panah, Spasi, E)
+  // ─── KEYBOARD EVENTS ──────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
 
-      // Tombol E untuk membuka materi saat berada di dekat terminal
       if (key === "e") {
-        if (isNearTerminal && !showMaterial && !showQuiz) {
+        if (isNearTerminal && !showMaterial && !showQuiz && !showMiniGame) {
           setShowMaterial(true);
+          return;
+        }
+        if (isNearLever && !showMaterial && !showQuiz && !showMiniGame) {
+          setShowMiniGame(true);
           return;
         }
       }
@@ -101,10 +154,10 @@ export default function Stage1Platformer() {
       if (key === "escape") {
         setShowMaterial(false);
         setShowQuiz(false);
+        setShowMiniGame(false);
         return;
       }
 
-      // Cegah scrolling bawaan browser saat bermain
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
         e.preventDefault();
       }
@@ -123,20 +176,20 @@ export default function Stage1Platformer() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isNearTerminal, showMaterial, showQuiz]);
+  }, [isNearTerminal, isNearLever, showMaterial, showQuiz, showMiniGame]);
 
-  // Game Loop dengan requestAnimationFrame
+  // ─── GAME LOOP ─────────────────────────────────────────────
   useEffect(() => {
     let animId: number;
 
     const gameLoop = () => {
-      // Hentikan simulasi fisika jika modal materi atau modal kuis sedang terbuka
-      if (!showMaterial && !showQuiz) {
-        let p = { ...playerRef.current };
-        let b = { ...boxRef.current };
+      if (!showMaterial && !showQuiz && !showMiniGame) {
+        const p = { ...playerRef.current };
+        const b = { ...boxRef.current };
         const keys = keysPressed.current;
+        const laserOpen = laserOpenRef.current;
 
-        // --- 1. KONTROL GERAK HORIZONTAL PEMAIN ---
+        // 1. GERAKAN HORIZONTAL
         let moveX = 0;
         if (keys.has("a") || keys.has("arrowleft")) {
           moveX -= MOVE_SPEED;
@@ -147,63 +200,97 @@ export default function Stage1Platformer() {
           setFacingRight(true);
         }
 
-        // Animasi jalan (waddle) hanya aktif saat bergerak di lantai
         setIsWalking(moveX !== 0 && !p.jumping);
 
-        // --- 2. LOMPAT PEMAIN ---
+        // 2. LOMPAT
         const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
         if (wantsJump && !p.jumping) {
           p.vy = JUMP_POWER;
           p.jumping = true;
         }
 
-        // Terapkan Gravitasi ke Pemain
+        // 3. GRAVITASI
         p.vy += GRAVITY;
         p.y += p.vy;
 
-        // Terapkan Gravitasi ke Batu Kargo
         b.vy += GRAVITY;
         b.y += b.vy;
 
-        // --- 3. TABRAKAN BATU DENGAN PLATFORM / LANTAI ---
-        for (const plat of platforms) {
-          // Cek apakah batu menimpa platform dari atas
-          if (
-            b.x + BOX_W > plat.x &&
-            b.x < plat.x + plat.w &&
-            b.y + BOX_H >= plat.y &&
-            b.y + BOX_H - b.vy <= plat.y + 10
-          ) {
-            b.y = plat.y - BOX_H;
-            b.vy = 0;
-          }
+        // 4. LANTAI DASAR
+        if (p.y + PLAYER_H >= GROUND_Y) {
+          p.y = GROUND_Y - PLAYER_H;
+          p.vy = 0;
+          p.jumping = false;
         }
 
-        // Batas bawah batu jika jatuh ke lubang
-        if (b.y > GAME_HEIGHT) {
-          b.x = 250;
+        if (b.y + BOX_H >= GROUND_Y) {
           b.y = GROUND_Y - BOX_H;
           b.vy = 0;
         }
 
-        // --- 4. MEKANIK MENDORONG BATU (BOX PUSHING) & COLLISION ---
-        // Prediksi posisi X pemain berikutnya
-        const nextPlayerX = p.x + moveX;
+        // 5. TABRAKAN PLATFORM (pijakan dari atas)
+        let nextPlayerX = p.x + moveX;
 
-        // AABB Collision antara Pemain dan Batu
-        const isHorizontallyTouching =
+        for (const plat of allPlatforms) {
+          const isOverPlatform =
+            p.x + PLAYER_W > plat.x &&
+            p.x < plat.x + plat.w &&
+            p.y + PLAYER_H >= plat.y &&
+            p.y + PLAYER_H - p.vy <= plat.y + 14;
+
+          if (isOverPlatform && p.vy >= 0) {
+            p.y = plat.y - PLAYER_H;
+            p.vy = 0;
+            p.jumping = false;
+          }
+        }
+
+        
+        // 6. TABRAKAN DINDING
+        for (const wall of allWalls) {
+          const inYRange = p.y + PLAYER_H > wall.y && p.y < wall.y + wall.h;
+          if (inYRange) {
+            // Datang dari kiri
+            if (p.x + PLAYER_W <= wall.x && nextPlayerX + PLAYER_W > wall.x) {
+              nextPlayerX = wall.x - PLAYER_W;
+            }
+            // Datang dari kanan
+            if (p.x >= wall.x + wall.w && nextPlayerX < wall.x + wall.w) {
+              nextPlayerX = wall.x + wall.w;
+            }
+          }
+        }
+
+        // 7. PINTU LASER (dinding penghalang)
+        if (!laserOpen) {
+          const inLaserYRange = p.y + PLAYER_H > laserDoor.y && p.y < laserDoor.y + laserDoor.h;
+          if (inLaserYRange) {
+            if (p.x + PLAYER_W <= laserDoor.x && nextPlayerX + PLAYER_W > laserDoor.x) {
+              nextPlayerX = laserDoor.x - PLAYER_W;
+            } else if (p.x >= laserDoor.x + laserDoor.w && nextPlayerX < laserDoor.x + laserDoor.w) {
+              nextPlayerX = laserDoor.x + laserDoor.w;
+            }
+          }
+
+          // Kotak juga tidak bisa menembus laser
+          if (b.y + BOX_H > laserDoor.y && b.y < laserDoor.y + laserDoor.h) {
+            if (b.x < laserDoor.x + laserDoor.w && b.x + BOX_W > laserDoor.x) {
+              b.x = laserDoor.x + laserDoor.w;
+            }
+          }
+        }
+
+        // 8. MEKANIK MENDORONG KOTAK (Box Pushing)
+        const isTouchingBoxSide =
           nextPlayerX < b.x + BOX_W &&
           nextPlayerX + PLAYER_W > b.x &&
-          p.y + PLAYER_H > b.y + 8 &&
+          p.y + PLAYER_H > b.y + 6 &&
           p.y < b.y + BOX_H;
 
-        if (isHorizontallyTouching) {
+        if (isTouchingBoxSide) {
           if (moveX > 0) {
-            // Mendorong batu ke kanan
             const pushDist = nextPlayerX + PLAYER_W - b.x;
             const newBoxX = b.x + pushDist;
-
-            // Batasi batu tidak tembus batas kanan game
             if (newBoxX + BOX_W <= GAME_WIDTH - 10) {
               b.x = newBoxX;
               p.x = b.x - PLAYER_W;
@@ -211,67 +298,60 @@ export default function Stage1Platformer() {
               p.x = b.x - PLAYER_W;
             }
           } else if (moveX < 0) {
-            // Mendorong batu ke kiri
             const pushDist = b.x + BOX_W - nextPlayerX;
             const newBoxX = b.x - pushDist;
-
-            // Batasi batu tidak tembus batas kiri game
-            if (newBoxX >= 10) {
+            const minAllowedBoxX = !laserOpen ? laserDoor.x + laserDoor.w : 10;
+            if (newBoxX >= minAllowedBoxX) {
               b.x = newBoxX;
               p.x = b.x + BOX_W;
             } else {
+              b.x = minAllowedBoxX;
               p.x = b.x + BOX_W;
             }
           }
         } else {
-          // Jika tidak bertabrakan dengan batu, gerakkan pemain secara normal
-          p.x = Math.max(10, Math.min(nextPlayerX, GAME_WIDTH - PLAYER_W - 10));
+          p.x = Math.max(5, Math.min(nextPlayerX, GAME_WIDTH - PLAYER_W - 5));
         }
 
-        // Pijakan di atas batu: Pemain bisa berdiri dan melompat di atas batu
-        if (
-          p.x + PLAYER_W > b.x + 6 &&
-          p.x < b.x + BOX_W - 6 &&
+        // Pijakan di atas kotak kargo
+        const isStandingOnBox =
+          p.x + PLAYER_W > b.x + 4 &&
+          p.x < b.x + BOX_W - 4 &&
           p.y + PLAYER_H >= b.y &&
-          p.y + PLAYER_H - p.vy <= b.y + 12
-        ) {
+          p.y + PLAYER_H - p.vy <= b.y + 12;
+
+        if (isStandingOnBox && p.vy >= 0) {
           p.y = b.y - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
         }
 
-        // --- 5. TABRAKAN PEMAIN DENGAN PLATFORM MELAYANG ---
-        for (const plat of platforms) {
-          if (
-            p.x + PLAYER_W > plat.x &&
-            p.x < plat.x + plat.w &&
-            p.y + PLAYER_H >= plat.y &&
-            p.y + PLAYER_H - p.vy <= plat.y + 14
-          ) {
-            p.y = plat.y - PLAYER_H;
-            p.vy = 0;
-            p.jumping = false;
-          }
+        // 9. TOMBOL LANTAI (injak = buka laser)
+        const playerSteppedOnButton =
+          p.x + PLAYER_W > floorButton.x &&
+          p.x < floorButton.x + floorButton.w &&
+          p.y + PLAYER_H >= floorButton.y;
+
+        const boxOnButton =
+          b.x + BOX_W > floorButton.x &&
+          b.x < floorButton.x + floorButton.w &&
+          b.y + BOX_H >= floorButton.y;
+
+        if ((playerSteppedOnButton || boxOnButton) && !laserOpen) {
+          setIsLaserDoorOpen(true);
         }
 
-        // --- 6. RINTANGAN MAUT (LUBANG LISTRIK) ---
-        const inHazard =
-          p.x + PLAYER_W > hazardPit.x + 10 &&
-          p.x < hazardPit.x + hazardPit.w - 10 &&
-          p.y + PLAYER_H >= hazardPit.y;
-
-        if (inHazard || p.y > GAME_HEIGHT) {
-          // Pemain jatuh ke rintangan listrik -> reset posisi
-          resetPlayerToSpawn();
-          return;
-        }
-
-        // --- 7. CEK KEDEKATAN DENGAN TERMINAL MATERI ---
+        // 10. CEK KEDEKATAN TERMINAL
         const distTermX = Math.abs(p.x + PLAYER_W / 2 - (terminalObj.x + terminalObj.w / 2));
         const distTermY = Math.abs(p.y + PLAYER_H / 2 - (terminalObj.y + terminalObj.h / 2));
-        setIsNearTerminal(distTermX < 65 && distTermY < 65);
+        setIsNearTerminal(distTermX < 60 && distTermY < 60);
 
-        // --- 8. CEK TABRAKAN DENGAN PORTAL AKHIR ---
+        // 11. CEK KEDEKATAN LEVER
+        const distLevX = Math.abs(p.x + PLAYER_W / 2 - (leverTrigger.x + leverTrigger.w / 2));
+        const distLevY = Math.abs(p.y + PLAYER_H / 2 - (leverTrigger.y + leverTrigger.h / 2));
+        setIsNearLever(distLevX < 65 && distLevY < 65);
+
+        // 12. CEK PORTAL AKHIR
         const touchPortal =
           p.x + PLAYER_W > portalObj.x &&
           p.x < portalObj.x + portalObj.w &&
@@ -282,7 +362,7 @@ export default function Stage1Platformer() {
           setShowQuiz(true);
         }
 
-        // Update State React
+        // UPDATE STATES
         setPlayerX(p.x);
         setPlayerY(p.y);
         setVelocityY(p.vy);
@@ -298,74 +378,307 @@ export default function Stage1Platformer() {
 
     animId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animId);
-  }, [showMaterial, showQuiz]);
+  }, [showMaterial, showQuiz, showMiniGame]);
 
-  // Handle Jawaban Kuis
+  // ─── QUIZ HANDLER ──────────────────────────────────────────
   const handleQuizSubmit = () => {
     if (selectedAnswer === null) return;
-    const isCorrect = selectedAnswer === 1; // Jawaban B benar
+    const isCorrect = selectedAnswer === 1;
     setIsQuizCorrect(isCorrect);
     setIsQuizSubmitted(true);
   };
 
+  // ═══════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-black p-4 select-none">
+    <main className="min-h-screen bg-black text-[#e9e4ff] select-none flex flex-col items-center justify-center">
       {/* HUD Info Atas */}
-      <div className="mb-3 flex w-full max-w-[1000px] items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2.5 text-xs text-gray-300 backdrop-blur-md">
+      <div className="flex w-[1024px] items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2 text-xs text-gray-300 backdrop-blur-md mb-3">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
-          <span className="font-bold tracking-wider text-[#ffb347] uppercase">
-            Stage 1 // 2D Platformer Koridor OMNI
+          <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+          <span className="font-bold tracking-wider text-[#ffb347] uppercase text-[11px]">
+            Stage 1 // Kanvas 1024×576 [Debug Hitbox Aktif]
           </span>
         </div>
-        <div className="flex items-center gap-4">
-          <span>Kontrol: <strong className="text-white">A / D</strong> (Jalan), <strong className="text-white">W / Spasi</strong> (Lompat), <strong className="text-white">E</strong> (Interaksi)</span>
+        <div className="flex items-center gap-3 text-[11px]">
+          <span>
+            <strong className="text-white">A / D</strong>: Jalan • <strong className="text-white">W / Spasi</strong>: Lompat • <strong className="text-white">E</strong>: Interaksi
+          </span>
+          <span className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${isLaserDoorOpen ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"}`}>
+            {isLaserDoorOpen ? "LASER: TERBUKA" : "LASER: AKTIF"}
+          </span>
         </div>
       </div>
 
-      {/* Arena Game 2D Platformer (1000px x 600px) */}
+      {/* ═══════════════════════════════════════════════════════
+          CONTAINER KANVAS UTAMA: 1024×576 (16:9)
+          ═══════════════════════════════════════════════════════ */}
       <div
-        className="relative overflow-hidden rounded-2xl border-2 border-purple-500/30 bg-[#0c081e] shadow-[0_0_50px_rgba(147,51,234,0.25)]"
-        style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
+        className="relative overflow-hidden rounded-2xl border-2 border-cyan-500/30 shadow-[0_0_50px_rgba(0,0,0,0.9)]"
+        style={{
+          width: `${GAME_WIDTH}px`,
+          height: `${GAME_HEIGHT}px`,
+          backgroundImage: "url('/stage1bg.jpg')",
+          backgroundSize: "100% 100%",
+        }}
       >
-        {/* Background Kosmik & Bintang Halus */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-purple-900/20 via-black to-black" />
-        <div className="absolute top-10 left-20 h-40 w-40 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
-
-        {/* 1. Platform & Lantai */}
-        {platforms.map((plat, idx) => (
-          <div
-            key={idx}
-            className="absolute rounded-t-lg border-t-2 border-cyan-400/60 bg-gradient-to-b from-[#2a1e5c] to-[#140e33] shadow-[0_4px_20px_rgba(0,0,0,0.8)]"
-            style={{
-              left: `${plat.x}px`,
-              top: `${plat.y}px`,
-              width: `${plat.w}px`,
-              height: `${plat.h}px`,
-            }}
-          >
-            {/* Tekstur Garis Platform */}
-            <div className="h-1 w-full bg-cyan-400/30" />
-          </div>
-        ))}
-
-        {/* 2. Rintangan Maut: Lubang Listrik (Electric Hazard Pit) */}
+        {/* ─── DEBUG: Garis Lantai Dasar ─────────────────────── */}
         <div
-          className="absolute flex flex-col items-center justify-center rounded-lg border-2 border-rose-500/80 bg-rose-950/40 shadow-[0_0_25px_rgba(244,63,94,0.7)] animate-pulse"
-          style={{
-            left: `${hazardPit.x}px`,
-            top: `${hazardPit.y}px`,
-            width: `${hazardPit.w}px`,
-            height: `${hazardPit.h}px`,
-          }}
+          className="absolute left-0 right-0 border-t border-dashed border-emerald-400/50 pointer-events-none z-10"
+          style={{ top: `${GROUND_Y}px` }}
         >
-          <span className="text-sm font-black tracking-widest text-rose-300">⚡ BAHAYA LISTRIK ⚡</span>
-          <span className="text-[10px] text-rose-400">Jatuh = Reset ke Titik Awal</span>
+          <span className="absolute left-2 -top-4 text-[9px] font-mono text-emerald-400 bg-black/60 px-1 rounded">
+            Ground (y: {GROUND_Y})
+          </span>
         </div>
 
-        {/* 3. Batu Kargo (Pushable Box) yang Tunduk pada Gravitasi & Dorongan */}
+        {/* ─── 1. LANTAI DASAR (Ground) ──────────────────────── */}
         <div
-          className="absolute z-20 flex flex-col items-center justify-center rounded-xl border-2 border-amber-400/90 bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 shadow-[0_0_20px_rgba(251,191,36,0.5)] cursor-grab active:cursor-grabbing"
+          className="absolute bg-green-500/30 border-t-2 border-green-400 pointer-events-none z-10"
+          style={{
+            left: `${groundPlatform.x}px`,
+            top: `${groundPlatform.y}px`,
+            width: `${groundPlatform.w}px`,
+            height: `${groundPlatform.h}px`,
+          }}
+        >
+          <span className="absolute left-1/2 -translate-x-1/2 top-0 text-[8px] font-mono text-green-300 bg-black/60 px-1 rounded">
+            GROUND
+          </span>
+        </div>
+
+        {/* ─── 2. KOTAK GARIS POLISI (Kanan Bawah) ───────────── */}
+        <div
+          className="absolute bg-yellow-500/40 border-2 border-yellow-400 pointer-events-none z-10 flex items-center justify-center"
+          style={{
+            left: `${policeBox.x}px`,
+            top: `${policeBox.y}px`,
+            width: `${policeBox.w}px`,
+            height: `${policeBox.h}px`,
+          }}
+        >
+          <span className="text-[8px] font-mono font-bold text-yellow-200 bg-black/60 px-1 rounded">
+            POLICE BOX
+          </span>
+        </div>
+
+        {/* ─── 3. KONTAINER BESI MIRING — Stair Steps ────────── */}
+        {/* Ramp body (solid bawah) */}
+        <div
+          className="absolute bg-red-500/15 border border-red-400/30 pointer-events-none z-5"
+          style={{
+            left: `${rampBody.x}px`,
+            top: `${rampBody.y}px`,
+            width: `${rampBody.w}px`,
+            height: `${rampBody.h}px`,
+          }}
+        >
+          <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-red-300 bg-black/60 px-1 rounded">
+            RAMP BODY
+          </span>
+        </div>
+
+        {/* ─── 4. CAHAYA NEON KIRI (Material Trigger) ─────────── */}
+        <div
+          className="absolute bg-pink-500/30 border-2 border-pink-400 pointer-events-none z-10 flex items-center justify-center"
+          style={{
+            left: `${materialTrigger.x}px`,
+            top: `${materialTrigger.y}px`,
+            width: `${materialTrigger.w}px`,
+            height: `${materialTrigger.h}px`,
+          }}
+        >
+          <span className="text-[8px] font-mono font-bold text-pink-200 bg-black/60 px-1 rounded">
+            MATERI [E]
+          </span>
+        </div>
+
+        {/* Dinding kiri area materi */}
+        <div
+          className="absolute bg-gray-500/40 border border-gray-400 pointer-events-none z-10"
+          style={{
+            left: `${materialWallLeft.x}px`,
+            top: `${materialWallLeft.y}px`,
+            width: `${materialWallLeft.w}px`,
+            height: `${materialWallLeft.h}px`,
+          }}
+        >
+          <span className="text-[6px] font-mono text-gray-200 -rotate-90 whitespace-nowrap absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            WALL L
+          </span>
+        </div>
+
+        {/* Dinding kanan area materi */}
+        <div
+          className="absolute bg-gray-500/40 border border-gray-400 pointer-events-none z-10"
+          style={{
+            left: `${materialWallRight.x}px`,
+            top: `${materialWallRight.y}px`,
+            width: `${materialWallRight.w}px`,
+            height: `${materialWallRight.h}px`,
+          }}
+        >
+          <span className="text-[6px] font-mono text-gray-200 -rotate-90 whitespace-nowrap absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            WALL R
+          </span>
+        </div>
+
+        {/* Platform pijakan kiri (rak) */}
+        <div
+          className="absolute bg-orange-500/40 border border-orange-400 pointer-events-none z-10 flex items-center justify-center"
+          style={{
+            left: `${leftShelfPlatform.x}px`,
+            top: `${leftShelfPlatform.y}px`,
+            width: `${leftShelfPlatform.w}px`,
+            height: `${leftShelfPlatform.h}px`,
+          }}
+        >
+          <span className="text-[7px] font-mono text-orange-200 bg-black/60 px-1 rounded">
+            LEFT SHELF
+          </span>
+        </div>
+
+        {/* ─── 5. TUAS/LEVER (Kanan Atas) — Mini-game Trigger ── */}
+        <div
+          className="absolute bg-emerald-500/40 border-2 border-emerald-400 z-10 flex items-center justify-center"
+          style={{
+            left: `${leverTrigger.x}px`,
+            top: `${leverTrigger.y}px`,
+            width: `${leverTrigger.w}px`,
+            height: `${leverTrigger.h}px`,
+          }}
+        >
+          {isNearLever && (
+            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30">
+              <span className="rounded bg-emerald-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
+                [E] Mini-Game
+              </span>
+            </div>
+          )}
+          <span className="text-[8px] font-mono font-bold text-emerald-200 bg-black/60 px-1 rounded">
+            LEVER
+          </span>
+        </div>
+
+        {/* Platform di bawah lever */}
+        <div
+          className="absolute bg-emerald-500/30 border border-emerald-400 pointer-events-none z-10 flex items-center justify-center"
+          style={{
+            left: `${leverPlatform.x}px`,
+            top: `${leverPlatform.y}px`,
+            width: `${leverPlatform.w}px`,
+            height: `${leverPlatform.h}px`,
+          }}
+        >
+          <span className="text-[7px] font-mono text-emerald-200 bg-black/60 px-1 rounded">
+            LEVER PLAT
+          </span>
+        </div>
+
+        {/* Platform atas kiri */}
+        <div
+          className="absolute bg-red-500/40 border border-red-400 pointer-events-none z-10 flex items-center justify-center"
+          style={{
+            left: `${upperLeftPlatform.x}px`,
+            top: `${upperLeftPlatform.y}px`,
+            width: `${upperLeftPlatform.w}px`,
+            height: `${upperLeftPlatform.h}px`,
+          }}
+        >
+          <span className="text-[8px] font-mono text-red-200 bg-black/60 px-1 rounded">
+            UPPER LEFT PLATFORM
+          </span>
+        </div>
+
+        {/* Platform tengah kiri */}
+        <div
+          className="absolute bg-purple-500/40 border border-purple-400 pointer-events-none z-10 flex items-center justify-center"
+          style={{
+            left: `${midLeftPlatform.x}px`,
+            top: `${midLeftPlatform.y}px`,
+            width: `${midLeftPlatform.w}px`,
+            height: `${midLeftPlatform.h}px`,
+          }}
+        >
+          <span className="text-[8px] font-mono text-purple-200 bg-black/60 px-1 rounded">
+            MID LEFT PLATFORM
+          </span>
+        </div>
+
+        {/* Platform bawah kiri */}
+        <div
+          className="absolute bg-blue-500/40 border border-blue-400 pointer-events-none z-10 flex items-center justify-center"
+          style={{
+            left: `${lowerLeftPlatform.x}px`,
+            top: `${lowerLeftPlatform.y}px`,
+            width: `${lowerLeftPlatform.w}px`,
+            height: `${lowerLeftPlatform.h}px`,
+          }}
+        >
+          <span className="text-[8px] font-mono text-blue-200 bg-black/60 px-1 rounded">
+            LOWER LEFT PLATFORM
+          </span>
+        </div>
+
+        {/* Dinding kanan */}
+        <div
+          className="absolute bg-gray-500/30 border border-gray-400 pointer-events-none z-10"
+          style={{
+            left: `${rightWall.x}px`,
+            top: `${rightWall.y}px`,
+            width: `${rightWall.w}px`,
+            height: `${rightWall.h}px`,
+          }}
+        >
+          <span className="text-[6px] font-mono text-gray-200 -rotate-90 whitespace-nowrap absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            WALL R
+          </span>
+        </div>
+
+        {/* ─── TOMBOL LANTAI ──────────────────────────────────── */}
+        <div
+          className={`absolute flex items-center justify-center rounded-t border transition-all z-10 ${
+            isLaserDoorOpen
+              ? "bg-yellow-500/80 border-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.9)]"
+              : "bg-yellow-500/50 border-yellow-400 animate-pulse"
+          }`}
+          style={{
+            left: `${floorButton.x}px`,
+            top: `${floorButton.y}px`,
+            width: `${floorButton.w}px`,
+            height: `${floorButton.h}px`,
+          }}
+        >
+          <span className="text-[7px] font-black text-black uppercase tracking-tighter">
+            {isLaserDoorOpen ? "ON" : "BTN"}
+          </span>
+        </div>
+
+        {/* ─── PINTU LASER ────────────────────────────────────── */}
+        <div
+          className={`absolute flex flex-col items-center justify-center transition-opacity duration-300 ${
+            isLaserDoorOpen
+              ? "opacity-20 pointer-events-none"
+              : "opacity-100 z-20"
+          }`}
+          style={{
+            left: `${laserDoor.x}px`,
+            top: `${laserDoor.y}px`,
+            width: `${laserDoor.w}px`,
+            height: `${laserDoor.h}px`,
+          }}
+        >
+          <div className="h-full w-full bg-blue-500/50 border-2 border-blue-400 rounded flex items-center justify-center">
+            <span className="text-[7px] font-mono font-bold text-white -rotate-90 whitespace-nowrap">
+              LASER
+            </span>
+          </div>
+        </div>
+
+        {/* ─── KOTAK KARGO (Bisa Didorong) ─────────────────────── */}
+        <div
+          className="absolute z-20 flex flex-col items-center justify-center rounded-lg border-2 border-amber-300 bg-amber-600/90 shadow-[0_4px_12px_rgba(0,0,0,0.8)] cursor-grab active:cursor-grabbing"
           style={{
             left: `${boxX}px`,
             top: `${boxY}px`,
@@ -373,13 +686,13 @@ export default function Stage1Platformer() {
             height: `${BOX_H}px`,
           }}
         >
-          <span className="text-xl">📦</span>
-          <span className="text-[9px] font-black text-amber-200 tracking-wider">DORONG</span>
+          <span className="text-base">📦</span>
+          <span className="text-[7px] font-black text-amber-100 uppercase">KOTAK</span>
         </div>
 
-        {/* 4. Terminal Interaktif & Checkpoint Materi */}
+        {/* ─── TERMINAL KOMPUTER ────────────────────────────────── */}
         <div
-          className="absolute z-10 flex flex-col items-center cursor-pointer"
+          className="absolute z-20 flex flex-col items-center cursor-pointer"
           style={{
             left: `${terminalObj.x}px`,
             top: `${terminalObj.y}px`,
@@ -389,21 +702,20 @@ export default function Stage1Platformer() {
           onClick={() => setShowMaterial(true)}
         >
           {isNearTerminal && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce">
-              <span className="rounded bg-amber-400 px-2 py-0.5 text-[10px] font-black text-black shadow-[0_0_10px_rgba(251,191,36,0.8)]">
-                [E] Buka Materi
+            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30">
+              <span className="rounded bg-amber-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
+                [E] Log OS
               </span>
             </div>
           )}
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-400/80 bg-cyan-950/60 shadow-[0_0_20px_rgba(34,211,238,0.6)] animate-pulse">
-            <span className="text-xl">🖥️</span>
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-cyan-400 bg-cyan-500/40 shadow-[0_0_15px_rgba(34,211,238,0.8)] animate-pulse">
+            <span className="text-lg">🖥️</span>
           </div>
-          <div className="h-3 w-5 bg-purple-500/40 rounded-t" />
         </div>
 
-        {/* 5. Portal Akhir Stage */}
+        {/* ─── PORTAL AKHIR STAGE ──────────────────────────────── */}
         <div
-          className="absolute z-10 flex flex-col items-center justify-center cursor-pointer"
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
             left: `${portalObj.x}px`,
             top: `${portalObj.y}px`,
@@ -412,15 +724,14 @@ export default function Stage1Platformer() {
           }}
           onClick={() => setShowQuiz(true)}
         >
-          {/* Cincin Energi Portal */}
-          <div className="absolute inset-0 rounded-full border-2 border-cyan-400 bg-gradient-to-t from-purple-600/50 via-cyan-500/30 to-blue-500/40 shadow-[0_0_35px_rgba(34,211,238,0.8)] animate-pulse" />
+          <div className="absolute inset-0 rounded-full border-2 border-purple-400 bg-purple-600/40 shadow-[0_0_25px_rgba(168,85,247,0.8)] animate-pulse" />
           <div className="relative z-10 text-center">
             <span className="text-2xl animate-spin inline-block" style={{ animationDuration: "8s" }}>🌀</span>
-            <span className="block text-[9px] font-black tracking-widest text-cyan-200 uppercase">PORTAL 2</span>
+            <span className="block text-[8px] font-black tracking-widest text-cyan-200 uppercase">PORTAL 2</span>
           </div>
         </div>
 
-        {/* 6. Karakter Pemain (Astronaut) dengan Animasi Visual (Flip, Waddle, Squash & Stretch) */}
+        {/* ─── KARAKTER ASTRONOT ──────────────────────────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -430,7 +741,6 @@ export default function Stage1Platformer() {
             height: `${PLAYER_H}px`,
           }}
         >
-          {/* Wrapper Squash & Stretch: Memanjang ke atas & menyempit saat berada di udara (melompat) */}
           <div
             className="h-full w-full transition-transform duration-150 ease-out"
             style={{
@@ -440,11 +750,10 @@ export default function Stage1Platformer() {
                 : `${facingRight ? "scaleX(1)" : "scaleX(-1)"} scaleY(1)`,
             }}
           >
-            {/* Elemen Gambar: Animasi waddle (ayunan langkah) aktif saat berjalan di tanah */}
             <img
               src="/astronaut-front.png"
               alt="Astronaut"
-              className={`h-full w-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] ${
+              className={`h-full w-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)] ${
                 isWalking && !isJumping ? "animate-waddle" : ""
               }`}
               style={{
@@ -455,7 +764,9 @@ export default function Stage1Platformer() {
         </div>
       </div>
 
-      {/* MODAL 1: CHECKPOINT MATERI SISTEM OPERASI */}
+      {/* ═══════════════════════════════════════════════════════
+          MODAL 1: MATERI SISTEM OPERASI
+          ═══════════════════════════════════════════════════════ */}
       {showMaterial && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
           <div className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-cyan-400/50 bg-[#0d091e]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_50px_rgba(34,211,238,0.3)]">
@@ -509,7 +820,9 @@ export default function Stage1Platformer() {
         </div>
       )}
 
-      {/* MODAL 2: KUIS PORTAL AKHIR STAGE */}
+      {/* ═══════════════════════════════════════════════════════
+          MODAL 2: KUIS PORTAL AKHIR STAGE
+          ═══════════════════════════════════════════════════════ */}
       {showQuiz && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
           <div className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-purple-500/50 bg-[#0f0924]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_60px_rgba(168,85,247,0.3)]">
@@ -610,7 +923,51 @@ export default function Stage1Platformer() {
           </div>
         </div>
       )}
-      {/* Keyframe Animasi Waddle (Ayunan Langkah Kaki Astronot) */}
+
+      {/* ═══════════════════════════════════════════════════════
+          MODAL 3: MINI-GAME (Lever Trigger)
+          ═══════════════════════════════════════════════════════ */}
+      {showMiniGame && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-emerald-500/50 bg-[#0d1e0e]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_60px_rgba(52,211,153,0.3)]">
+            <div className="flex items-center justify-between border-b border-emerald-500/30 pb-3">
+              <h2 className="text-lg font-bold text-emerald-300">
+                🕹️ KONSOL KONTROL ALIEN
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowMiniGame(false)}
+                className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-gray-400 hover:text-white"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs md:text-sm text-gray-300">
+              <p>
+                Kamu menemukan konsol kontrol utama alien. Panel ini menampilkan sekuens perintah yang harus kamu pecahkan untuk mengaktifkan sistem navigasi.
+              </p>
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 font-mono text-emerald-300 text-xs">
+                <p className="text-gray-500">// TODO: Mini-game puzzle akan ditambahkan di sini</p>
+                <p className="mt-2 text-emerald-400">{'>'} System.activate(navigation_core);</p>
+                <p className="text-emerald-400">{'>'} Status: STANDBY</p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowMiniGame(false)}
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-2 text-xs md:text-sm font-bold text-white shadow-lg transition hover:scale-105"
+              >
+                Kembali ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Keyframe Animasi Waddle */}
       <style jsx>{`
         @keyframes waddle {
           0%,
