@@ -190,10 +190,7 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
             <div className="dome" />
             <div className="saucer" />
             <div className="beam" />
-            <div className="figure">
-              <span className="head" />
-              <span className="body" />
-            </div>
+            <img src="/astronaut-front.png" alt="Astronaut" className="figure" />
           </div>
         </section>
       </div>
@@ -270,26 +267,14 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
         .figure {
           position: absolute;
           left: 50%;
-          bottom: 3rem;
-          width: 1.5rem;
+          bottom: 2.2rem;
+          width: 4.5rem;
+          height: auto;
           transform: translateX(-50%);
           animation: bob 3.2s ease-in-out infinite;
-        }
-        .head {
-          display: block;
-          width: 0.75rem;
-          height: 0.75rem;
-          margin: 0 auto;
-          border-radius: 50%;
-          background: #000000;
-        }
-        .body {
-          display: block;
-          width: 1.25rem;
-          height: 2rem;
-          margin: 0.1rem auto 0;
-          border-radius: 0.5rem 0.5rem 0.2rem 0.2rem;
-          background: #000000;
+          filter: drop-shadow(0 0 12px rgba(201, 242, 255, 0.45));
+          user-select: none;
+          pointer-events: none;
         }
         [data-launching="true"] .beam {
           opacity: 1;
