@@ -38,7 +38,7 @@ Karena proyek ini dibangun menggunakan **Next.js**, pastikan komputermu sudah te
 |----|------|-----|-------|------------|
 | 1  |   Rama   |  088   |  Gatau     |       Belum ada     |
 | 2  |Lalita Bela      |101     |       |            |
-| 3  |      |     |       |            |
+| 3  |   Fibrilla   |   096  |       |            |
 | 4  |      |     |       |            |
 | 5  |      |     |       |            |
 | 6  |      |     |       |            |
