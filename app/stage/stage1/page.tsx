@@ -232,6 +232,11 @@ export default function Stage1Platformer() {
         let nextPlayerX = p.x + moveX;
 
         for (const plat of allPlatforms) {
+          // Lewati platform kontainer besi karena ditangani secara terpadu oleh Double Ramp Zone
+          if (plat === upperLeftPlatform || plat === midLeftPlatform || plat === lowerLeftPlatform) {
+            continue;
+          }
+
           const isOverPlatform =
             p.x + PLAYER_W > plat.x &&
             p.x < plat.x + plat.w &&
@@ -242,6 +247,57 @@ export default function Stage1Platformer() {
             p.y = plat.y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+          }
+        }
+
+        // ─── DOUBLE RAMP ZONE & PIJAKAN KONTAINER BESI ─────────────
+        // Menggunakan titik tumpu kaki karakter (charFootX) agar lereng presisi dengan batas visual
+        // 1. Pijakan Atas (Datar):         charFootX <= 601          (top: 258)
+        // 2. Ramp Zone 2 (Tengah ke Atas): charFootX: 601 s.d 651    (lerp 258 ke 313)
+        // 3. Pijakan Tengah (Datar):       charFootX: 651 s.d 707    (top: 313)
+        // 4. Ramp Zone 1 (Bawah ke Tengah): charFootX: 707 s.d 785   (lerp 313 ke 389)
+        // 5. Pijakan Bawah (Datar):        charFootX: 785 s.d 800    (top: 389)
+        let containerGroundY: number | null = null;
+        const charFootX = nextPlayerX + PLAYER_W * 0.5;
+
+        if (charFootX >= 215 && charFootX <= 601) {
+          // Pijakan Atas (Datar)
+          containerGroundY = 258;
+        } else if (charFootX > 601 && charFootX < 651) {
+          // Ramp Zone 2 (Dari Tengah ke Atas: lerp 258px ke 313px)
+          const t2 = (charFootX - 601) / (651 - 601);
+          containerGroundY = 258 + t2 * (313 - 258);
+        } else if (charFootX >= 651 && charFootX <= 707) {
+          // Pijakan Tengah (Datar)
+          containerGroundY = 313;
+        } else if (charFootX > 707 && charFootX < 785) {
+          // Ramp Zone 1 (Dari Bawah ke Tengah: lerp 313px ke 389px)
+          const t1 = (charFootX - 707) / (785 - 707);
+          containerGroundY = 313 + t1 * (389 - 313);
+        } else if (charFootX >= 785 && charFootX <= 800) {
+          // Pijakan Bawah (Datar)
+          containerGroundY = 389;
+        }
+
+        // Terapkan batas groundY dinamis HANYA jika karakter memang berada di permukaan kontainer
+        // (Mencegah bug tersedot/ketarik ke bawah saat berada di minigame lever platform di atas)
+        if (containerGroundY !== null) {
+          const footY = p.y + PLAYER_H;
+          const prevFootY = footY - p.vy;
+
+          if (!p.jumping) {
+            // Berjalan menanjak/menurun mulus (hanya jika kaki memang menempel di permukaan kontainer)
+            if (Math.abs(footY - containerGroundY) <= 14) {
+              p.y = containerGroundY - PLAYER_H;
+              p.vy = 0;
+            }
+          } else if (p.vy >= 0) {
+            // Mendarat saat jatuh dari lompatan ke kontainer
+            if (footY >= containerGroundY && prevFootY <= containerGroundY + 14) {
+              p.y = containerGroundY - PLAYER_H;
+              p.vy = 0;
+              p.jumping = false;
+            }
           }
         }
 
