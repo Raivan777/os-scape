@@ -44,13 +44,37 @@ export default function Stage1Platformer() {
 
   // ─── STATE MODAL & EDUKASI ─────────────────────────────────
   const [showMaterial, setShowMaterial] = useState(false);
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [isQuizSubmitted, setIsQuizSubmitted] = useState(false);
-  const [isQuizCorrect, setIsQuizCorrect] = useState(false);
   const [isNearTerminal, setIsNearTerminal] = useState(false);
   const [isNearLever, setIsNearLever] = useState(false);
-  const [showMiniGame, setShowMiniGame] = useState(false);
+
+  // ─── STATE MINI-GAME SJF SCHEDULING ────────────────────────
+  const [isMiniGameOpen, setIsMiniGameOpen] = useState(false);
+  const [availableModules, setAvailableModules] = useState<{ id: string; name: string; time: number }[]>([]);
+  const [reactorQueue, setReactorQueue] = useState<({ id: string; name: string; time: number } | null)[]>([null, null, null]);
+  const [isPortalActive, setIsPortalActive] = useState(false);
+
+  // Fungsi mengacak 3 modul dengan nilai time unik antara 2 hingga 15 ms
+  const generateRandomModules = () => {
+    const times: number[] = [];
+    while (times.length < 3) {
+      const randTime = Math.floor(Math.random() * 14) + 2; // Acak unik 2 s.d 15 ms
+      if (!times.includes(randTime)) {
+        times.push(randTime);
+      }
+    }
+    const modules = [
+      { id: "A", name: "Modul A", time: times[0] },
+      { id: "B", name: "Modul B", time: times[1] },
+      { id: "C", name: "Modul C", time: times[2] },
+    ];
+    setAvailableModules(modules);
+    setReactorQueue([null, null, null]);
+  };
+
+  const openSJFGame = () => {
+    generateRandomModules();
+    setIsMiniGameOpen(true);
+  };
 
   // ──────────────────────────────────────────────────────────
   // HITBOX DEFINITIONS (Relatif terhadap kanvas 1024×576)
@@ -141,20 +165,19 @@ export default function Stage1Platformer() {
       const key = e.key.toLowerCase();
 
       if (key === "e") {
-        if (isNearTerminal && !showMaterial && !showQuiz && !showMiniGame) {
+        if (isNearTerminal && !showMaterial && !isMiniGameOpen) {
           setShowMaterial(true);
           return;
         }
-        if (isNearLever && !showMaterial && !showQuiz && !showMiniGame) {
-          setShowMiniGame(true);
+        if (isNearLever && !showMaterial && !isMiniGameOpen) {
+          openSJFGame();
           return;
         }
       }
 
       if (key === "escape") {
         setShowMaterial(false);
-        setShowQuiz(false);
-        setShowMiniGame(false);
+        setIsMiniGameOpen(false);
         return;
       }
 
@@ -176,14 +199,14 @@ export default function Stage1Platformer() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isNearTerminal, isNearLever, showMaterial, showQuiz, showMiniGame]);
+  }, [isNearTerminal, isNearLever, showMaterial, isMiniGameOpen]);
 
   // ─── GAME LOOP ─────────────────────────────────────────────
   useEffect(() => {
     let animId: number;
 
     const gameLoop = () => {
-      if (!showMaterial && !showQuiz && !showMiniGame) {
+      if (!showMaterial && !isMiniGameOpen) {
         const p = { ...playerRef.current };
         const b = { ...boxRef.current };
         const keys = keysPressed.current;
@@ -415,7 +438,9 @@ export default function Stage1Platformer() {
           p.y < portalObj.y + portalObj.h;
 
         if (touchPortal) {
-          setShowQuiz(true);
+          if (isPortalActive) {
+            router.push("/stage/stage2");
+          }
         }
 
         // UPDATE STATES
@@ -434,14 +459,69 @@ export default function Stage1Platformer() {
 
     animId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animId);
-  }, [showMaterial, showQuiz, showMiniGame]);
+  }, [showMaterial, isMiniGameOpen, isPortalActive]);
 
-  // ─── QUIZ HANDLER ──────────────────────────────────────────
-  const handleQuizSubmit = () => {
-    if (selectedAnswer === null) return;
-    const isCorrect = selectedAnswer === 1;
-    setIsQuizCorrect(isCorrect);
-    setIsQuizSubmitted(true);
+  // ─── LOGIKA SJF (SHORTEST JOB FIRST) DRAG & DROP ──────────
+  const handleDragStart = (e: React.DragEvent, moduleId: string) => {
+    e.dataTransfer.setData("text/plain", moduleId);
+  };
+
+  const handleDrop = (e: React.DragEvent, slotIndex: number) => {
+    e.preventDefault();
+    const moduleId = e.dataTransfer.getData("text/plain");
+    if (!moduleId) return;
+
+    const moduleToPlace = availableModules.find((m) => m.id === moduleId);
+    if (!moduleToPlace) return;
+
+    setReactorQueue((prev) => {
+      const next = [...prev];
+      // Jika modul ini sudah ada di slot antrean lain, kosongkan slot lamanya
+      for (let i = 0; i < next.length; i++) {
+        if (next[i]?.id === moduleId) {
+          next[i] = null;
+        }
+      }
+      next[slotIndex] = moduleToPlace;
+      return next;
+    });
+  };
+
+  const handleRemoveFromQueue = (slotIndex: number) => {
+    setReactorQueue((prev) => {
+      const next = [...prev];
+      next[slotIndex] = null;
+      return next;
+    });
+  };
+
+  const handleResetQueue = () => {
+    setReactorQueue([null, null, null]);
+  };
+
+  const handleActivateReactor = () => {
+    // a. Cek apakah ada slot di reactorQueue yang masih null (belum penuh)
+    if (reactorQueue.some((slot) => slot === null)) {
+      alert("Isi semua slot!");
+      return;
+    }
+
+    // b. Validasi apakah urutan time dari indeks 0 ke 2 sudah dari TERKECIL ke TERBESAR (Ascending)
+    const q = reactorQueue as { id: string; name: string; time: number }[];
+    const isCorrectOrder = q[0].time <= q[1].time && q[1].time <= q[2].time;
+
+    if (isCorrectOrder) {
+      // c. Jika BENAR: set isPortalActive = true, tutup modal, beri notifikasi sukses
+      setIsPortalActive(true);
+      setIsMiniGameOpen(false);
+      alert(
+        `✅ REAKTOR BERHASIL DIAKTIFKAN!\n\nPrinsip Shortest Job First (SJF) valid: [${q[0].name}: ${q[0].time}ms] ➔ [${q[1].name}: ${q[1].time}ms] ➔ [${q[2].name}: ${q[2].time}ms].\nAverage Waiting Time diminimalkan.\n\nGerbang Portal Stage 2 kini terbuka!`
+      );
+    } else {
+      // d. Jika SALAH: beri alert overload lalu reset antrean
+      alert("❌ Sistem Overload! Gunakan prinsip Shortest Job First (beban terkecil duluan).");
+      setReactorQueue([null, null, null]);
+    }
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -463,6 +543,9 @@ export default function Stage1Platformer() {
           </span>
           <span className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${isLaserDoorOpen ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"}`}>
             {isLaserDoorOpen ? "LASER: TERBUKA" : "LASER: AKTIF"}
+          </span>
+          <span className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${isPortalActive ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.5)]" : "bg-purple-500/20 text-purple-300 border border-purple-500/40"}`}>
+            {isPortalActive ? "PORTAL: AKTIF 🌀" : "PORTAL: TERKUNCI 🔒"}
           </span>
         </div>
       </div>
@@ -597,22 +680,23 @@ export default function Stage1Platformer() {
 
         {/* ─── 5. TUAS/LEVER (Kanan Atas) — Mini-game Trigger ── */}
         <div
-          className="absolute bg-emerald-500/40 border-2 border-emerald-400 z-10 flex items-center justify-center"
+          className="absolute bg-emerald-500/40 border-2 border-emerald-400 z-10 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
           style={{
             left: `${leverTrigger.x}px`,
             top: `${leverTrigger.y}px`,
             width: `${leverTrigger.w}px`,
             height: `${leverTrigger.h}px`,
           }}
+          onClick={openSJFGame}
         >
           {isNearLever && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30">
+            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
               <span className="rounded bg-emerald-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
-                [E] Mini-Game
+                [E] Konsol SJF
               </span>
             </div>
           )}
-          <span className="text-[8px] font-mono font-bold text-emerald-200 bg-black/60 px-1 rounded">
+          <span className="text-[8px] font-mono font-bold text-emerald-200 bg-black/60 px-1 rounded pointer-events-none">
             LEVER
           </span>
         </div>
@@ -771,19 +855,37 @@ export default function Stage1Platformer() {
 
         {/* ─── PORTAL AKHIR STAGE ──────────────────────────────── */}
         <div
-          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform"
           style={{
             left: `${portalObj.x}px`,
             top: `${portalObj.y}px`,
             width: `${portalObj.w}px`,
             height: `${portalObj.h}px`,
           }}
-          onClick={() => setShowQuiz(true)}
+          onClick={() => {
+            if (isPortalActive) {
+              router.push("/stage/stage2");
+            } else {
+              alert("⚠️ Portal terkunci! Aktifkan reaktor melalui tuas konsol terlebih dahulu.");
+            }
+          }}
         >
-          <div className="absolute inset-0 rounded-full border-2 border-purple-400 bg-purple-600/40 shadow-[0_0_25px_rgba(168,85,247,0.8)] animate-pulse" />
-          <div className="relative z-10 text-center">
+          <div
+            className={`absolute inset-0 rounded-full border-2 transition-all duration-500 ${
+              isPortalActive
+                ? "border-emerald-400 bg-emerald-600/50 shadow-[0_0_35px_rgba(52,211,153,0.9)] animate-pulse"
+                : "border-purple-400 bg-purple-600/30 shadow-[0_0_20px_rgba(168,85,247,0.5)] opacity-70"
+            }`}
+          />
+          <div className="relative z-10 text-center pointer-events-none">
             <span className="text-2xl animate-spin inline-block" style={{ animationDuration: "8s" }}>🌀</span>
-            <span className="block text-[8px] font-black tracking-widest text-cyan-200 uppercase">PORTAL 2</span>
+            <span
+              className={`block text-[8px] font-black tracking-widest uppercase ${
+                isPortalActive ? "text-emerald-300" : "text-cyan-200"
+              }`}
+            >
+              {isPortalActive ? "PORTAL ON" : "PORTAL 2"}
+            </span>
           </div>
         </div>
 
@@ -877,146 +979,168 @@ export default function Stage1Platformer() {
       )}
 
       {/* ═══════════════════════════════════════════════════════
-          MODAL 2: KUIS PORTAL AKHIR STAGE
+          MODAL 2: MINI-GAME SHORTEST JOB FIRST (SJF) SCHEDULING
           ═══════════════════════════════════════════════════════ */}
-      {showQuiz && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-          <div className="relative max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-purple-500/50 bg-[#0f0924]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_60px_rgba(168,85,247,0.3)]">
-            <div className="flex items-center justify-between border-b border-purple-500/30 pb-3">
-              <h2 className="text-lg font-bold text-purple-300">
-                FIREWALL PORTAL 1 // VERIFIKASI KERNEL
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowQuiz(false)}
-                className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-gray-400 hover:text-white"
-              >
-                ✕ Batal
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-4 text-xs md:text-sm">
-              <p className="font-semibold text-white">
-                Komponen sistem operasi manakah yang bertanggung jawab memilih proses mana dari antrean siap (Ready Queue) untuk dialokasikan ke CPU?
-              </p>
-
-              <div className="space-y-2">
-                {[
-                  { id: 0, text: "A. File System Manager" },
-                  { id: 1, text: "B. CPU Scheduler (Short-term Scheduler)" },
-                  { id: 2, text: "C. Virtual Memory Paging Unit" },
-                  { id: 3, text: "D. Network Protocol Driver" },
-                ].map((opt) => {
-                  const isSelected = selectedAnswer === opt.id;
-                  let btnClass = "border-white/10 bg-white/[0.04] text-gray-200 hover:border-cyan-400/50";
-
-                  if (isQuizSubmitted) {
-                    if (opt.id === 1) btnClass = "border-emerald-500 bg-emerald-950/60 text-emerald-200 font-bold";
-                    else if (isSelected) btnClass = "border-rose-500 bg-rose-950/60 text-rose-200";
-                  } else if (isSelected) {
-                    btnClass = "border-cyan-400 bg-cyan-950/60 text-cyan-200 shadow-[0_0_15px_rgba(34,211,238,0.4)]";
-                  }
-
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      disabled={isQuizSubmitted}
-                      onClick={() => setSelectedAnswer(opt.id)}
-                      className={`w-full text-left rounded-xl border p-3 transition-all ${btnClass}`}
-                    >
-                      {opt.text}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {isQuizSubmitted && (
-                <div className={`rounded-xl border p-3.5 leading-relaxed ${isQuizCorrect ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-300" : "border-rose-500/50 bg-rose-950/40 text-rose-300"}`}>
-                  <p className="font-bold">
-                    {isQuizCorrect ? "✅ OTENTIKASI BERHASIL!" : "❌ KODE SALAH!"}
-                  </p>
-                  <p className="mt-1">
-                    {isQuizCorrect
-                      ? "Tepat sekali! CPU Scheduler memilih proses dari Ready Queue dan mengalokasikan CPU core kepadanya. Gerbang Portal Stage 2 kini terbuka."
-                      : "Jawaban belum tepat. Pelajari kembali materi di terminal untuk mengetahui komponen penjadwal CPU!"}
+      {isMiniGameOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md select-none">
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border-2 border-cyan-500 bg-gray-900/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_60px_rgba(6,182,212,0.4)]">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between border-b border-cyan-500/30 pb-4">
+              <div className="flex items-center gap-3">
+                <span className="flex h-3 w-3 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500" />
+                </span>
+                <div>
+                  <h2 className="text-base md:text-lg font-black tracking-wider text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)] uppercase">
+                    ⚡ KONSOL REAKTOR // SHORTEST JOB FIRST (SJF)
+                  </h2>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    Susun urutan eksekusi modul ke dalam antrean inti berdasarkan beban waktu (burst time) terkecil ke terbesar.
                   </p>
                 </div>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3 border-t border-purple-500/30 pt-4">
-              {!isQuizSubmitted ? (
-                <button
-                  type="button"
-                  disabled={selectedAnswer === null}
-                  onClick={handleQuizSubmit}
-                  className="rounded-xl bg-gradient-to-r from-purple-600 to-cyan-500 px-6 py-2.5 font-bold text-white shadow-lg transition hover:scale-105 disabled:opacity-50"
-                >
-                  Konfirmasi Jawaban ➔
-                </button>
-              ) : isQuizCorrect ? (
-                <button
-                  type="button"
-                  onClick={() => router.push("/stage/stage2")}
-                  className="rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 px-6 py-2.5 font-bold text-black shadow-[0_0_20px_rgba(52,211,153,0.6)] transition hover:scale-105"
-                >
-                  Masuk ke Stage 2 🚀
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsQuizSubmitted(false);
-                    setSelectedAnswer(null);
-                  }}
-                  className="rounded-xl bg-rose-600 px-5 py-2 font-bold text-white transition hover:bg-rose-500"
-                >
-                  Coba Lagi ↺
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════
-          MODAL 3: MINI-GAME (Lever Trigger)
-          ═══════════════════════════════════════════════════════ */}
-      {showMiniGame && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-emerald-500/50 bg-[#0d1e0e]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_60px_rgba(52,211,153,0.3)]">
-            <div className="flex items-center justify-between border-b border-emerald-500/30 pb-3">
-              <h2 className="text-lg font-bold text-emerald-300">
-                🕹️ KONSOL KONTROL ALIEN
-              </h2>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowMiniGame(false)}
-                className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-gray-400 hover:text-white"
+                onClick={() => setIsMiniGameOpen(false)}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:border-cyan-400 transition"
               >
                 ✕ Tutup
               </button>
             </div>
 
-            <div className="mt-4 space-y-3 text-xs md:text-sm text-gray-300">
-              <p>
-                Kamu menemukan konsol kontrol utama alien. Panel ini menampilkan sekuens perintah yang harus kamu pecahkan untuk mengaktifkan sistem navigasi.
-              </p>
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 font-mono text-emerald-300 text-xs">
-                <p className="text-gray-500">// TODO: Mini-game puzzle akan ditambahkan di sini</p>
-                <p className="mt-2 text-emerald-400">{'>'} System.activate(navigation_core);</p>
-                <p className="text-emerald-400">{'>'} Status: STANDBY</p>
+            {/* Konten Utama Mini-Game */}
+            <div className="mt-5 space-y-6">
+              {/* Bagian Atas: Modul Tersedia */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-300">
+                    📦 Modul Proses Tersedia (Tarik ke Slot Bawah):
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    Drag & Drop Native HTML5
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  {availableModules.map((mod) => {
+                    const isPlaced = reactorQueue.some((q) => q?.id === mod.id);
+
+                    return (
+                      <div
+                        key={mod.id}
+                        draggable={!isPlaced}
+                        onDragStart={(e) => handleDragStart(e, mod.id)}
+                        className={`rounded-xl border p-3 flex flex-col justify-between transition-all select-none ${
+                          isPlaced
+                            ? "border-gray-700 bg-gray-800/40 opacity-40 cursor-not-allowed"
+                            : "border-cyan-400/60 bg-cyan-950/40 hover:border-cyan-300 hover:scale-102 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] cursor-grab active:cursor-grabbing"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                            MODUL {mod.id}
+                          </span>
+                          <span className="text-base">⚡</span>
+                        </div>
+                        <div className="mt-2 text-center">
+                          <span className="text-xs text-gray-300 block">{mod.name}</span>
+                          <span className="text-lg font-black font-mono text-amber-400 tracking-wider">
+                            {mod.time} <span className="text-[11px] font-normal text-amber-200">ms</span>
+                          </span>
+                        </div>
+                        {isPlaced && (
+                          <span className="mt-1 text-[9px] font-mono text-center text-emerald-400">
+                            ✓ Di Antrean
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Bagian Bawah: Antrean Inti Reaktor (3 Slot) */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300">
+                    ⚛️ Antrean Inti Reaktor (CPU Execution Queue):
+                  </span>
+                  <span className="text-[10px] text-gray-400">
+                    Slot 1 (Awal) ➔ Slot 2 ➔ Slot 3 (Akhir)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  {reactorQueue.map((slot, index) => (
+                    <div
+                      key={`slot-${index}`}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => handleDrop(e, index)}
+                      className={`min-h-[110px] rounded-xl border-2 transition-all p-3 flex flex-col justify-between ${
+                        slot === null
+                          ? "border-dashed border-cyan-500/40 bg-gray-950/60 hover:border-cyan-400 hover:bg-cyan-950/20"
+                          : "border-solid border-emerald-400 bg-emerald-950/40 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] font-mono font-bold">
+                        <span className="text-gray-400">
+                          SLOT {index + 1}{" "}
+                          <span className="text-[9px] text-gray-500">
+                            ({index === 0 ? "Prioritas 1" : index === 1 ? "Prioritas 2" : "Prioritas 3"})
+                          </span>
+                        </span>
+                        {slot !== null && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFromQueue(index)}
+                            className="text-gray-400 hover:text-rose-400 transition"
+                            title="Hapus dari slot"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {slot === null ? (
+                        <div className="my-auto text-center">
+                          <span className="text-2xl opacity-40 block mb-1">📥</span>
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            Tarik modul ke sini
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="my-auto text-center">
+                          <span className="text-sm font-black font-mono text-emerald-300">
+                            MODUL {slot.id}
+                          </span>
+                          <span className="block text-base font-black font-mono text-amber-300 mt-0.5">
+                            {slot.time} ms
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="mt-5 flex justify-end">
+            {/* Bagian Bawah Modal: Tombol Aksi */}
+            <div className="mt-6 flex items-center justify-between border-t border-cyan-500/30 pt-4">
               <button
                 type="button"
-                onClick={() => setShowMiniGame(false)}
-                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 px-6 py-2 text-xs md:text-sm font-bold text-white shadow-lg transition hover:scale-105"
+                onClick={handleResetQueue}
+                className="rounded-xl border border-white/20 bg-white/[0.04] px-5 py-2 text-xs font-bold text-gray-300 hover:border-rose-400 hover:text-rose-300 transition"
               >
-                Kembali ➔
+                ↺ RESET ANTREAN
+              </button>
+
+              <button
+                type="button"
+                onClick={handleActivateReactor}
+                className="rounded-xl bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 px-6 py-2.5 text-xs font-black text-black shadow-[0_0_25px_rgba(34,211,238,0.6)] hover:scale-105 active:scale-95 transition"
+              >
+                ⚡ AKTIFKAN REAKTOR ➔
               </button>
             </div>
           </div>
