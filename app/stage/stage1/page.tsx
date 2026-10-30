@@ -130,6 +130,11 @@ export default function Stage1Platformer() {
   // Portal akhir (di pojok kanan atas, dekat lever)
   const portalObj = { x: 910, y: 44, w: 60, h: 80 };
 
+  // 3 Platform Baru Sementara di Tengah (Bisa disesuaikan manual)
+  const newPlatform1 = { x: 37, y: 359, w: 256, h: 20 };
+  const newPlatform2 = { x: 615, y: 186, w: 60, h: 20 };
+  const newPlatform3 = { x: 901, y: 133, w: 80, h: 20 };
+
   // Semua platform statis untuk collision
   const allPlatforms = [
     leftShelfPlatform,
@@ -137,6 +142,9 @@ export default function Stage1Platformer() {
     midLeftPlatform,
     lowerLeftPlatform,
     leverPlatform,
+    newPlatform1,
+    newPlatform2,
+    newPlatform3,
     { x: policeBox.x, y: policeBox.y, w: policeBox.w, h: 18 }, // pijakan atas kotak polisi
   ];
 
@@ -255,8 +263,13 @@ export default function Stage1Platformer() {
         let nextPlayerX = p.x + moveX;
 
         for (const plat of allPlatforms) {
-          // Lewati platform kontainer besi karena ditangani secara terpadu oleh Double Ramp Zone
-          if (plat === upperLeftPlatform || plat === midLeftPlatform || plat === lowerLeftPlatform) {
+          // Lewati platform kontainer besi & tanjakan tuas karena ditangani secara terpadu oleh Ramp Zone
+          if (
+            plat === upperLeftPlatform ||
+            plat === midLeftPlatform ||
+            plat === lowerLeftPlatform ||
+            plat === newPlatform2
+          ) {
             continue;
           }
 
@@ -318,6 +331,42 @@ export default function Stage1Platformer() {
             // Mendarat saat jatuh dari lompatan ke kontainer
             if (footY >= containerGroundY && prevFootY <= containerGroundY + 14) {
               p.y = containerGroundY - PLAYER_H;
+              p.vy = 0;
+              p.jumping = false;
+            }
+          }
+        }
+
+        // ─── RAMP ZONE BARU (NEW_PLAT_2 ➔ LEVER_PLAT) ─────────────
+        // Titik A: sisi paling kiri NEW_PLAT_2 (X & Y)
+        const rampA_X = newPlatform2.x;
+        const rampA_Y = newPlatform2.y;
+
+        // Titik B: ujung LEVER_PLAT yang mengarah ke NEW_PLAT_2 (X & Y)
+        const rampB_X = newPlatform2.x < leverPlatform.x ? leverPlatform.x : leverPlatform.x + leverPlatform.w;
+        const rampB_Y = leverPlatform.y;
+
+        const rampStartX = Math.min(rampA_X, rampB_X);
+        const rampEndX = Math.max(rampA_X, rampB_X);
+
+        if (charFootX >= rampStartX && charFootX <= rampEndX && rampEndX > rampStartX) {
+          // Interpolasi Linear (Lerp) antara Titik A dan Titik B
+          const t = (charFootX - rampA_X) / (rampB_X - rampA_X);
+          const leverRampGroundY = rampA_Y + t * (rampB_Y - rampA_Y);
+
+          const footY = p.y + PLAYER_H;
+          const prevFootY = footY - p.vy;
+
+          if (!p.jumping) {
+            // Berjalan menanjak/menurun mulus tanpa melompat
+            if (Math.abs(footY - leverRampGroundY) <= 16) {
+              p.y = leverRampGroundY - PLAYER_H;
+              p.vy = 0;
+            }
+          } else if (p.vy >= 0) {
+            // Mendarat saat jatuh dari lompatan ke tanjakan
+            if (footY >= leverRampGroundY && prevFootY <= leverRampGroundY + 16) {
+              p.y = leverRampGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
             }
@@ -602,34 +651,46 @@ export default function Stage1Platformer() {
           </span>
         </div>
 
-        {/* ─── 3. KONTAINER BESI MIRING — Stair Steps ────────── */}
-        {/* Ramp body (solid bawah) */}
+        {/* ─── PLATFORM SEMENTARA BARU (TENGAH) ───────────── */}
         <div
-          className="absolute bg-red-500/15 border border-red-400/30 pointer-events-none z-5"
+          className="absolute bg-cyan-900/40 border border-cyan-400 pointer-events-none z-10 flex items-center justify-center rounded"
           style={{
-            left: `${rampBody.x}px`,
-            top: `${rampBody.y}px`,
-            width: `${rampBody.w}px`,
-            height: `${rampBody.h}px`,
+            left: `${newPlatform1.x}px`,
+            top: `${newPlatform1.y}px`,
+            width: `${newPlatform1.w}px`,
+            height: `${newPlatform1.h}px`,
           }}
         >
-          <span className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-red-300 bg-black/60 px-1 rounded">
-            RAMP BODY
+          <span className="text-[7px] font-mono text-cyan-200 bg-black/60 px-1 rounded">
+            NEW_PLAT_1
           </span>
         </div>
 
-        {/* ─── 4. CAHAYA NEON KIRI (Material Trigger) ─────────── */}
         <div
-          className="absolute bg-pink-500/30 border-2 border-pink-400 pointer-events-none z-10 flex items-center justify-center"
+          className="absolute bg-cyan-900/40 border border-cyan-400 pointer-events-none z-10 flex items-center justify-center rounded"
           style={{
-            left: `${materialTrigger.x}px`,
-            top: `${materialTrigger.y}px`,
-            width: `${materialTrigger.w}px`,
-            height: `${materialTrigger.h}px`,
+            left: `${newPlatform2.x}px`,
+            top: `${newPlatform2.y}px`,
+            width: `${newPlatform2.w}px`,
+            height: `${newPlatform2.h}px`,
           }}
         >
-          <span className="text-[8px] font-mono font-bold text-pink-200 bg-black/60 px-1 rounded">
-            MATERI [E]
+          <span className="text-[7px] font-mono text-cyan-200 bg-black/60 px-1 rounded">
+            NEW_PLAT_2
+          </span>
+        </div>
+
+        <div
+          className="absolute bg-cyan-900/40 border border-cyan-400 pointer-events-none z-10 flex items-center justify-center rounded"
+          style={{
+            left: `${newPlatform3.x}px`,
+            top: `${newPlatform3.y}px`,
+            width: `${newPlatform3.w}px`,
+            height: `${newPlatform3.h}px`,
+          }}
+        >
+          <span className="text-[7px] font-mono text-cyan-200 bg-black/60 px-1 rounded">
+            NEW_PLAT_3
           </span>
         </div>
 
@@ -795,11 +856,11 @@ export default function Stage1Platformer() {
           </span>
         </div>
 
-        {/* ─── PINTU LASER ────────────────────────────────────── */}
+        {/* ─── PINTU LASER ENERGI BERANIMASI (HIDUP & SCI-FI) ── */}
         <div
-          className={`absolute flex flex-col items-center justify-center transition-opacity duration-300 ${
+          className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
             isLaserDoorOpen
-              ? "opacity-20 pointer-events-none"
+              ? "opacity-0 scale-95"
               : "opacity-100 z-20"
           }`}
           style={{
@@ -809,10 +870,46 @@ export default function Stage1Platformer() {
             height: `${laserDoor.h}px`,
           }}
         >
-          <div className="h-full w-full bg-blue-500/50 border-2 border-blue-400 rounded flex items-center justify-center">
-            <span className="text-[7px] font-mono font-bold text-white -rotate-90 whitespace-nowrap">
-              LASER
+          {/* Emitter Pod Atas */}
+          <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-cyan-500 to-slate-900 border border-cyan-300 shadow-[0_0_12px_#22d3ee] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" />
+          </div>
+
+          {/* Kolom Berkas Laser Utama */}
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
+            {/* Outer Glow Aura (Bloom besar berdenyut) */}
+            <div className="absolute inset-y-0 -inset-x-3 bg-gradient-to-b from-cyan-400 via-blue-500 to-indigo-600 blur-md opacity-80 laser-alive" />
+            
+            {/* Secondary Energetic Aura */}
+            <div className="absolute inset-y-0 -inset-x-1.5 bg-gradient-to-b from-blue-400 via-cyan-300 to-indigo-500 blur-sm opacity-90 laser-alive" />
+
+            {/* Laser Beam Outer Body (Gradient menyala biru-cyan-indigo) */}
+            <div className="relative w-3 h-full bg-gradient-to-b from-cyan-300 via-blue-500 to-cyan-300 rounded-full shadow-[0_0_20px_#06b6d4,0_0_35px_#3b82f6] laser-alive flex items-center justify-center overflow-hidden">
+              {/* Ultra-hot Core (Garis tipis putih sangat panas di tengah) */}
+              <div className="w-1 h-full bg-white shadow-[0_0_8px_#ffffff] rounded-full opacity-95 laser-core-flicker" />
+
+              {/* Berkas Energi Bergerak Vertikal Naik-Turun (Flow/Pulse) */}
+              <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
+            </div>
+
+            {/* Kilatan Cahaya & Partikel Listrik Sci-Fi */}
+            <div className="absolute top-1/5 -left-1.5 w-2 h-2 rounded-full bg-white shadow-[0_0_8px_#ffffff] laser-sparkle-1" />
+            <div className="absolute top-2/4 -right-1.5 w-2 h-2 rounded-full bg-cyan-200 shadow-[0_0_8px_#22d3ee] laser-sparkle-2" />
+            <div className="absolute top-3/4 -left-1 w-1.5 h-1.5 rounded-full bg-indigo-200 shadow-[0_0_6px_#818cf8] laser-sparkle-1" />
+
+            {/* Cincin Energi Horizontal (Electric Arc Discharges) */}
+            <div className="absolute top-1/4 w-5 h-0.5 bg-cyan-100 shadow-[0_0_8px_#22d3ee] rounded-full animate-ping" />
+            <div className="absolute top-2/3 w-5 h-0.5 bg-cyan-100 shadow-[0_0_8px_#22d3ee] rounded-full animate-ping" style={{ animationDelay: "0.45s" }} />
+
+            {/* Label Mini Status Pintu */}
+            <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-cyan-200 tracking-widest bg-cyan-950/80 border border-cyan-400/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(34,211,238,0.5)]">
+              HIGH VOLTAGE
             </span>
+          </div>
+
+          {/* Emitter Pod Bawah */}
+          <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-cyan-500 to-slate-900 border border-cyan-300 shadow-[0_0_12px_#22d3ee] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
           </div>
         </div>
 
@@ -1147,7 +1244,7 @@ export default function Stage1Platformer() {
         </div>
       )}
 
-      {/* Keyframe Animasi Waddle */}
+      {/* Keyframe Animasi Waddle & Efek Laser Sci-Fi */}
       <style jsx>{`
         @keyframes waddle {
           0%,
@@ -1163,6 +1260,76 @@ export default function Stage1Platformer() {
         }
         .animate-waddle {
           animation: waddle 0.25s ease-in-out infinite;
+        }
+
+        /* Animasi Laser Hidup (Flicker, Surge, Sparkle) */
+        @keyframes laserFlicker {
+          0%, 100% {
+            opacity: 1;
+            filter: drop-shadow(0 0 16px rgba(6, 182, 212, 0.95)) drop-shadow(0 0 30px rgba(59, 130, 246, 0.7));
+          }
+          20% {
+            opacity: 0.86;
+            filter: drop-shadow(0 0 10px rgba(6, 182, 212, 0.75)) drop-shadow(0 0 18px rgba(59, 130, 246, 0.5));
+          }
+          40% {
+            opacity: 1;
+            filter: drop-shadow(0 0 20px rgba(6, 182, 212, 1)) drop-shadow(0 0 35px rgba(59, 130, 246, 0.85));
+          }
+          65% {
+            opacity: 0.92;
+            filter: drop-shadow(0 0 12px rgba(6, 182, 212, 0.8)) drop-shadow(0 0 22px rgba(59, 130, 246, 0.6));
+          }
+          85% {
+            opacity: 0.84;
+            filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.65));
+          }
+        }
+        .laser-alive {
+          animation: laserFlicker 0.16s infinite alternate ease-in-out;
+        }
+
+        @keyframes laserCoreFlicker {
+          0%, 100% {
+            opacity: 0.98;
+            transform: scaleX(1);
+          }
+          50% {
+            opacity: 0.75;
+            transform: scaleX(0.7);
+          }
+        }
+        .laser-core-flicker {
+          animation: laserCoreFlicker 0.12s infinite alternate ease-in-out;
+        }
+
+        @keyframes laserPulseFlow {
+          0% {
+            transform: translateY(-100%);
+          }
+          100% {
+            transform: translateY(200%);
+          }
+        }
+        .laser-energy-pulse {
+          animation: laserPulseFlow 1.1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes laserSparkle {
+          0%, 100% {
+            transform: scale(0.7) rotate(0deg);
+            opacity: 0.3;
+          }
+          50% {
+            transform: scale(1.3) rotate(180deg);
+            opacity: 1;
+          }
+        }
+        .laser-sparkle-1 {
+          animation: laserSparkle 0.75s ease-in-out infinite;
+        }
+        .laser-sparkle-2 {
+          animation: laserSparkle 0.55s ease-in-out infinite reverse;
         }
       `}</style>
     </main>
