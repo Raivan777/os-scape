@@ -21,24 +21,81 @@ import {
 // 2D Platformer Mechanics (Kanvas Tetap 1024×576 16:9)
 // ──────────────────────────────────────────────────────────────
 
+// ─── TACTICAL SCI-FI VECTOR ICONS (BESPOKE HUD & RETICLE GLYPHS) ─────
+const IconTerminalScreen = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="2" y="3" width="20" height="14" rx="2" className="stroke-cyan-400" />
+    <path d="M8 21h8M12 17v4" className="stroke-cyan-500" />
+    <path d="M7 8l3 3-3 3" className="stroke-cyan-300" />
+    <path d="M13 14h4" className="stroke-cyan-300" />
+  </svg>
+);
+
+const IconDatalogChip = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <rect x="4" y="4" width="16" height="16" rx="2" className="stroke-cyan-400" />
+    <rect x="9" y="9" width="6" height="6" className="stroke-cyan-300 fill-cyan-400/20" />
+    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3" className="stroke-cyan-500" />
+  </svg>
+);
+
+const IconBreakerSwitch = ({ active, color = "amber" }: { active?: boolean; color?: "amber" | "purple" }) => {
+  const strokeColor = active
+    ? "stroke-emerald-400"
+    : color === "amber"
+    ? "stroke-amber-400"
+    : "stroke-purple-400";
+  const glowFill = active
+    ? "fill-emerald-400/20"
+    : color === "amber"
+    ? "fill-amber-400/20"
+    : "fill-purple-400/20";
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="9" className={`${strokeColor} ${glowFill}`} />
+      <polygon points="13 3 6 13 12 13 11 21 18 11 12 11 13 3" className={strokeColor} />
+    </svg>
+  );
+};
+
+const IconTransitGateway = ({ unlocked }: { unlocked?: boolean }) => (
+  <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" strokeWidth="1.8">
+    <circle
+      cx="12"
+      cy="12"
+      r="9"
+      className={unlocked ? "stroke-emerald-400 animate-spin" : "stroke-rose-500/80"}
+      style={{ animationDuration: "12s" }}
+      strokeDasharray={unlocked ? "4 2" : "none"}
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="5"
+      className={unlocked ? "stroke-cyan-300 fill-emerald-500/30" : "stroke-rose-400/60 fill-rose-950/40"}
+    />
+    {unlocked ? (
+      <path d="M12 7v10M7 12h10" className="stroke-emerald-200" />
+    ) : (
+      <rect x="9.5" y="10.5" width="5" height="4" rx="1" className="stroke-rose-400 fill-rose-400/30" />
+    )}
+  </svg>
+);
+
 export default function Stage3Page() {
   const router = useRouter();
 
   // ─── KONSTANTA KANVAS (16:9 Fixed Sesuai Stage 1 & 2) ────────
   const GAME_WIDTH = 1024;
   const GAME_HEIGHT = 576;
-  const GROUND_Y = 510; // Ketinggian lantai dasar
+  const GROUND_Y = 540; // Lantai dasar solid mengikuti garis lantai gambar baru
 
   // ─── KONSTANTA PEMAIN ────────────────────────────────────────
   const PLAYER_W = 44;
   const PLAYER_H = 64;
   const MOVE_SPEED = 4.5;
-  const JUMP_POWER = -12.5;
+  const JUMP_POWER = -13.8; // Lompatan responsif menjangkau catwalk atas
   const GRAVITY = 0.6;
-
-  // ─── KONSTANTA KOTAK KARGO (CACHE MEMORY BLOCK) ──────────────
-  const BOX_W = 46;
-  const BOX_H = 46;
 
   // ─── TITIK AWAL PEMAIN (SPAWN POINT) ─────────────────────────
   const SPAWN_X = 60;
@@ -53,19 +110,6 @@ export default function Stage3Page() {
   const [isWalking, setIsWalking] = useState(false);
   const [isHurt, setIsHurt] = useState(false);
 
-  // ─── STATE KOTAK KARGO CACHE ─────────────────────────────────
-  const [boxX, setBoxX] = useState(210);
-  const [boxY, setBoxY] = useState(GROUND_Y - BOX_H);
-  const [boxVelocityY, setBoxVelocityY] = useState(0);
-
-  // ─── STATE SCANNER DRONE HAZARD (BERGERAK HORIZONTAL) ────────
-  const [droneX, setDroneX] = useState(520);
-  const droneY = 410;
-  const DRONE_W = 48;
-  const DRONE_H = 34;
-  const droneDirRef = useRef(1); // 1 = kanan, -1 = kiri
-  const droneXRef = useRef(droneX);
-
   // ─── STATE TOAST NOTIFIKASI ──────────────────────────────────
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
@@ -79,37 +123,85 @@ export default function Stage3Page() {
     return () => clearTimeout(t);
   }, [alertMessage]);
 
-  // ─── HITBOX DEFINITIONS (PLATFORM & RINTANGAN) ───────────────
-  // 1. Lantai Dasar Kiri & Kanan dengan Lubang Memory Leak di Tengah
-  const groundLeft = { x: 0, y: GROUND_Y, w: 320, h: GAME_HEIGHT - GROUND_Y };
-  const hazardPit = { x: 320, y: 518, w: 140, h: GAME_HEIGHT - 518 };
-  const groundRight = { x: 460, y: GROUND_Y, w: GAME_WIDTH - 460, h: GAME_HEIGHT - GROUND_Y };
+  // ─── HITBOX DEFINITIONS (PLATFORM SESUAI GAMBAR) ─────────────
+  // 1. Lantai Dasar Paling Bawah (Continuous Solid Floor)
+  const groundPlatform = { x: 0, y: GROUND_Y, w: GAME_WIDTH, h: GAME_HEIGHT - GROUND_Y };
 
-  // 2. Pijakan Melayang (Catwalks & Docks)
-  const platConsole = { x: 60, y: 390, w: 160, h: 18, label: "DATA-LOG CONSOLE" };
-  const platMidLeft = { x: 260, y: 320, w: 120, h: 18, label: "CACHE STEP" };
-  const platTerminal = { x: 430, y: 240, w: 200, h: 20, label: "PAGE-MAPPER TERMINAL" };
-  const platMidRight = { x: 680, y: 310, w: 130, h: 18, label: "MMU CONNECTOR" };
-  const platGate = { x: 850, y: 200, w: 174, h: 20, label: "FIREWALL GATE 4" };
+  // 2. Platform Mezanin Kiri (Lantai mezanin di atas lab bawah)
+  const platLeftDeck = { x: 0, y: 350, w: 330, h: 20, label: "DATA DECK" };
 
+  // 3. Platform Utama Tengah (Ketinggian y=295 pas dengan lantai panggung gambar)
+  const platMain = { x: 325, y: 295, w: 515, h: 22, label: "MAIN PLATFORM" };
+
+  // 4. Bordas Pendaratan Tangga Kanan (Lantai bawah di sebelah kanan tangga)
+  const platLanding = { x: 780, y: 410, w: 210, h: 20, label: "LOWER DECK" };
+
+  // 5. Catwalk Pipa Atas Kiri (Tempat Gerbang Portal Keluar ke Stage 4 di Ujung Kiri)
+  const platCatwalkLeft = { x: 10, y: 166, w: 285, h: 18, label: "PORTAL DECK L" };
+
+  // 6. Catwalk Atas Kanan (Tempat Komputer Materi OMNI di bawah jendela planet)
+  const platCatwalkRight = { x: 748, y: 165, w: 235, h: 18, label: "CONSOLE DECK R" };
+
+  // Daftar semua platform statis untuk deteksi tabrakan
   const allPlatforms = [
-    platConsole,
-    platMidLeft,
-    platTerminal,
-    platMidRight,
-    platGate,
+    platLeftDeck,
+    platMain,
+    platLanding,
+    platCatwalkLeft,
+    platCatwalkRight,
   ];
 
-  // 3. Objek Interaktif Ruangan
-  const consoleObj = { x: 110, y: 390 - 48, w: 46, h: 48 };
-  const terminalObj = { x: 505, y: 240 - 54, w: 54, h: 54 };
-  const laserDoor = { x: 845, y: 0, w: 14, h: 200 };
-  const portalObj = { x: 935, y: 200 - 80, w: 60, h: 80 };
+  // ─── OBJEK INTERAKTIF RUANGAN ────────────────────────────────
+  // 1. Materi di Komputer Kanan Atas (Manual OMNI)
+  const consoleObj = { x: 915, y: 165 - 48, w: 46, h: 48 };
+
+  // 2. Mini Game Tetap di Komputer Tengah (Page Frame Mapper)
+  const terminalObj = { x: 475, y: 295 - 54, w: 54, h: 54 };
+
+  // 3. Portal di Ujung Kiri Pijakan Atas (Stage 4 Gate)
+  const laserDoor = { x: 30, y: 166 - 76, w: 54, h: 76 };
+  const portalObj = { x: 30, y: 166 - 76, w: 54, h: 76 };
+
+  // 4. Komputer Tengah Kanan (Switch Pembuka Tembok Kuning) - Pas di komputer gambar dek kanan
+  const consoleMidRightObj = { x: 805, y: 295 - 48, w: 46, h: 48 };
+
+  // 5. Komputer Kiri (Switch Pembuka Tembok Merah) - Pas di komputer gambar mezanin kiri
+  const consoleMidLeftObj = { x: 215, y: 350 - 48, w: 46, h: 48 };
+
+  // ─── TEMBOK PENGHALANG SEKURITAS RUANGAN (TINGGI PENUH: TIDAK BISA DILOMPATI) ─────────
+  // 1. Tembok Kuning (Bawah): Di x=285, y=166..350 (menghalangi akses ke Komputer Kiri)
+  const wallYellow = { x: 285, y: 166, w: 22, h: 350 - 166 };
+  const wallCenter = wallYellow; // Alias kompatibilitas
+
+  // 2. Tembok Biru (Atas): Di x=285, y=0..166 (menghalangi akses ke Catwalk Portal Stage 4)
+  const wallBlue = { x: 285, y: 0, w: 22, h: 166 };
+
+  // 3. Tembok Merah: Di ujung kiri platCatwalkRight (x=748, y=0..165, menghalangi Catwalk Materi)
+  const wallMaterial = { x: 748, y: 0, w: 22, h: 165 };
 
   // Status Kedekatan Pemain dengan Objek Interaktif
   const [isNearConsole, setIsNearConsole] = useState(false);
   const [isNearTerminal, setIsNearTerminal] = useState(false);
   const [isNearPortal, setIsNearPortal] = useState(false);
+  const [isNearMidRightSwitch, setIsNearMidRightSwitch] = useState(false);
+  const [isNearMidLeftSwitch, setIsNearMidLeftSwitch] = useState(false);
+
+  // Status Pembukaan Tembok Penghalang
+  const [isWallCenterOpen, setIsWallCenterOpen] = useState(false);
+  const [isWallMaterialOpen, setIsWallMaterialOpen] = useState(false);
+
+  // Refs untuk Game Loop 60fps
+  const wallCenterOpenRef = useRef(isWallCenterOpen);
+  const wallMaterialOpenRef = useRef(isWallMaterialOpen);
+  useEffect(() => {
+    wallCenterOpenRef.current = isWallCenterOpen;
+  }, [isWallCenterOpen]);
+  useEffect(() => {
+    wallMaterialOpenRef.current = isWallMaterialOpen;
+  }, [isWallMaterialOpen]);
+
+  // Status Pembacaan Materi Manual OMNI (Wajib dibaca sebelum Terminal Mini-Game dapat diakses)
+  const [hasReadMaterial, setHasReadMaterial] = useState(false);
 
   // ============================================================================
   // LOGIKA PAGING & STATE MINI-GAME
@@ -125,7 +217,7 @@ export default function Stage3Page() {
     8: false,
   });
 
-  // State penyimpanan frame memory per mode agar data pemetaan tidak hilang saat berganti tab
+  // State penyimpanan frame memory per mode
   const [framesPerMode, setFramesPerMode] = useState<Record<PageSizeMode, FrameItem[]>>(() => ({
     2: initializeFrames(2),
     4: initializeFrames(4),
@@ -160,12 +252,12 @@ export default function Stage3Page() {
     return completedModes[2] && completedModes[4] && completedModes[8];
   }, [completedModes]);
 
-  // Buka otomatis modal metrik begitu ketiga mode selesai
+  // Begitu ketiga mode selesai, tutup terminal mini-game dan buka portal di kiri atas
   useEffect(() => {
     if (isAllModesCompleted && !hasAutoOpenedMetrics) {
       setHasAutoOpenedMetrics(true);
       setShowMapperModal(false);
-      setShowMetricsModal(true);
+      triggerAlert("🔓 Selamat! 3 Mode Paging Selesai. Tembok Biru Dinonaktifkan & Portal Stage 4 di Kiri Atas Terbuka!");
     }
   }, [isAllModesCompleted, hasAutoOpenedMetrics]);
 
@@ -307,25 +399,33 @@ export default function Stage3Page() {
     }));
 
     if (res.isCorrect) {
-      setCompletedModes((prev) => ({
-        ...prev,
-        [activeMode]: true,
-      }));
-      triggerAlert(`🎉 Mode Page ${activeMode} KB Berhasil Diverifikasi!`);
+      setCompletedModes((prev) => {
+        const next = { ...prev, [activeMode]: true };
+        const allDone = next[2] && next[4] && next[8];
+        if (allDone) {
+          setShowMapperModal(false);
+          triggerAlert("🔓 Selesai! Tembok Biru Dinonaktifkan & Portal Stage 4 di Kiri Atas Terbuka!");
+        } else {
+          triggerAlert(`🎉 Mode Page ${activeMode} KB Berhasil Diverifikasi!`);
+        }
+        return next;
+      });
     }
   };
 
   // ─── REFS GAME LOOP ──────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
-  const boxRef = useRef({ x: boxX, y: boxY, vy: boxVelocityY });
   const laserOpenRef = useRef(isAllModesCompleted);
+  // Tembok Biru terbuka bersamaan dengan portal menuju Stage 4 setelah menyelesaikan mini-game
+  const isWallBlueOpen = isAllModesCompleted;
+  const wallBlueOpenRef = useRef(isWallBlueOpen);
 
   playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
-  boxRef.current = { x: boxX, y: boxY, vy: boxVelocityY };
   laserOpenRef.current = isAllModesCompleted;
+  wallBlueOpenRef.current = isWallBlueOpen;
 
-  // ─── RESET PEMAIN JIKA TERKENA RINTANGAN ──────────────────────
+  // ─── RESET PEMAIN KE TITIK SPAWN ─────────────────────────────
   const resetPlayerToSpawn = (reason?: string) => {
     setIsHurt(true);
     setTimeout(() => setIsHurt(false), 500);
@@ -347,19 +447,51 @@ export default function Stage3Page() {
 
       // Interaksi tombol E
       if (key === "e") {
+        // 1. Komputer Tengah Kanan (Membuka Tembok Kuning di Kiri)
+        if (isNearMidRightSwitch && !showManualModal && !showMapperModal && !showMetricsModal) {
+          if (!isWallCenterOpen) {
+            setIsWallCenterOpen(true);
+            triggerAlert("🔓 Tembok Kuning Terbuka! Akses menuju Komputer Kiri sekarang terbuka.");
+          } else {
+            triggerAlert("ℹ️ Tembok Kuning sudah dinonaktifkan.");
+          }
+          return;
+        }
+
+        // 2. Komputer Kiri (Membuka Tembok Merah di Catwalk Kanan)
+        if (isNearMidLeftSwitch && !showManualModal && !showMapperModal && !showMetricsModal) {
+          if (!isWallMaterialOpen) {
+            setIsWallMaterialOpen(true);
+            triggerAlert("🔓 Tembok Merah Terbuka! Akses Catwalk menuju Komputer Materi (Kanan Atas) sekarang terbuka.");
+          } else {
+            triggerAlert("ℹ️ Tembok Merah sudah dinonaktifkan.");
+          }
+          return;
+        }
+
+        // 3. Komputer Materi (Kanan Atas)
         if (isNearConsole && !showManualModal && !showMapperModal && !showMetricsModal) {
           setShowManualModal(true);
+          setHasReadMaterial(true);
           return;
         }
+
+        // 4. Komputer Tengah (Page Mapper)
         if (isNearTerminal && !showManualModal && !showMapperModal && !showMetricsModal) {
-          setShowMapperModal(true);
+          if (!hasReadMaterial) {
+            triggerAlert("🔒 Terminal Terkunci! Buka dan pelajari Manual OMNI di komputer kanan atas terlebih dahulu.");
+          } else {
+            setShowMapperModal(true);
+          }
           return;
         }
+
+        // 5. Portal Keluar (Kiri Atas)
         if (isNearPortal && !showManualModal && !showMapperModal && !showMetricsModal) {
           if (isAllModesCompleted) {
             router.push("/stage/stage4");
           } else {
-            triggerAlert("⚠️ Firewall Aktif! Selesaikan 3 mode Paging di Terminal Utama.");
+            triggerAlert("⚠️ Firewall Aktif! Selesaikan 3 mode Paging di Terminal Tengah.");
           }
           return;
         }
@@ -367,6 +499,9 @@ export default function Stage3Page() {
 
       // Tombol ESC menutup modal
       if (key === "escape") {
+        if (showManualModal && !isAllModesCompleted) {
+          triggerAlert("✅ Log Manual OMNI dipelajari! Terminal Page Mapper di meja tengah sekarang terbuka.");
+        }
         setShowManualModal(false);
         setShowMapperModal(false);
         setShowMetricsModal(false);
@@ -391,19 +526,31 @@ export default function Stage3Page() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isNearConsole, isNearTerminal, isNearPortal, showManualModal, showMapperModal, showMetricsModal, isAllModesCompleted, router]);
+  }, [
+    isNearConsole,
+    isNearTerminal,
+    isNearPortal,
+    isNearMidRightSwitch,
+    isNearMidLeftSwitch,
+    isWallCenterOpen,
+    isWallMaterialOpen,
+    showManualModal,
+    showMapperModal,
+    showMetricsModal,
+    isAllModesCompleted,
+    hasReadMaterial,
+    router,
+  ]);
 
   // ─── GAME LOOP FISIKA 60FPS ──────────────────────────────────
   useEffect(() => {
     let animId: number;
 
     const gameLoop = () => {
-      // Jeda fisika jika modal sedang terbuka
       const isPaused = showManualModal || showMapperModal || showMetricsModal;
 
       if (!isPaused) {
         const p = { ...playerRef.current };
-        const b = { ...boxRef.current };
         const keys = keysPressed.current;
         const laserOpen = laserOpenRef.current;
 
@@ -431,70 +578,33 @@ export default function Stage3Page() {
         p.vy += GRAVITY;
         p.y += p.vy;
 
-        b.vy += GRAVITY;
-        b.y += b.vy;
-
-        // 4. FISIKA KOTAK KARGO (CACHE MEMORY BLOCK)
-        // Jatuh ke lantai dasar kiri/kanan atau terbenam di hazard pit
-        if (b.x + BOX_W <= hazardPit.x) {
-          if (b.y + BOX_H >= groundLeft.y) {
-            b.y = groundLeft.y - BOX_H;
-            b.vy = 0;
-          }
-        } else if (b.x >= hazardPit.x + hazardPit.w) {
-          if (b.y + BOX_H >= groundRight.y) {
-            b.y = groundRight.y - BOX_H;
-            b.vy = 0;
-          }
-        } else {
-          // Kotak berada di zona lubang Memory Leak: terbenam sebagai jembatan pijakan
-          if (b.y + BOX_H >= hazardPit.y + 36) {
-            b.y = hazardPit.y + 36;
-            b.vy = 0;
-          }
-        }
-
-        // 5. INTERAKSI DORONG KOTAK KARGO
         let nextPlayerX = p.x + moveX;
-        const playerBoxOverlapY = p.y + PLAYER_H > b.y + 4 && p.y < b.y + BOX_H - 4;
 
-        if (playerBoxOverlapY) {
-          // Dorong ke kanan
-          if (p.x + PLAYER_W <= b.x && nextPlayerX + PLAYER_W > b.x) {
-            const nextBoxX = b.x + moveX;
-            if (nextBoxX + BOX_W <= GAME_WIDTH - 12) {
-              b.x = nextBoxX;
-              nextPlayerX = b.x - PLAYER_W;
-            } else {
-              nextPlayerX = b.x - PLAYER_W;
+        // 5. TABRAKAN PELAPON (LOGIKA KEJEDOT SAAT MELOMPAT KE ATAS)
+        // Pemain tidak bisa menembus bagian bawah pelapon platform saat melompat ke atas
+        if (p.vy < 0) {
+          for (const plat of allPlatforms) {
+            const platBottom = plat.y + plat.h;
+            const isUnderPlatform =
+              nextPlayerX + PLAYER_W > plat.x + 4 &&
+              nextPlayerX < plat.x + plat.w - 4;
+
+            if (isUnderPlatform) {
+              if (p.y <= platBottom && (p.y - p.vy) >= platBottom - 8) {
+                p.y = platBottom;
+                p.vy = 1.0; // Kejedot: membatalkan dorongan ke atas, langsung memantul ke bawah
+              }
             }
           }
-          // Dorong ke kiri
-          if (p.x >= b.x + BOX_W && nextPlayerX < b.x + BOX_W) {
-            const nextBoxX = b.x + moveX;
-            if (nextBoxX >= 12) {
-              b.x = nextBoxX;
-              nextPlayerX = b.x + BOX_W;
-            } else {
-              nextPlayerX = b.x + BOX_W;
-            }
+
+          // Langit-langit atap layar
+          if (p.y <= 8) {
+            p.y = 8;
+            p.vy = 1.0;
           }
         }
 
-        // 6. PIJAKAN DI ATAS KOTAK
-        const isOverBox =
-          p.x + PLAYER_W > b.x &&
-          p.x < b.x + BOX_W &&
-          p.y + PLAYER_H >= b.y &&
-          p.y + PLAYER_H - p.vy <= b.y + 14;
-
-        if (isOverBox && p.vy >= 0) {
-          p.y = b.y - PLAYER_H;
-          p.vy = 0;
-          p.jumping = false;
-        }
-
-        // 7. TABRAKAN PLATFORM MELAYANG
+        // 6. TABRAKAN PLATFORM STATIS (PIJAKAN DARI ATAS)
         for (const plat of allPlatforms) {
           const isOverPlatform =
             p.x + PLAYER_W > plat.x &&
@@ -509,40 +619,44 @@ export default function Stage3Page() {
           }
         }
 
-        // 8. LANTAI DASAR & RINTANGAN HAZARD PIT
-        if (p.x + PLAYER_W <= hazardPit.x) {
-          // Berada di lantai dasar kiri
-          if (p.y + PLAYER_H >= groundLeft.y) {
-            p.y = groundLeft.y - PLAYER_H;
-            p.vy = 0;
-            p.jumping = false;
-          }
-        } else if (p.x >= hazardPit.x + hazardPit.w) {
-          // Berada di lantai dasar kanan
-          if (p.y + PLAYER_H >= groundRight.y) {
-            p.y = groundRight.y - PLAYER_H;
-            p.vy = 0;
-            p.jumping = false;
-          }
-        } else {
-          // Pemain berada di atas zona lubang Memory Leak
-          if (p.y + PLAYER_H >= hazardPit.y) {
-            // Cek apakah pemain mendarat di atas kotak kargo yang berada di dalam pit
-            const landingOnBoxInPit =
-              p.x + PLAYER_W > b.x &&
-              p.x < b.x + BOX_W &&
-              p.y + PLAYER_H >= b.y &&
-              p.y + PLAYER_H - p.vy <= b.y + 14;
+        // 7. TANGGA REALISTIS (RAMP DARI LANTAI DASAR KE LANDING KANAN)
+        // Tangga dari x: 740 (y: 540) menanjak ke kanan menuju x: 840 (y: 410)
+        let stairsGroundY: number | null = null;
+        const charFootX = nextPlayerX + PLAYER_W * 0.5;
+        const footY = p.y + PLAYER_H;
 
-            if (!landingOnBoxInPit) {
-              resetPlayerToSpawn("⚠️ Korsleting Memori! Jatuh ke dalam Memory Leak Pit.");
-              animId = requestAnimationFrame(gameLoop);
-              return;
+        if (charFootX >= 740 && charFootX <= 840) {
+          const t = (840 - charFootX) / (840 - 740);
+          const rampLowerY = 410 + t * (540 - 410);
+          if (footY >= 400 && footY <= 545) {
+            stairsGroundY = rampLowerY;
+          }
+        }
+
+        if (stairsGroundY !== null) {
+          const prevFootY = footY - p.vy;
+          if (!p.jumping) {
+            if (Math.abs(footY - stairsGroundY) <= 16) {
+              p.y = stairsGroundY - PLAYER_H;
+              p.vy = 0;
+            }
+          } else if (p.vy >= 0) {
+            if (footY >= stairsGroundY && prevFootY <= stairsGroundY + 16) {
+              p.y = stairsGroundY - PLAYER_H;
+              p.vy = 0;
+              p.jumping = false;
             }
           }
         }
 
-        // 9. PINTU LASER FIREWALL (PENGHALANG VERTICAL MENUJU STAGE 4)
+        // 8. LANTAI DASAR SOLID (FULL LEBAR 1024 PX)
+        if (p.y + PLAYER_H >= GROUND_Y) {
+          p.y = GROUND_Y - PLAYER_H;
+          p.vy = 0;
+          p.jumping = false;
+        }
+
+        // 9. PENGHALANG PINTU LASER FIREWALL (DI PIJAKAN KIRI ATAS SEBELUM SELESAI)
         if (!laserOpen) {
           const inLaserYRange = p.y + PLAYER_H > laserDoor.y && p.y < laserDoor.y + laserDoor.h;
           if (inLaserYRange) {
@@ -554,37 +668,120 @@ export default function Stage3Page() {
           }
         }
 
+        // 9b. TEMBOK KUNING (BAWAH: PENGHALANG MENUJU KOMPUTER KIRI, y=166..350)
+        if (!wallCenterOpenRef.current) {
+          const wallL = wallYellow.x;
+          const wallR = wallYellow.x + wallYellow.w;
+          const wallT = wallYellow.y;
+          const wallB = wallYellow.y + wallYellow.h;
+
+          const pBottom = p.y + PLAYER_H;
+          const inVertical = pBottom > wallT && p.y < wallB;
+
+          if (inVertical) {
+            const nextL = nextPlayerX;
+            const nextR = nextPlayerX + PLAYER_W;
+            const willOverlap = nextR > wallL && nextL < wallR;
+
+            if (willOverlap) {
+              const prevR = p.x + PLAYER_W;
+              const prevL = p.x;
+
+              if (prevR <= wallL + 6) {
+                nextPlayerX = wallL - PLAYER_W;
+              } else if (prevL >= wallR - 6) {
+                nextPlayerX = wallR;
+              } else {
+                const pCenter = p.x + PLAYER_W * 0.5;
+                const wallMid = wallL + wallYellow.w * 0.5;
+                if (pCenter < wallMid) {
+                  nextPlayerX = wallL - PLAYER_W;
+                } else {
+                  nextPlayerX = wallR;
+                }
+              }
+            }
+          }
+        }
+
+        // 9c. TEMBOK BIRU (ATAS: PENGHALANG MENUJU CATWALK PORTAL STAGE 4, y=0..166)
+        if (!wallBlueOpenRef.current) {
+          const wallL = wallBlue.x;
+          const wallR = wallBlue.x + wallBlue.w;
+          const wallT = wallBlue.y;
+          const wallB = wallBlue.y + wallBlue.h;
+
+          const pBottom = p.y + PLAYER_H;
+          const inVertical = pBottom > wallT && p.y < wallB;
+
+          if (inVertical) {
+            const nextL = nextPlayerX;
+            const nextR = nextPlayerX + PLAYER_W;
+            const willOverlap = nextR > wallL && nextL < wallR;
+
+            if (willOverlap) {
+              const prevR = p.x + PLAYER_W;
+              const prevL = p.x;
+
+              if (prevR <= wallL + 6) {
+                nextPlayerX = wallL - PLAYER_W;
+              } else if (prevL >= wallR - 6) {
+                nextPlayerX = wallR;
+              } else {
+                const pCenter = p.x + PLAYER_W * 0.5;
+                const wallMid = wallL + wallBlue.w * 0.5;
+                if (pCenter < wallMid) {
+                  nextPlayerX = wallL - PLAYER_W;
+                } else {
+                  nextPlayerX = wallR;
+                }
+              }
+            }
+          }
+        }
+
+        // 9d. TEMBOK MERAH (PENGHALANG MENUJU KOMPUTER MATERI CATWALK KANAN)
+        if (!wallMaterialOpenRef.current) {
+          const wallL = wallMaterial.x;
+          const wallR = wallMaterial.x + wallMaterial.w;
+          const wallT = wallMaterial.y;
+          const wallB = wallMaterial.y + wallMaterial.h;
+
+          const pBottom = p.y + PLAYER_H;
+          const inVertical = pBottom > wallT && p.y < wallB;
+
+          if (inVertical) {
+            const nextL = nextPlayerX;
+            const nextR = nextPlayerX + PLAYER_W;
+            const willOverlap = nextR > wallL && nextL < wallR;
+
+            if (willOverlap) {
+              const prevR = p.x + PLAYER_W;
+              const prevL = p.x;
+
+              if (prevR <= wallL + 6) {
+                nextPlayerX = wallL - PLAYER_W;
+              } else if (prevL >= wallR - 6) {
+                nextPlayerX = wallR;
+              } else {
+                const pCenter = p.x + PLAYER_W * 0.5;
+                const wallMid = wallL + wallMaterial.w * 0.5;
+                if (pCenter < wallMid) {
+                  nextPlayerX = wallL - PLAYER_W;
+                } else {
+                  nextPlayerX = wallR;
+                }
+              }
+            }
+          }
+        }
+
         // 10. BATAS KANVAS KIRI & KANAN
         if (nextPlayerX < 10) nextPlayerX = 10;
         if (nextPlayerX + PLAYER_W > GAME_WIDTH - 10) nextPlayerX = GAME_WIDTH - 10 - PLAYER_W;
         p.x = nextPlayerX;
 
-        // 11. PATROLI SCANNER DRONE HAZARD
-        let dx = droneXRef.current + 1.8 * droneDirRef.current;
-        if (dx > 760) {
-          dx = 760;
-          droneDirRef.current = -1;
-        } else if (dx < 480) {
-          dx = 480;
-          droneDirRef.current = 1;
-        }
-        droneXRef.current = dx;
-        setDroneX(dx);
-
-        // Deteksi tabrakan dengan Drone
-        const hitDrone =
-          p.x + PLAYER_W > dx + 6 &&
-          p.x < dx + DRONE_W - 6 &&
-          p.y + PLAYER_H > droneY + 6 &&
-          p.y < droneY + DRONE_H - 6;
-
-        if (hitDrone) {
-          resetPlayerToSpawn("⚡ Terdeteksi oleh OMNI Security Drone! Karakter di-reset.");
-          animId = requestAnimationFrame(gameLoop);
-          return;
-        }
-
-        // 12. DETEKSI KEDEKATAN OBJEK INTERAKTIF
+        // 11. DETEKSI KEDEKATAN OBJEK INTERAKTIF
         const distConsoleX = Math.abs(p.x + PLAYER_W / 2 - (consoleObj.x + consoleObj.w / 2));
         const distConsoleY = Math.abs(p.y + PLAYER_H / 2 - (consoleObj.y + consoleObj.h / 2));
         setIsNearConsole(distConsoleX < 65 && distConsoleY < 65);
@@ -597,15 +794,19 @@ export default function Stage3Page() {
         const distPortalY = Math.abs(p.y + PLAYER_H / 2 - (portalObj.y + portalObj.h / 2));
         setIsNearPortal(distPortalX < 65 && distPortalY < 65);
 
+        const distMidRightX = Math.abs(p.x + PLAYER_W / 2 - (consoleMidRightObj.x + consoleMidRightObj.w / 2));
+        const distMidRightY = Math.abs(p.y + PLAYER_H / 2 - (consoleMidRightObj.y + consoleMidRightObj.h / 2));
+        setIsNearMidRightSwitch(distMidRightX < 65 && distMidRightY < 65);
+
+        const distMidLeftX = Math.abs(p.x + PLAYER_W / 2 - (consoleMidLeftObj.x + consoleMidLeftObj.w / 2));
+        const distMidLeftY = Math.abs(p.y + PLAYER_H / 2 - (consoleMidLeftObj.y + consoleMidLeftObj.h / 2));
+        setIsNearMidLeftSwitch(distMidLeftX < 65 && distMidLeftY < 65);
+
         // Sinkronisasi state React
         setPlayerX(p.x);
         setPlayerY(p.y);
         setVelocityY(p.vy);
         setIsJumping(p.jumping);
-
-        setBoxX(b.x);
-        setBoxY(b.y);
-        setBoxVelocityY(b.vy);
       }
 
       animId = requestAnimationFrame(gameLoop);
@@ -622,61 +823,88 @@ export default function Stage3Page() {
   return (
     <main className="min-h-screen bg-black text-[#e9e4ff] select-none flex flex-col items-center justify-center p-2">
       
-      {/* ─── HUD INFO ATAS ────────────────────────────────────────── */}
-      <div className="flex w-[1024px] max-w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2 text-xs text-gray-300 backdrop-blur-md mb-2">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
-          <span className="font-bold tracking-wider text-[#ffb347] uppercase text-[11px] font-mono">
-            Stage 3 // The Memory Vault - Paging System
+      {/* ─── HUD TELEMETRY COMMAND BAR ────────────────────────────── */}
+      <div className="flex w-[1024px] max-w-full items-center justify-between rounded-xl border border-cyan-500/20 bg-[#070913]/90 px-4 py-2 text-xs backdrop-blur-xl mb-2 shadow-[0_4px_25px_rgba(0,0,0,0.8)]">
+        
+        {/* Left: Mission Callout */}
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+          </span>
+          <span className="font-mono text-[11px] font-bold text-cyan-300 tracking-wider">
+            STAGE 03 // THE MEMORY VAULT
+          </span>
+          <span className="hidden md:inline font-mono text-[9px] text-slate-500 border-l border-slate-700 pl-2">
+            PAGING ARCHITECTURE
           </span>
         </div>
 
-        <div className="flex items-center gap-3 text-[11px]">
-          <span className="hidden sm:inline">
-            <strong className="text-white font-mono">A / D</strong>: Jalan • <strong className="text-white font-mono">W / Spasi</strong>: Lompat • <strong className="text-white font-mono">E</strong>: Interaksi
-          </span>
-
-          {/* Status 3 Mode Paging */}
-          <div className="flex items-center gap-1.5 font-mono">
+        {/* Center: System Status Telemetry */}
+        <div className="flex items-center gap-4 text-[10px] font-mono">
+          
+          {/* Paging Modes Status */}
+          <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 px-2 py-0.5 rounded-md">
+            <span className="text-slate-500 font-bold mr-1">MMU:</span>
             {([2, 4, 8] as PageSizeMode[]).map((mode) => (
               <span
                 key={mode}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                className={`px-1.5 py-0.2 rounded text-[9px] font-bold tracking-tight ${
                   completedModes[mode]
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                    : "bg-slate-800 text-slate-400 border border-slate-700"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                    : "text-slate-600"
                 }`}
               >
-                {mode}K: {completedModes[mode] ? "✓" : "○"}
+                {mode}K {completedModes[mode] ? "●" : "○"}
               </span>
             ))}
           </div>
 
+          {/* Security Grids Telemetry */}
+          <div className="hidden lg:flex items-center gap-2 bg-slate-950/80 border border-slate-800 px-2 py-0.5 rounded-md text-[9px]">
+            <span className="text-slate-500 font-bold">GRIDS:</span>
+            <span className={isWallCenterOpen ? "text-emerald-400 font-bold" : "text-amber-400/80"}>
+              A:{isWallCenterOpen ? "OFFLINE" : "ENGAGED"}
+            </span>
+            <span className="text-slate-700">•</span>
+            <span className={isWallMaterialOpen ? "text-emerald-400 font-bold" : "text-rose-400/80"}>
+              B:{isWallMaterialOpen ? "OFFLINE" : "ENGAGED"}
+            </span>
+            <span className="text-slate-700">•</span>
+            <span className={isWallBlueOpen ? "text-emerald-400 font-bold" : "text-cyan-400/80"}>
+              C:{isWallBlueOpen ? "OFFLINE" : "ENGAGED"}
+            </span>
+          </div>
+
+          {/* Firewall Gate Status */}
           <span
-            className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${
+            className={`font-mono font-bold px-2 py-0.5 rounded text-[9px] tracking-wider uppercase border ${
               isAllModesCompleted
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_10px_rgba(52,211,153,0.5)]"
-                : "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"
+                ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(52,211,153,0.3)]"
+                : "bg-rose-500/10 text-rose-400 border-rose-500/30"
             }`}
           >
-            {isAllModesCompleted ? "FIREWALL: BYPASSED" : "FIREWALL: AKTIF"}
+            {isAllModesCompleted ? "TRANSIT UNLOCKED" : "TRANSIT CONTAINED"}
           </span>
+        </div>
 
+        {/* Right: Metrics & Controls */}
+        <div className="flex items-center gap-2 text-[10px] font-mono">
           {isAllModesCompleted && (
             <button
               type="button"
               onClick={() => setShowMetricsModal(true)}
-              className="font-mono font-bold px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition"
+              className="font-bold px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition shadow-[0_0_10px_rgba(245,158,11,0.3)]"
             >
-              📊 METRIK
+              METRIK
             </button>
           )}
 
           <Link
             href="/stage/stage2"
-            className="rounded border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-mono text-gray-300 hover:text-white"
+            className="rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-400 hover:text-white hover:border-white/20 transition"
           >
-            ← Stage 2
+            ← STAGE 02
           </Link>
         </div>
       </div>
@@ -691,179 +919,90 @@ export default function Stage3Page() {
           backgroundSize: "100% 100%",
         }}
       >
-        {/* Overlay atmosfer sci-fi */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+        {/* Overlay lembut sci-fi */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/40 pointer-events-none" />
 
-        {/* ─── TOAST NOTIFIKASI DI LAYAR GAME ──────────────────────── */}
+        {/* ─── TOAST NOTIFIKASI TELEMETRI (HUD TACTICAL) ────────────── */}
         {alertMessage && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 animate-bounce pointer-events-none">
-            <div className="rounded-xl border border-amber-400/80 bg-black/90 px-4 py-2 text-xs font-mono font-bold text-amber-300 shadow-[0_0_20px_rgba(251,191,36,0.6)] backdrop-blur-md">
-              {alertMessage}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-all duration-300">
+            <div className="flex items-center gap-2.5 rounded-lg border border-cyan-400/50 bg-[#060914]/95 px-4 py-2 font-mono text-xs text-cyan-200 shadow-[0_0_25px_rgba(34,211,238,0.35)] backdrop-blur-md">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+              </span>
+              <span className="text-[10px] tracking-wider text-cyan-400 font-bold uppercase">[SYS // TELEMETRY]</span>
+              <span className="text-gray-200 font-semibold">{alertMessage}</span>
             </div>
           </div>
         )}
 
-        {/* ─── 1. LANTAI DASAR KIRI (PHYSICAL RAM SECTOR A) ────────── */}
-        <div
-          className="absolute z-10 border-t-2 border-cyan-400/70 bg-[#060c14]/90 shadow-[0_-4px_20px_rgba(0,0,0,0.8)]"
-          style={{
-            left: `${groundLeft.x}px`,
-            top: `${groundLeft.y}px`,
-            width: `${groundLeft.w}px`,
-            height: `${groundLeft.h}px`,
-          }}
-        >
-          <div className="h-1 w-full bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-500 opacity-60" />
-          <div className="p-2 text-[8px] font-mono text-cyan-400/60 flex items-center justify-between">
-            <span>RAM SECTOR A [0x0000 - 0x3FFF]</span>
-            <span className="text-[7px] text-cyan-300/40">32 KB BASE</span>
-          </div>
-        </div>
+        {/* ─── PIJAKAN & LANTAI DASAR (TRANSPARAN PENUH MENGIKUTI BACKGROUND) ─── */}
+        {/* Fisika tabrakan dikelola secara matematis di gameLoop oleh allPlatforms & groundPlatform */}
 
-        {/* ─── 2. RINTANGAN HAZARD PIT (MEMORY LEAK PIT) ────────────── */}
+        {/* ─── 1. MATERI DI KOMPUTER KANAN ATAS (CATWALK R) ─────────── */}
         <div
-          className="absolute z-10 border-t-2 border-rose-500/80 bg-rose-950/40 shadow-[0_0_25px_rgba(244,63,94,0.6)] flex flex-col items-center justify-center overflow-hidden"
-          style={{
-            left: `${hazardPit.x}px`,
-            top: `${hazardPit.y}px`,
-            width: `${hazardPit.w}px`,
-            height: `${hazardPit.h}px`,
-          }}
-        >
-          <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,rgba(244,63,94,0.15),rgba(244,63,94,0.15)_8px,transparent_8px,transparent_16px)] animate-pulse" />
-          <span className="relative z-10 text-[9px] font-mono font-black text-rose-400 tracking-wider animate-bounce">
-            ⚠️ MEMORY LEAK PIT
-          </span>
-          <span className="relative z-10 text-[7px] font-mono text-rose-300/80">
-            [CORRUPT FLUX ZONE]
-          </span>
-        </div>
-
-        {/* ─── 3. LANTAI DASAR KANAN (PHYSICAL RAM SECTOR B) ────────── */}
-        <div
-          className="absolute z-10 border-t-2 border-cyan-400/70 bg-[#060c14]/90 shadow-[0_-4px_20px_rgba(0,0,0,0.8)]"
-          style={{
-            left: `${groundRight.x}px`,
-            top: `${groundRight.y}px`,
-            width: `${groundRight.w}px`,
-            height: `${groundRight.h}px`,
-          }}
-        >
-          <div className="h-1 w-full bg-gradient-to-r from-cyan-500 via-blue-500 to-cyan-500 opacity-60" />
-          <div className="p-2 text-[8px] font-mono text-cyan-400/60 flex items-center justify-between">
-            <span>RAM SECTOR B [0x4000 - 0x7FFF]</span>
-            <span className="text-[7px] text-cyan-300/40">MMU READY</span>
-          </div>
-        </div>
-
-        {/* ─── 4. PIJAKAN MELAYANG (CATWALKS & DOCKS) ───────────────── */}
-        {allPlatforms.map((plat, idx) => (
-          <div
-            key={idx}
-            className="absolute z-10 rounded-md border border-cyan-500/50 bg-[#091522]/85 shadow-[0_4px_20px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(34,211,238,0.5)] backdrop-blur-xs flex items-center justify-between px-2 overflow-hidden"
-            style={{
-              left: `${plat.x}px`,
-              top: `${plat.y}px`,
-              width: `${plat.w}px`,
-              height: `${plat.h}px`,
-            }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-cyan-400 via-teal-300 to-cyan-400" />
-            <span className="text-[7px] font-mono tracking-widest text-cyan-300/80 select-none">
-              {plat.label}
-            </span>
-            <span className="text-[6px] font-mono text-cyan-400/40 select-none">
-              BLK-{idx + 1}
-            </span>
-          </div>
-        ))}
-
-        {/* ─── 5. KONSOL KIRI (MANUAL OMNI / LOG ALIEN) ─────────────── */}
-        <div
-          className="absolute z-20 flex flex-col items-center cursor-pointer hover:scale-105 transition-transform"
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
             left: `${consoleObj.x}px`,
             top: `${consoleObj.y}px`,
             width: `${consoleObj.w}px`,
             height: `${consoleObj.h}px`,
           }}
-          onClick={() => setShowManualModal(true)}
+          onClick={() => {
+            setShowManualModal(true);
+            setHasReadMaterial(true);
+          }}
         >
           {isNearConsole && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
-              <span className="rounded bg-cyan-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
-                [E] Baca Manual OMNI
+            <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
+              <span className="rounded-md border border-cyan-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
+                Tekan <kbd className="rounded bg-cyan-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk {hasReadMaterial ? "Baca Ulang Materi" : "Baca Materi OMNI"}
               </span>
             </div>
           )}
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-400/80 bg-cyan-950/70 shadow-[0_0_20px_rgba(34,211,238,0.7)] animate-pulse">
-            <span className="text-lg">📖</span>
-          </div>
-          <span className="text-[7px] font-mono font-bold text-cyan-300 bg-black/70 px-1 rounded mt-0.5">
-            MANUAL
-          </span>
         </div>
 
-        {/* ─── 6. TERMINAL UTAMA (PAGE FRAME MAPPER) ────────────────── */}
+        {/* ─── 2. MINI GAME TETAP DI KOMPUTER TENGAH (PAGE MAPPER) ──── */}
         <div
-          className="absolute z-20 flex flex-col items-center cursor-pointer hover:scale-105 transition-transform"
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
             left: `${terminalObj.x}px`,
             top: `${terminalObj.y}px`,
             width: `${terminalObj.w}px`,
             height: `${terminalObj.h}px`,
           }}
-          onClick={() => setShowMapperModal(true)}
+          onClick={() => {
+            if (!hasReadMaterial) {
+              triggerAlert("Terminal Terkunci! Pelajari Manual OMNI di komputer kanan atas terlebih dahulu.");
+            } else {
+              setShowMapperModal(true);
+            }
+          }}
         >
           {isNearTerminal && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
-              <span className="rounded bg-amber-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
-                [E] Terminal Page Mapper
+            <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
+              <span
+                className={`rounded-md border px-2.5 py-1 text-[10px] font-mono font-bold shadow-md ${
+                  hasReadMaterial
+                    ? "border-amber-400/80 bg-black/90 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                    : "border-rose-500/80 bg-black/90 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.5)]"
+                }`}
+              >
+                {hasReadMaterial ? (
+                  <>
+                    Tekan <kbd className="rounded bg-amber-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Akses Terminal Page Mapper
+                  </>
+                ) : (
+                  "🔒 Terminal Terkunci (Pelajari Materi di Komputer Kanan Dahulu)"
+                )}
               </span>
             </div>
           )}
-          <div className="relative flex h-12 w-14 items-center justify-center rounded-xl border-2 border-cyan-400 bg-gradient-to-b from-cyan-950 to-blue-950 shadow-[0_0_25px_rgba(34,211,238,0.9)] animate-pulse">
-            <span className="text-xl">🖥️</span>
-            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500" />
-            </span>
-          </div>
-          <span className="text-[8px] font-mono font-black text-cyan-200 bg-black/80 px-1.5 py-0.2 rounded border border-cyan-400/40 mt-1">
-            PAGE MAPPER
-          </span>
         </div>
 
-        {/* ─── 7. PINTU FIREWALL LASER (PENGHALANG VERTICAL) ────────── */}
+        {/* ─── 3. PORTAL PINDAH KE PIJAKAN KIRI ATAS (CATWALK L) ─────── */}
         <div
-          className={`absolute z-20 transition-all duration-500 flex flex-col items-center justify-center ${
-            isAllModesCompleted
-              ? "opacity-20 pointer-events-none"
-              : "opacity-100 shadow-[0_0_25px_rgba(244,63,94,0.9)]"
-          }`}
-          style={{
-            left: `${laserDoor.x}px`,
-            top: `${laserDoor.y}px`,
-            width: `${laserDoor.w}px`,
-            height: `${laserDoor.h}px`,
-          }}
-        >
-          <div
-            className={`h-full w-full rounded border-2 flex items-center justify-center ${
-              isAllModesCompleted
-                ? "border-emerald-400 bg-emerald-500/20"
-                : "border-rose-500 bg-rose-600/60 animate-pulse"
-            }`}
-          >
-            <span className="text-[7px] font-mono font-black text-white -rotate-90 whitespace-nowrap">
-              {isAllModesCompleted ? "BYPASSED" : "FIREWALL"}
-            </span>
-          </div>
-        </div>
-
-        {/* ─── 8. PORTAL AKHIR (MENUJU STAGE 4) ─────────────────────── */}
-        <div
-          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer hover:scale-105 transition-transform"
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
             left: `${portalObj.x}px`,
             top: `${portalObj.y}px`,
@@ -874,81 +1013,237 @@ export default function Stage3Page() {
             if (isAllModesCompleted) {
               router.push("/stage/stage4");
             } else {
-              triggerAlert("⚠️ Portal Terkunci! Selesaikan 3 mode Paging di Terminal Utama.");
+              triggerAlert("Singularity Transit Terkunci! Selesaikan 3 mode Paging di Terminal Tengah.");
             }
           }}
         >
           {isNearPortal && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
+            <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
               <span
-                className={`rounded px-2 py-0.5 text-[9px] font-black shadow-md ${
+                className={`rounded-md border px-2.5 py-1 text-[10px] font-mono font-bold shadow-md ${
                   isAllModesCompleted
-                    ? "bg-emerald-400 text-black"
-                    : "bg-rose-500 text-white"
+                    ? "border-emerald-400/80 bg-black/90 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.6)]"
+                    : "border-rose-500/80 bg-black/90 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.5)]"
                 }`}
               >
-                {isAllModesCompleted ? "[E] Masuk Stage 4 ➔" : "🔒 Terkunci"}
+                {isAllModesCompleted ? (
+                  <>
+                    Tekan <kbd className="rounded bg-emerald-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Masuk ke Stage 4 ➔
+                  </>
+                ) : (
+                  "🔒 Portal Terkunci (Selesaikan Tantangan di Komputer Tengah)"
+                )}
               </span>
             </div>
           )}
+
+          {/* Efek visual portal hanya aktif ketika isAllModesCompleted */}
+          {isAllModesCompleted && (
+            <div className="h-full w-full rounded-xl border-2 border-emerald-400 bg-emerald-950/40 shadow-[0_0_35px_rgba(52,211,153,0.7)] flex flex-col items-center justify-center animate-pulse">
+              <IconTransitGateway unlocked={true} />
+              <span className="text-[7px] font-mono font-bold tracking-widest mt-1 text-emerald-300">
+                TRANSIT OPEN
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ─── 4. KOMPUTER TENGAH KANAN (SWITCH PEMBUKA TEMBOK KUNING) ─── */}
+        <div
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
+          style={{
+            left: `${consoleMidRightObj.x}px`,
+            top: `${consoleMidRightObj.y}px`,
+            width: `${consoleMidRightObj.w}px`,
+            height: `${consoleMidRightObj.h}px`,
+          }}
+          onClick={() => {
+            if (!isWallCenterOpen) {
+              setIsWallCenterOpen(true);
+              triggerAlert("Grid Amber dinonaktifkan! Jalur akses menuju Mezanin Kiri terbuka.");
+            } else {
+              triggerAlert("Grid Amber sudah dalam status deaktif.");
+            }
+          }}
+        >
+          {isNearMidRightSwitch && (
+            <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
+              <span
+                className={`rounded-md border px-2.5 py-1 text-[10px] font-mono font-bold shadow-md ${
+                  isWallCenterOpen
+                    ? "border-emerald-400/80 bg-black/90 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.5)]"
+                    : "border-amber-400/80 bg-black/90 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
+                }`}
+              >
+                {isWallCenterOpen ? (
+                  "Tembok Kuning Terbuka ✓"
+                ) : (
+                  <>
+                    Tekan <kbd className="rounded bg-amber-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Buka Tembok Kuning
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ─── 5. KOMPUTER KIRI (SWITCH PEMBUKA TEMBOK MERAH) ───────── */}
+        <div
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
+          style={{
+            left: `${consoleMidLeftObj.x}px`,
+            top: `${consoleMidLeftObj.y}px`,
+            width: `${consoleMidLeftObj.w}px`,
+            height: `${consoleMidLeftObj.h}px`,
+          }}
+          onClick={() => {
+            if (!isWallMaterialOpen) {
+              setIsWallMaterialOpen(true);
+              triggerAlert("Containment Crimson dinonaktifkan! Catwalk menuju Komputer Log terbuka.");
+            } else {
+              triggerAlert("Containment Crimson sudah dalam status deaktif.");
+            }
+          }}
+        >
+          {isNearMidLeftSwitch && (
+            <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
+              <span
+                className={`rounded-md border px-2.5 py-1 text-[10px] font-mono font-bold shadow-md ${
+                  isWallMaterialOpen
+                    ? "border-emerald-400/80 bg-black/90 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.5)]"
+                    : "border-purple-400/80 bg-black/90 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.5)]"
+                }`}
+              >
+                {isWallMaterialOpen ? (
+                  "Tembok Merah Terbuka ✓"
+                ) : (
+                  <>
+                    Tekan <kbd className="rounded bg-purple-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Buka Tembok Merah
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ─── TEMBOK 1: TEMBOK KUNING (BAWAH: PENGHALANG MENUJU KOMPUTER KIRI) ── */}
+        <div
+          className={`absolute z-25 transition-all duration-700 flex flex-col items-center justify-between rounded overflow-hidden ${
+            isWallCenterOpen
+              ? "opacity-0 scale-y-0 pointer-events-none origin-top"
+              : "opacity-100 border-x border-amber-400/60 shadow-[0_0_25px_rgba(245,158,11,0.6)]"
+          }`}
+          style={{
+            left: `${wallYellow.x}px`,
+            top: `${wallYellow.y}px`,
+            width: `${wallYellow.w}px`,
+            height: `${wallYellow.h}px`,
+          }}
+        >
+          {/* Top Industrial Emitter Clamp */}
+          <div className="w-full h-3 bg-[#0d121f] border-b border-amber-400/80 flex items-center justify-center">
+            <span className="h-1 w-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_6px_#f59e0b]" />
+          </div>
+
+          {/* Central Laser Containment Beam with High-Tech Scanline Filaments */}
           <div
-            className={`absolute inset-0 rounded-full border-2 transition-all duration-500 ${
-              isAllModesCompleted
-                ? "border-emerald-400 bg-emerald-600/40 shadow-[0_0_35px_rgba(52,211,153,0.9)] animate-pulse"
-                : "border-purple-500 bg-purple-900/30 shadow-[0_0_20px_rgba(168,85,247,0.5)] opacity-70"
-            }`}
-          />
-          <div className="relative z-10 text-center pointer-events-none">
-            <span className="text-2xl animate-spin inline-block" style={{ animationDuration: "8s" }}>
-              🌀
+            className="flex-1 w-full relative flex items-center justify-center"
+            style={{
+              background:
+                "repeating-linear-gradient(0deg, rgba(245,158,11,0.2) 0px, rgba(245,158,11,0.2) 2px, transparent 2px, transparent 6px), linear-gradient(90deg, rgba(245,158,11,0.1), rgba(245,158,11,0.35), rgba(245,158,11,0.1))",
+            }}
+          >
+            <div className="absolute inset-y-0 w-[2px] bg-amber-300 shadow-[0_0_10px_#f59e0b] animate-pulse" />
+            <span className="text-[6.5px] font-mono font-black text-amber-200/90 uppercase tracking-widest transform -rotate-90 select-none pointer-events-none">
+              GRID // AMBER-01
             </span>
-            <span
-              className={`block text-[8px] font-black tracking-widest uppercase ${
-                isAllModesCompleted ? "text-emerald-300" : "text-purple-300"
-              }`}
-            >
-              {isAllModesCompleted ? "GATE 4 ON" : "GATE 4"}
-            </span>
+          </div>
+
+          {/* Bottom Industrial Emitter Clamp */}
+          <div className="w-full h-3 bg-[#0d121f] border-t border-amber-400/80 flex items-center justify-center">
+            <span className="h-1 w-2 rounded-full bg-amber-400 animate-pulse shadow-[0_0_6px_#f59e0b]" />
           </div>
         </div>
 
-        {/* ─── 9. KOTAK KARGO CACHE (BISA DIDORONG) ─────────────────── */}
+        {/* ─── TEMBOK 2: TEMBOK BIRU (ATAS: PENGHALANG MENUJU PORTAL STAGE 4) ──── */}
         <div
-          className="absolute z-20 flex flex-col items-center justify-center rounded-lg border-2 border-cyan-300 bg-cyan-900/90 shadow-[0_4px_16px_rgba(0,0,0,0.9),0_0_12px_rgba(34,211,238,0.4)] cursor-grab active:cursor-grabbing transition-transform"
+          className={`absolute z-25 transition-all duration-700 flex flex-col items-center justify-between rounded overflow-hidden ${
+            isWallBlueOpen
+              ? "opacity-0 scale-y-0 pointer-events-none origin-top"
+              : "opacity-100 border-x border-cyan-400/60 shadow-[0_0_25px_rgba(34,211,238,0.6)]"
+          }`}
           style={{
-            left: `${boxX}px`,
-            top: `${boxY}px`,
-            width: `${BOX_W}px`,
-            height: `${BOX_H}px`,
+            left: `${wallBlue.x}px`,
+            top: `${wallBlue.y}px`,
+            width: `${wallBlue.w}px`,
+            height: `${wallBlue.h}px`,
           }}
         >
-          <span className="text-sm">💾</span>
-          <span className="text-[7px] font-mono font-black text-cyan-200 tracking-wider">
-            CACHE
-          </span>
-        </div>
+          {/* Top Industrial Emitter Clamp */}
+          <div className="w-full h-3 bg-[#081224] border-b border-cyan-400/80 flex items-center justify-center">
+            <span className="h-1 w-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_#22d3ee]" />
+          </div>
 
-        {/* ─── 10. SCANNER DRONE HAZARD (PATROLI HORIZONTAL) ────────── */}
-        <div
-          className="absolute z-20 flex flex-col items-center justify-center transition-transform pointer-events-none"
-          style={{
-            left: `${droneX}px`,
-            top: `${droneY}px`,
-            width: `${DRONE_W}px`,
-            height: `${DRONE_H}px`,
-            transform: droneDirRef.current > 0 ? "scaleX(1)" : "scaleX(-1)",
-          }}
-        >
-          <div className="relative flex items-center justify-center rounded-xl border border-rose-400/80 bg-rose-950/80 px-2 py-1 shadow-[0_0_15px_rgba(244,63,94,0.7)] animate-pulse">
-            <span className="text-xs">🛸</span>
-            <span className="ml-1 text-[7px] font-mono font-bold text-rose-200">
-              SCAN
+          {/* Central Laser Containment Beam with High-Tech Scanline Filaments */}
+          <div
+            className="flex-1 w-full relative flex items-center justify-center"
+            style={{
+              background:
+                "repeating-linear-gradient(0deg, rgba(34,211,238,0.2) 0px, rgba(34,211,238,0.2) 2px, transparent 2px, transparent 6px), linear-gradient(90deg, rgba(34,211,238,0.1), rgba(34,211,238,0.35), rgba(34,211,238,0.1))",
+            }}
+          >
+            <div className="absolute inset-y-0 w-[2px] bg-cyan-300 shadow-[0_0_10px_#22d3ee] animate-pulse" />
+            <span className="text-[6.5px] font-mono font-black text-cyan-200/90 uppercase tracking-widest transform -rotate-90 select-none pointer-events-none">
+              SHIELD // CYAN-04
             </span>
           </div>
-          <div className="w-10 h-10 bg-gradient-to-b from-rose-500/30 to-transparent pointer-events-none blur-[2px]" />
+
+          {/* Bottom Industrial Emitter Clamp */}
+          <div className="w-full h-3 bg-[#081224] border-t border-cyan-400/80 flex items-center justify-center">
+            <span className="h-1 w-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_6px_#22d3ee]" />
+          </div>
         </div>
 
-        {/* ─── 11. KARAKTER ASTRONOT (SPRITE & ANIMASI SAMA SEPERTI STAGE 1 & 2) ─── */}
+        {/* ─── TEMBOK 3: TEMBOK MERAH (PENGHALANG MENUJU KOMPUTER MATERI) ── */}
+        <div
+          className={`absolute z-25 transition-all duration-700 flex flex-col items-center justify-between rounded overflow-hidden ${
+            isWallMaterialOpen
+              ? "opacity-0 scale-y-0 pointer-events-none origin-top"
+              : "opacity-100 border-x border-rose-500/70 shadow-[0_0_25px_rgba(244,63,94,0.7)]"
+          }`}
+          style={{
+            left: `${wallMaterial.x}px`,
+            top: `${wallMaterial.y}px`,
+            width: `${wallMaterial.w}px`,
+            height: `${wallMaterial.h}px`,
+          }}
+        >
+          {/* Top Industrial Emitter Clamp */}
+          <div className="w-full h-3 bg-[#190812] border-b border-rose-500/80 flex items-center justify-center">
+            <span className="h-1 w-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_6px_#f43f5e]" />
+          </div>
+
+          {/* Central Laser Containment Beam with High-Tech Scanline Filaments */}
+          <div
+            className="flex-1 w-full relative flex items-center justify-center"
+            style={{
+              background:
+                "repeating-linear-gradient(0deg, rgba(244,63,94,0.2) 0px, rgba(244,63,94,0.2) 2px, transparent 2px, transparent 6px), linear-gradient(90deg, rgba(244,63,94,0.1), rgba(244,63,94,0.4), rgba(244,63,94,0.1))",
+            }}
+          >
+            <div className="absolute inset-y-0 w-[2px] bg-rose-400 shadow-[0_0_10px_#f43f5e] animate-pulse" />
+            <span className="text-[6.5px] font-mono font-black text-rose-200/90 uppercase tracking-widest transform -rotate-90 select-none pointer-events-none">
+              CONTAINMENT // CRIMSON
+            </span>
+          </div>
+
+          {/* Bottom Industrial Emitter Clamp */}
+          <div className="w-full h-3 bg-[#190812] border-t border-rose-500/80 flex items-center justify-center">
+            <span className="h-1 w-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_6px_#f43f5e]" />
+          </div>
+        </div>
+
+        {/* ─── KARAKTER ASTRONOT (SPRITE & ANIMASI LENGKAP) ──────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1050,15 +1345,17 @@ export default function Stage3Page() {
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-5">
               
               {/* Petunjuk Aksi Dinamis */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/30 bg-cyan-950/30 px-4 py-2 text-xs font-mono text-cyan-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">💡</span>
-                  <span>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-500/30 bg-[#070b1a]/90 px-4 py-2.5 text-xs font-mono text-cyan-200">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-cyan-400/50 bg-cyan-950/70 font-bold text-cyan-300">
+                    SYS // INFO
+                  </span>
+                  <span className="text-gray-300">
                     {selectedPageId
-                      ? `Page [${selectedPageId}] dipilih! Klik salah satu Frame KOSONG di kolom kanan untuk menempatkannya.`
+                      ? `Page [${selectedPageId}] aktif. Klik salah satu Frame KOSONG di kolom kanan.`
                       : isAllPagesMapped
-                      ? "Seluruh Page telah terpetakan! Selesaikan Tantangan Translasi Alamat di bawah ini."
-                      : "Klik Page pada kolom kiri untuk memilih, lalu klik Frame kosong di kolom kanan."}
+                      ? "Seluruh Page telah terpetakan. Selesaikan formulir Translasi Alamat di bawah."
+                      : "Pilih Page pada kolom kiri, lalu tempatkan ke Frame kosong di kolom kanan."}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1066,16 +1363,16 @@ export default function Stage3Page() {
                     type="button"
                     onClick={handleAutoMap}
                     disabled={isAllPagesMapped}
-                    className="rounded-lg bg-cyan-500/30 border border-cyan-400/50 px-2.5 py-1 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/50 disabled:opacity-30 disabled:pointer-events-none transition"
+                    className="rounded-lg bg-cyan-500/20 border border-cyan-400/50 px-2.5 py-1 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/40 disabled:opacity-30 disabled:pointer-events-none transition"
                   >
-                    ⚡ Auto-Map
+                    AUTO-MAP
                   </button>
                   <button
                     type="button"
                     onClick={handleResetMode}
                     className="rounded-lg bg-white/5 border border-white/10 px-2.5 py-1 text-[11px] text-gray-300 hover:bg-white/15 transition"
                   >
-                    ↺ Reset
+                    RESET
                   </button>
                 </div>
               </div>
@@ -1097,9 +1394,13 @@ export default function Stage3Page() {
                   <div className="flex-1 space-y-2 overflow-y-auto pr-1">
                     {unmappedPages.length === 0 ? (
                       <div className="flex h-full flex-col items-center justify-center p-6 text-center rounded-xl border border-dashed border-emerald-500/40 bg-emerald-950/20">
-                        <span className="text-3xl mb-1">🎉</span>
-                        <p className="text-xs font-bold text-emerald-300 font-mono">
-                          Semua Page Terpetakan!
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-400/60 bg-emerald-950/60 text-emerald-300 mb-2 shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </div>
+                        <p className="text-xs font-bold text-emerald-300 font-mono tracking-wider">
+                          SEMUA PAGE TERPETAKAN
                         </p>
                         <p className="text-[10px] text-gray-400 mt-1">
                           Page Table terisi penuh. Silakan verifikasi Alamat Fisik di bawah.
@@ -1298,8 +1599,8 @@ export default function Stage3Page() {
                               <span className="font-bold text-rose-300">
                                 Frame {frame.frameIndex}
                               </span>
-                              <span className="rounded bg-rose-500/30 px-1 py-0.2 text-[8px] font-black text-rose-200">
-                                🔒 SYS
+                              <span className="rounded bg-rose-500/30 px-1 py-0.2 text-[8px] font-mono font-black text-rose-200">
+                                SYS_CORE
                               </span>
                             </div>
                             <div className="text-center my-0.5">
@@ -1400,8 +1701,14 @@ export default function Stage3Page() {
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{isAllPagesMapped ? "⚡" : "🔒"}</span>
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        isAllPagesMapped
+                          ? "bg-amber-400 animate-ping shadow-[0_0_8px_#f59e0b]"
+                          : "bg-slate-600"
+                      }`}
+                    />
                     <div>
                       <h3 className="text-xs md:text-sm font-bold font-mono text-amber-300">
                         TANTANGAN KUNCI FIREWALL: TRANSLASI ALAMAT FISIK (MODE {activeMode} KB)
@@ -1425,7 +1732,7 @@ export default function Stage3Page() {
                   <div className="mt-3 space-y-3">
                     <div className="rounded-lg border border-white/10 bg-black/50 p-3 text-xs font-mono">
                       <div className="text-cyan-300 font-bold mb-1">
-                        🎯 TARGET TRANSLASI: {activeChallenge.description}
+                        [MMU QUERY // TARGET]: {activeChallenge.description}
                       </div>
                       <p className="text-gray-300 text-[11px]">
                         Rumus Hardware MMU: <br />
@@ -1471,10 +1778,10 @@ export default function Stage3Page() {
                             : "border-rose-500/60 bg-rose-950/40 text-rose-300"
                         }`}
                       >
-                        <p className="font-bold mb-0.5">
+                        <p className="font-bold mb-0.5 tracking-wider">
                           {challengeResults[activeMode]?.isCorrect
-                            ? "✅ OTENTIKASI BERHASIL!"
-                            : "❌ VERIFIKASI GAGAL!"}
+                            ? "[STATUS // OTENTIKASI BERHASIL]"
+                            : "[STATUS // VERIFIKASI GAGAL]"}
                         </p>
                         <p className="text-[11px]">{challengeResults[activeMode]?.message}</p>
                       </div>
@@ -1509,7 +1816,12 @@ export default function Stage3Page() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowManualModal(false)}
+                onClick={() => {
+                  setShowManualModal(false);
+                  if (!isAllModesCompleted) {
+                    triggerAlert("✅ Log Manual OMNI dipelajari! Terminal Page Mapper di meja tengah sekarang terbuka.");
+                  }
+                }}
                 className="rounded-lg border border-white/10 px-3 py-1 text-xs text-gray-400 hover:text-white"
               >
                 ✕ Tutup (ESC)
@@ -1556,10 +1868,15 @@ export default function Stage3Page() {
             <div className="flex justify-end pt-2">
               <button
                 type="button"
-                onClick={() => setShowManualModal(false)}
-                className="rounded-xl bg-cyan-500 px-5 py-2 font-mono text-xs font-bold text-black shadow-lg hover:bg-cyan-400"
+                onClick={() => {
+                  setShowManualModal(false);
+                  if (!isAllModesCompleted) {
+                    triggerAlert("✅ Log Manual OMNI dipelajari! Terminal Page Mapper di meja tengah sekarang terbuka.");
+                  }
+                }}
+                className="rounded-xl bg-cyan-500 px-5 py-2 font-mono text-xs font-bold text-black shadow-lg hover:bg-cyan-400 transition"
               >
-                Mengerti &amp; Tutup ➔
+                Mengerti &amp; Buka Akses Terminal ➔
               </button>
             </div>
 
@@ -1599,13 +1916,12 @@ export default function Stage3Page() {
             <div className="rounded-xl border border-white/10 bg-black/50 p-4 space-y-3">
               <div className="flex justify-between items-center text-xs font-mono">
                 <span className="font-bold text-cyan-300">
-                  📊 GRAFIK 1: TOTAL FRAGMENTASI INTERNAL (KB)
+                  [METRIK 01] TOTAL FRAGMENTASI INTERNAL (KB)
                 </span>
                 <span className="text-[10px] text-gray-400">
                   (Makin Rendah = Pemborosan Memori Makin Sedikit)
                 </span>
               </div>
-
               <div className="space-y-2.5 pt-1">
                 {allMetrics.map((item) => {
                   const barWidth = (item.totalInternalFragKB / 10) * 100;
@@ -1649,13 +1965,12 @@ export default function Stage3Page() {
             <div className="rounded-xl border border-white/10 bg-black/50 p-4 space-y-3">
               <div className="flex justify-between items-center text-xs font-mono">
                 <span className="font-bold text-purple-300">
-                  📈 GRAFIK 2: OVERHEAD ENTRI PAGE TABLE (JUMLAH BARIS TABEL)
+                  [METRIK 02] OVERHEAD ENTRI PAGE TABLE (JUMLAH BARIS TABEL)
                 </span>
                 <span className="text-[10px] text-gray-400">
                   (Makin Sedikit = Struktur Data Kernel Makin Ringan)
                 </span>
               </div>
-
               <div className="space-y-2.5 pt-1">
                 {allMetrics.map((item) => {
                   const barWidth = (item.totalPages / 8) * 100;
@@ -1693,7 +2008,7 @@ export default function Stage3Page() {
             {/* KESIMPULAN AKADEMIS SISTEM OPERASI */}
             <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/20 p-4 text-xs text-gray-200 leading-relaxed space-y-1.5 font-sans">
               <h4 className="font-bold text-emerald-300 font-mono text-sm flex items-center gap-1.5">
-                <span>💡 KESIMPULAN ARSITEKTUR: MENGAPA PAGE SIZE 4 KB MENJADI STANDAR MODERN?</span>
+                <span>[ANALISIS ARSITEKTUR] MENGAPA PAGE SIZE 4 KB MENJADI STANDAR MODERN</span>
               </h4>
               <p className="text-gray-300 text-[11px]">
                 Dalam desain sistem operasi dan prosesor modern (seperti arsitektur x86 dan ARM64), ukuran <strong className="text-white">Page 4 KB</strong> dipilih sebagai standar utama karena menghasilkan kompromi (*trade-off*) paling seimbang:
@@ -1713,20 +2028,16 @@ export default function Stage3Page() {
 
             {/* Tombol Aksi Modal */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-500/30 pt-3">
-              <button
-                type="button"
-                onClick={() => setShowMetricsModal(false)}
-                className="rounded-xl border border-white/20 px-4 py-2 text-xs font-mono font-semibold text-gray-300 hover:bg-white/10"
-              >
-                Kembali ke Ruangan
-              </button>
+              <span className="text-[11px] font-mono text-emerald-400">
+                ✓ Seluruh 3 Mode Selesai. Portal menuju Stage 4 kini terbuka di catwalk kiri atas!
+              </span>
 
               <button
                 type="button"
-                onClick={() => router.push("/stage/stage4")}
-                className="rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-6 py-2.5 font-mono text-xs md:text-sm font-black text-black shadow-[0_0_25px_rgba(52,211,153,0.6)] transition hover:scale-105 active:scale-95"
+                onClick={() => setShowMetricsModal(false)}
+                className="rounded-xl border border-cyan-400/50 bg-cyan-950/60 px-5 py-2 font-mono text-xs font-bold text-cyan-300 hover:bg-cyan-900/60 transition shadow-[0_0_15px_rgba(34,211,238,0.3)]"
               >
-                Masuk ke Stage 4 🚀
+                Kembali ke Ruangan ➔
               </button>
             </div>
 
