@@ -252,11 +252,12 @@ export default function Stage3Page() {
     return completedModes[2] && completedModes[4] && completedModes[8];
   }, [completedModes]);
 
-  // Begitu ketiga mode selesai, tutup terminal mini-game dan buka portal di kiri atas
+  // Begitu ketiga mode selesai, tutup terminal mini-game, buka modal metrik dan buka portal di kiri atas
   useEffect(() => {
     if (isAllModesCompleted && !hasAutoOpenedMetrics) {
       setHasAutoOpenedMetrics(true);
       setShowMapperModal(false);
+      setShowMetricsModal(true);
       triggerAlert("🔓 Selamat! 3 Mode Paging Selesai. Tembok Biru Dinonaktifkan & Portal Stage 4 di Kiri Atas Terbuka!");
     }
   }, [isAllModesCompleted, hasAutoOpenedMetrics]);
@@ -296,6 +297,64 @@ export default function Stage3Page() {
   const activeChallenge = useMemo(() => {
     return TRANSLATION_CHALLENGES[activeMode];
   }, [activeMode]);
+
+  // Target Page & Frame untuk Verifikasi Translasi MMU
+  const targetPageId = `${activeChallenge.processId}-P${activeChallenge.targetPageIndex}`;
+  const targetFrame = currentFrames.find((f) => f.mappedPage?.id === targetPageId);
+  const targetFrameIndex = targetFrame ? targetFrame.frameIndex : 0;
+  const correctAddressVal = targetFrameIndex * activeMode + activeChallenge.offsetKB;
+
+  // 3 Kartu Pilihan Jawaban MMU Dinamis (1 Jawaban Benar + 2 Distraktor Edukatif)
+  const mmuOptions = useMemo(() => {
+    // Distraktor 1: Lupa menambahkan offset (hanya frameIndex * activeMode)
+    const distractor1Val = targetFrameIndex * activeMode;
+
+    // Distraktor 2: Salah baris frame (frame alternatif yang valid di RAM)
+    const altFrameIndex = targetFrameIndex === 0 ? targetFrameIndex + 2 : targetFrameIndex - 1;
+    const distractor2Val = altFrameIndex * activeMode + activeChallenge.offsetKB;
+
+    const optCorrect = {
+      value: correctAddressVal,
+      formula: `(${targetFrameIndex} × ${activeMode}) + ${activeChallenge.offsetKB} KB`,
+      note: `Perhitungan Tepat: (Frame ${targetFrameIndex} × ${activeMode} KB) + Offset ${activeChallenge.offsetKB} KB`,
+      isCorrect: true,
+    };
+
+    const optNoOffset = {
+      value: distractor1Val,
+      formula: `(${targetFrameIndex} × ${activeMode}) + 0 KB`,
+      note: `Lupa Offset: Hanya mengalikan Frame ${targetFrameIndex} tanpa Offset ${activeChallenge.offsetKB} KB`,
+      isCorrect: false,
+    };
+
+    const optWrongFrame = {
+      value: distractor2Val,
+      formula: `(${altFrameIndex} × ${activeMode}) + ${activeChallenge.offsetKB} KB`,
+      note: `Salah Lookup Frame: Mengambil baris Frame ${altFrameIndex} di Page Table`,
+      isCorrect: false,
+    };
+
+    // Susunan deterministik per mode agar posisi jawaban variatif (Mode 2 -> B, Mode 4 -> A, Mode 8 -> C)
+    if (activeMode === 2) {
+      return [
+        { letter: "A", ...optNoOffset },
+        { letter: "B", ...optCorrect },
+        { letter: "C", ...optWrongFrame },
+      ];
+    } else if (activeMode === 4) {
+      return [
+        { letter: "A", ...optCorrect },
+        { letter: "B", ...optNoOffset },
+        { letter: "C", ...optWrongFrame },
+      ];
+    } else {
+      return [
+        { letter: "A", ...optWrongFrame },
+        { letter: "B", ...optNoOffset },
+        { letter: "C", ...optCorrect },
+      ];
+    }
+  }, [activeMode, targetFrameIndex, correctAddressVal, activeChallenge]);
 
   const allMetrics = useMemo(() => {
     return getAllPagingMetrics();
@@ -365,11 +424,16 @@ export default function Stage3Page() {
     setChallengeInputs((prev) => ({ ...prev, [activeMode]: "" }));
   };
 
-  const handleVerifyTranslation = () => {
-    const rawInput = challengeInputs[activeMode].trim();
-    const userVal = Number(rawInput);
+  const handleVerifyTranslation = (selectedAddress?: number) => {
+    let userVal: number;
+    if (selectedAddress !== undefined) {
+      userVal = selectedAddress;
+    } else {
+      const rawInput = challengeInputs[activeMode].trim();
+      userVal = Number(rawInput);
+    }
 
-    if (rawInput === "" || isNaN(userVal)) {
+    if (isNaN(userVal)) {
       setChallengeResults((prev) => ({
         ...prev,
         [activeMode]: {
@@ -380,7 +444,7 @@ export default function Stage3Page() {
           expectedPhysicalAddressKB: null,
           userAddressKB: 0,
           isCorrect: false,
-          message: "Masukkan angka bilangan bulat hasil kalkulasi Physical Address (KB).",
+          message: "Pilih salah satu kartu kalkulasi Physical Address di bawah.",
         },
       }));
       return;
@@ -404,7 +468,8 @@ export default function Stage3Page() {
         const allDone = next[2] && next[4] && next[8];
         if (allDone) {
           setShowMapperModal(false);
-          triggerAlert("🔓 Selesai! Tembok Biru Dinonaktifkan & Portal Stage 4 di Kiri Atas Terbuka!");
+          setShowMetricsModal(true);
+          triggerAlert("🔓 Selesai! Evaluasi Metrik Siap & Portal Stage 4 di Kiri Atas Terbuka!");
         } else {
           triggerAlert(`🎉 Mode Page ${activeMode} KB Berhasil Diverifikasi!`);
         }
@@ -888,18 +953,8 @@ export default function Stage3Page() {
           </span>
         </div>
 
-        {/* Right: Metrics & Controls */}
+        {/* Right: Controls */}
         <div className="flex items-center gap-2 text-[10px] font-mono">
-          {isAllModesCompleted && (
-            <button
-              type="button"
-              onClick={() => setShowMetricsModal(true)}
-              className="font-bold px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition shadow-[0_0_10px_rgba(245,158,11,0.3)]"
-            >
-              METRIK
-            </button>
-          )}
-
           <Link
             href="/stage/stage2"
             className="rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-400 hover:text-white hover:border-white/20 transition"
@@ -1331,6 +1386,20 @@ export default function Stage3Page() {
                   );
                 })}
 
+                {isAllModesCompleted && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMapperModal(false);
+                      setShowMetricsModal(true);
+                    }}
+                    className="flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-mono font-bold border border-amber-400/50 bg-amber-500/15 text-amber-300 hover:bg-amber-500/30 transition shadow-[0_0_12px_rgba(251,191,36,0.3)]"
+                    title="Buka Laporan Metrik Kinerja"
+                  >
+                    📊 Laporan Metrik
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setShowMapperModal(false)}
@@ -1503,31 +1572,55 @@ export default function Stage3Page() {
                             (f) => f.mappedPage?.id === page.id
                           );
                           const isMapped = Boolean(mappedFrame);
+                          const isTarget =
+                            isAllPagesMapped &&
+                            activeChallenge.processId === page.processId &&
+                            activeChallenge.targetPageIndex === page.pageIndex;
 
                           return (
                             <tr
                               key={page.id}
                               className={`transition ${
-                                isMapped ? "bg-white/[0.02]" : "opacity-60"
+                                isTarget
+                                  ? "bg-amber-500/25 ring-1 ring-amber-400 font-bold"
+                                  : isMapped
+                                  ? "bg-white/[0.02]"
+                                  : "opacity-60"
                               }`}
                             >
                               <td className="py-1.5 px-1">
-                                <span
-                                  className={`rounded px-1.5 py-0.2 text-[9px] font-bold ${
-                                    page.processId === "A"
-                                      ? "text-cyan-300 bg-cyan-950/60"
-                                      : "text-purple-300 bg-purple-950/60"
-                                  }`}
-                                >
-                                  Proc {page.processId}
-                                </span>
+                                <div className="flex items-center gap-1">
+                                  {isTarget && (
+                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+                                  )}
+                                  <span
+                                    className={`rounded px-1.5 py-0.2 text-[9px] font-bold ${
+                                      page.processId === "A"
+                                        ? "text-cyan-300 bg-cyan-950/60"
+                                        : "text-purple-300 bg-purple-950/60"
+                                    }`}
+                                  >
+                                    Proc {page.processId}
+                                  </span>
+                                  {isTarget && (
+                                    <span className="rounded bg-amber-400/30 border border-amber-400/60 px-1 text-[8px] text-amber-200 uppercase font-mono">
+                                      QUERY
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-1.5 px-1 text-center font-bold text-white">
                                 P{page.pageIndex}
                               </td>
                               <td className="py-1.5 px-1 text-center">
                                 {isMapped ? (
-                                  <span className="rounded bg-emerald-950/80 border border-emerald-400/50 px-2 py-0.2 font-bold text-emerald-300">
+                                  <span
+                                    className={`rounded px-2 py-0.2 font-bold ${
+                                      isTarget
+                                        ? "bg-amber-400/30 border border-amber-400 text-amber-200 animate-pulse"
+                                        : "bg-emerald-950/80 border border-emerald-400/50 text-emerald-300"
+                                    }`}
+                                  >
                                     Frame {mappedFrame!.frameIndex}
                                   </span>
                                 ) : (
@@ -1535,7 +1628,9 @@ export default function Stage3Page() {
                                 )}
                               </td>
                               <td className="py-1.5 px-1 text-right">
-                                {isMapped ? (
+                                {isTarget ? (
+                                  <span className="text-[9px] text-amber-300 font-bold">Target MMU</span>
+                                ) : isMapped ? (
                                   <span className="text-[9px] text-emerald-400">Mapped</span>
                                 ) : (
                                   <span className="text-[9px] text-amber-400">Wait</span>
@@ -1711,11 +1806,11 @@ export default function Stage3Page() {
                     />
                     <div>
                       <h3 className="text-xs md:text-sm font-bold font-mono text-amber-300">
-                        TANTANGAN KUNCI FIREWALL: TRANSLASI ALAMAT FISIK (MODE {activeMode} KB)
+                        TANTANGAN KUNCI FIREWALL: TRANSLASI ALAMAT MMU (MODE {activeMode} KB)
                       </h3>
                       <p className="text-[10px] text-gray-400 font-mono">
                         {isAllPagesMapped
-                          ? "Gunakan Page Table di atas untuk menghitung Physical Address yang tepat."
+                          ? "Ikuti alur translasi hardware MMU (Langkah 1 s.d. 3) lalu pilih kartu kalkulasi yang tepat."
                           : "Petakan seluruh page ke frame fisik terlebih dahulu untuk membuka formulir ini."}
                       </p>
                     </div>
@@ -1729,61 +1824,156 @@ export default function Stage3Page() {
                 </div>
 
                 {isAllPagesMapped ? (
-                  <div className="mt-3 space-y-3">
-                    <div className="rounded-lg border border-white/10 bg-black/50 p-3 text-xs font-mono">
-                      <div className="text-cyan-300 font-bold mb-1">
-                        [MMU QUERY // TARGET]: {activeChallenge.description}
-                      </div>
-                      <p className="text-gray-300 text-[11px]">
-                        Rumus Hardware MMU: <br />
-                        1. Page Number = floor({activeChallenge.logicalAddressKB} / {activeMode}) = <strong className="text-cyan-300">Page {activeChallenge.targetPageIndex}</strong><br />
-                        2. Offset = {activeChallenge.logicalAddressKB} % {activeMode} = <strong className="text-amber-300">{activeChallenge.offsetKB} KB</strong><br />
-                        3. Physical Address = (Nomor Frame Page {activeChallenge.targetPageIndex} × {activeMode}) + {activeChallenge.offsetKB} KB
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex-1 min-w-[200px]">
-                        <input
-                          type="number"
-                          value={challengeInputs[activeMode]}
-                          onChange={(e) =>
-                            setChallengeInputs((prev) => ({
-                              ...prev,
-                              [activeMode]: e.target.value,
-                            }))
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleVerifyTranslation();
-                          }}
-                          placeholder="Masukkan Physical Address (KB)..."
-                          className="w-full rounded-lg border border-white/20 bg-black/60 px-3.5 py-2 font-mono text-xs text-white placeholder-gray-500 outline-none focus:border-amber-400"
-                        />
+                  <div className="mt-3 space-y-4">
+                    {/* VISUAL STEP-BY-STEP MMU SCAFFOLDING */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {/* LANGKAH 1 */}
+                      <div className="rounded-lg border border-cyan-500/40 bg-cyan-950/30 p-2.5 font-mono text-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] text-cyan-400 font-bold mb-1">
+                            <span>LANGKAH 1: LOGICAL ADDR</span>
+                            <span className="rounded bg-cyan-500/20 px-1 text-[9px]">CPU QUERY</span>
+                          </div>
+                          <p className="text-gray-300 text-[11px] leading-snug">
+                            Instruksi CPU: <strong className="text-white">{activeChallenge.processName} ({activeChallenge.processId})</strong> meminta Logical Address <strong className="text-cyan-300">{activeChallenge.logicalAddressKB} KB</strong>.
+                          </p>
+                        </div>
+                        <div className="mt-2 pt-1.5 border-t border-cyan-500/20 text-[10px] text-cyan-200">
+                          <div>• Page = ⌊{activeChallenge.logicalAddressKB} / {activeMode}⌋ = <span className="font-bold text-amber-300">Page P{activeChallenge.targetPageIndex}</span></div>
+                          <div>• Offset (d) = {activeChallenge.logicalAddressKB} % {activeMode} = <span className="font-bold text-amber-300">{activeChallenge.offsetKB} KB</span></div>
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={handleVerifyTranslation}
-                        className="rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-2 font-mono font-bold text-xs text-black shadow-lg transition hover:scale-105 active:scale-95"
-                      >
-                        [ VERIFIKASI ALAMAT ]
-                      </button>
+                      {/* LANGKAH 2 */}
+                      <div className="rounded-lg border border-amber-500/40 bg-amber-950/30 p-2.5 font-mono text-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold mb-1">
+                            <span>LANGKAH 2: LOOKUP TABLE</span>
+                            <span className="rounded bg-amber-500/20 px-1 text-[9px]">PAGE TABLE</span>
+                          </div>
+                          <p className="text-gray-300 text-[11px] leading-snug">
+                            MMU memeriksa baris target <strong className="text-amber-300">Proc {activeChallenge.processId} - P{activeChallenge.targetPageIndex}</strong> pada Page Table di atas.
+                          </p>
+                        </div>
+                        <div className="mt-2 pt-1.5 border-t border-amber-500/20 text-[10px] text-amber-200">
+                          <div>• Berada di: <span className="font-bold text-emerald-300">Frame {targetFrameIndex}</span> (Physical RAM)</div>
+                          <div>• Base Frame = {targetFrameIndex} × {activeMode} KB = <span className="font-bold text-emerald-300">{targetFrameIndex * activeMode} KB</span></div>
+                        </div>
+                      </div>
+
+                      {/* LANGKAH 3 */}
+                      <div className="rounded-lg border border-emerald-500/40 bg-emerald-950/30 p-2.5 font-mono text-xs flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold mb-1">
+                            <span>LANGKAH 3: RUMUS PHYSICAL</span>
+                            <span className="rounded bg-emerald-500/20 px-1 text-[9px]">RAM OUTPUT</span>
+                          </div>
+                          <p className="text-gray-300 text-[11px] leading-snug">
+                            Kalkulasi Alamat Fisik di RAM:<br />
+                            <span className="text-emerald-300 font-bold text-[11px]">(Frame × Ukuran Page) + Offset</span>
+                          </p>
+                        </div>
+                        <div className="mt-2 pt-1.5 border-t border-emerald-500/20 text-[10px] text-emerald-200">
+                          <div>• Substitusi: ({targetFrameIndex} × {activeMode}) + {activeChallenge.offsetKB} KB</div>
+                          <div>• Pilih kartu kalkulasi yang benar di bawah ⬇</div>
+                        </div>
+                      </div>
                     </div>
 
+                    {/* 3 KARTU PILIHAN JAWABAN INTERAKTIF */}
+                    <div>
+                      <div className="text-[11px] font-mono font-bold text-gray-300 mb-2 flex items-center justify-between">
+                        <span>PILIH KALKULASI PHYSICAL ADDRESS (KLIK KARTU):</span>
+                        {completedModes[activeMode] && (
+                          <span className="text-emerald-400 text-[10px]">Tervalidasi ✓ (Bisa klik untuk simulasi ulang)</span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {mmuOptions.map((opt) => {
+                          const isSelected = challengeResults[activeMode]?.userAddressKB === opt.value;
+                          const isSolved = completedModes[activeMode] && opt.isCorrect;
+
+                          return (
+                            <button
+                              key={opt.letter}
+                              type="button"
+                              onClick={() => handleVerifyTranslation(opt.value)}
+                              className={`group relative text-left rounded-xl p-3 border font-mono transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
+                                isSolved
+                                  ? "border-emerald-400 bg-emerald-950/60 shadow-[0_0_20px_rgba(52,211,153,0.3)] ring-1 ring-emerald-400"
+                                  : isSelected && !challengeResults[activeMode]?.isCorrect
+                                  ? "border-rose-500 bg-rose-950/60 shadow-[0_0_15px_rgba(244,63,94,0.3)]"
+                                  : "border-white/15 bg-black/60 hover:border-amber-400/80 hover:bg-black/80 hover:shadow-[0_0_15px_rgba(251,191,36,0.2)]"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <span
+                                  className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-bold ${
+                                    isSolved
+                                      ? "bg-emerald-500 text-black shadow-[0_0_8px_#10b981]"
+                                      : isSelected && !challengeResults[activeMode]?.isCorrect
+                                      ? "bg-rose-500 text-white"
+                                      : "bg-white/10 text-amber-300 group-hover:bg-amber-400 group-hover:text-black transition"
+                                  }`}
+                                >
+                                  {opt.letter}
+                                </span>
+                                <span className="text-sm font-bold text-white group-hover:text-amber-300 transition">
+                                  {opt.value} KB
+                                </span>
+                              </div>
+
+                              <div className="text-[11px] text-gray-300 font-mono mb-1">
+                                Rumus: <span className="font-bold text-white">{opt.formula}</span>
+                              </div>
+
+                              <div className="text-[10px] text-gray-400 leading-tight">
+                                {opt.note}
+                              </div>
+
+                              {isSolved && (
+                                <div className="mt-2 pt-1 border-t border-emerald-500/30 text-[9px] font-bold text-emerald-300 flex items-center gap-1">
+                                  <span>✓ KUNCI FIREWALL TERKONFIRMASI</span>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* STATUS DAN PENJELASAN VERIFIKASI */}
                     {challengeResults[activeMode] && (
                       <div
-                        className={`rounded-lg border p-3 text-xs font-mono leading-relaxed ${
+                        className={`rounded-lg border p-3 text-xs font-mono leading-relaxed transition-all ${
                           challengeResults[activeMode]?.isCorrect
                             ? "border-emerald-500/60 bg-emerald-950/40 text-emerald-300"
                             : "border-rose-500/60 bg-rose-950/40 text-rose-300"
                         }`}
                       >
-                        <p className="font-bold mb-0.5 tracking-wider">
-                          {challengeResults[activeMode]?.isCorrect
-                            ? "[STATUS // OTENTIKASI BERHASIL]"
-                            : "[STATUS // VERIFIKASI GAGAL]"}
-                        </p>
-                        <p className="text-[11px]">{challengeResults[activeMode]?.message}</p>
+                        <div className="flex items-center justify-between">
+                          <p className="font-bold tracking-wider">
+                            {challengeResults[activeMode]?.isCorrect
+                              ? "[STATUS // OTENTIKASI BERHASIL]"
+                              : "[STATUS // KALKULASI BELUM TEPAT]"}
+                          </p>
+                          {challengeResults[activeMode]?.isCorrect && !isAllModesCompleted && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextMode = ([2, 4, 8] as PageSizeMode[]).find(
+                                  (m) => !completedModes[m] && m !== activeMode
+                                );
+                                if (nextMode) setActiveMode(nextMode);
+                              }}
+                              className="text-[10px] bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-400/50 rounded px-2.5 py-1 text-emerald-200 transition font-bold"
+                            >
+                              Lanjut ke Mode Berikutnya ➔
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] mt-1">{challengeResults[activeMode]?.message}</p>
                       </div>
                     )}
                   </div>
@@ -2029,16 +2219,29 @@ export default function Stage3Page() {
             {/* Tombol Aksi Modal */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-amber-500/30 pt-3">
               <span className="text-[11px] font-mono text-emerald-400">
-                ✓ Seluruh 3 Mode Selesai. Portal menuju Stage 4 kini terbuka di catwalk kiri atas!
+                ✓ Seluruh 3 Mode Selesai! Tembok Biru Dinonaktifkan &amp; Portal Stage 4 Aktif di Catwalk Kiri Atas.
               </span>
 
-              <button
-                type="button"
-                onClick={() => setShowMetricsModal(false)}
-                className="rounded-xl border border-cyan-400/50 bg-cyan-950/60 px-5 py-2 font-mono text-xs font-bold text-cyan-300 hover:bg-cyan-900/60 transition shadow-[0_0_15px_rgba(34,211,238,0.3)]"
-              >
-                Kembali ke Ruangan ➔
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMetricsModal(false);
+                    setShowMapperModal(true);
+                  }}
+                  className="rounded-xl border border-white/20 bg-white/5 px-3.5 py-1.5 font-mono text-xs text-gray-300 hover:bg-white/10 transition"
+                >
+                  ← Ke Terminal Mapper
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMetricsModal(false)}
+                  className="rounded-xl border border-cyan-400/50 bg-cyan-950/60 px-5 py-2 font-mono text-xs font-bold text-cyan-300 hover:bg-cyan-900/60 transition shadow-[0_0_15px_rgba(34,211,238,0.3)]"
+                >
+                  Kembali ke Ruangan &amp; Masuk Portal ➔
+                </button>
+              </div>
             </div>
 
           </div>
