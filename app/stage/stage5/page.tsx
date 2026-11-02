@@ -13,7 +13,7 @@ export default function Stage5Page() {
   // ─── KONSTANTA KANVAS (16:9 Sesuai Gambar stage5bg.jpg) ────────
   const GAME_WIDTH = 1024;
   const GAME_HEIGHT = 576;
-  const GROUND_Y = 536;
+  const GROUND_Y = 544;
 
   // ─── DIMENSI & FISIKA KARAKTER ASTRONOT ───────────────────────
   const PLAYER_W = 44;
@@ -61,76 +61,64 @@ export default function Stage5Page() {
   const [isNearArchitectStation, setIsNearArchitectStation] = useState(false);
   const [isNearPortal, setIsNearPortal] = useState(false);
 
-  // ─── PLATFORM HORIZONTAL SESUAI GAMBAR stage5bg.jpg (B2 & B3) ──
+  // ─── PLATFORM HORIZONTAL SESUAI GAMBAR stage5bg.jpeg ──────────
   // Pijakan transparan murni untuk physics collider
   const platforms = [
     // 1. Lantai Bawah Kiri (Area Pintu Masuk)
-    { x: 0, y: 536, w: 301, h: 40, label: "Lantai Kiri" },
+    { x: 0, y: 544, w: 301, h: 32, label: "Lantai Kiri" },
     // 2. Jembatan Tengah di antara kolam lava & listrik
-    { x: 448, y: 518, w: 110, h: 20, label: "Jembatan Tengah" },
+    { x: 448, y: 544, w: 110, h: 32, label: "Jembatan Tengah" },
     // 3. Lantai Bawah Kanan (Depan Tangga Bawah)
-    { x: 722, y: 536, w: 302, h: 40, label: "Lantai Kanan" },
+    { x: 722, y: 544, w: 302, h: 32, label: "Lantai Kanan" },
     // 4. Kotak Kargo Kecil di Kanan Bawah (Pijakan Kotak 1)
-    { x: 848, y: 462, w: 76, h: 74, label: "Pijakan Kotak 1" },
+    { x: 856, y: 461, w: 68, h: 83, label: "Pijakan Kotak 1" },
     // 5. Tumpukan Peti Tinggi di Kanan Bawah (Pijakan Kotak 2)
-    { x: 912, y: 368, w: 78, h: 168, label: "Pijakan Kotak 2" },
+    { x: 908, y: 368, w: 80, h: 176, label: "Pijakan Kotak 2" },
     // 6. Catwalk Lantai Tengah (Meja Datalog Direktori & Jalur Utama)
-    { x: 250, y: 414, w: 560, h: 20, label: "Catwalk Tengah" },
+    { x: 245, y: 414, w: 470, h: 20, label: "Catwalk Tengah" },
     // 7. Mezanin Kiri di atas Pintu Masuk
-    { x: 0, y: 362, w: 216, h: 20, label: "Mezanin Kiri" },
-    // 8. Platform Tengah Terangkat (di atas tangga tengah)
-    { x: 455, y: 304, w: 110, h: 20, label: "Platform Tengah Atas" },
-    // 9. Ledge Melayang Kiri (Konektor Balok Oranye)
-    { x: 248, y: 311, w: 56, h: 18, label: "Ledge Kiri" },
-    // 10. Ledge Melayang Kanan (Konektor Balok Biru)
-    { x: 706, y: 311, w: 60, h: 18, label: "Ledge Kanan" },
-    // 11. Piringan Gantung Kiri (Suspended Pod L)
-    { x: 327, y: 255, w: 98, h: 18, label: "Pod Gantung Kiri" },
-    // 12. Piringan Gantung Kanan (Suspended Pod R)
-    { x: 595, y: 255, w: 98, h: 18, label: "Pod Gantung Kanan" },
-    // 13. Bracket Pod Kiri (B3: Menjembatani selisih 150 px ke catwalk 105)
-    { x: 345, y: 180, w: 65, h: 16, label: "Bracket Pod Kiri" },
-    // 14. Bracket Pod Kanan (B3: Menjembatani selisih 150 px ke catwalk 105)
-    { x: 620, y: 180, w: 65, h: 16, label: "Bracket Pod Kanan" },
-    // 15. Step Blok 1 (Anak tangga bawah pada blok mesin kanan)
-    { x: 770, y: 260, w: 46, h: 18, label: "Step Blok 1" },
-    // 16. Step Blok 2 (Anak tangga atas pada blok mesin kanan)
-    { x: 812, y: 200, w: 74, h: 18, label: "Step Blok 2" },
-    // 17. Step Catwalk Kanan (Transisi ketinggian catwalk kanan)
-    { x: 748, y: 145, w: 46, h: 18, label: "Step Catwalk Kanan" },
-    // 18. Catwalk Atas Kiri (Di bawah Rak Senjata)
+    { x: 0, y: 364, w: 216, h: 20, label: "Mezanin Kiri" },
+    // 8. Platform Tengah Terangkat (Di bawah Hologram Tree)
+    { x: 463, y: 298, w: 98, h: 20, label: "Platform Tengah Atas" },
+    // 9. Ledge Melayang Kiri (Konektor Dinding Kiri)
+    { x: 248, y: 310, w: 50, h: 18, label: "Ledge Kiri" },
+    // 10. Ledge Melayang Kanan (Platform di bawah Tangga Exit)
+    { x: 712, y: 318, w: 149, h: 20, label: "Ledge Kanan" },
+    // 11. Piringan Gantung Kiri (Suspended Pod L - Thruster Merah)
+    { x: 324, y: 262, w: 100, h: 20, label: "Pod Gantung Kiri" },
+    // 12. Piringan Gantung Kanan (Suspended Pod R - Thruster Biru)
+    { x: 595, y: 262, w: 96, h: 20, label: "Pod Gantung Kanan" },
+    // 13. Catwalk Atas Kiri (Di bawah Rak Senjata)
     { x: 0, y: 105, w: 465, h: 20, label: "Catwalk Atas Kiri" },
-    // 19. Catwalk Atas Kanan (Terminal Directory Architect)
-    { x: 558, y: 105, w: 190, h: 20, label: "Catwalk Atas Kanan" },
-    // 20. Platform Depan Pintu Keluar Portal Stage 6
-    { x: 885, y: 130, w: 110, h: 20, label: "Platform Pintu Exit" },
+    // 14. Ledge Konsol Directory Architect (Di bawah Terminal Architect)
+    { x: 755, y: 245, w: 85, h: 20, label: "Ledge Directory Architect" },
+    // 15. Platform Depan Pintu Keluar Portal Stage 6
+    { x: 887, y: 132, w: 101, h: 20, label: "Platform Pintu Exit" },
   ];
 
-  // ─── TANGGA REALISTIS (RAMP MENGIKUTI VISUAL GAMBAR stage5bg.jpg) ─
+  // ─── TANGGA REALISTIS (RAMP MENGIKUTI VISUAL GAMBAR stage5bg.jpeg) ─
   const stairs = [
-    // 1. Tangga Kanan Bawah: dari (712, 414) catwalk tengah turun ke kanan menuju (848, 536) lantai kanan
-    { x1: 712, y1: 414, x2: 848, y2: 536, label: "Tangga Kanan Bawah" },
-    // 2. Tangga Tengah: dari (329, 414) naik ke kanan menuju (455, 304) platform tengah atas
-    { x1: 329, y1: 414, x2: 455, y2: 304, label: "Tangga Tengah" },
-    // 3. Tangga Mezanin Kiri: dari (217, 366) turun ke kanan menuju (252, 410) catwalk tengah
-    { x1: 217, y1: 366, x2: 252, y2: 410, label: "Tangga Mezanin Kiri" },
-    // 4. Tangga Atas Kanan Menuju Pintu Exit: dari (817, 197) naik ke kanan menuju (890, 134) platform exit
-    { x1: 817, y1: 197, x2: 890, y2: 134, label: "Tangga Exit Atas" },
+    // 1. Tangga Kanan Bawah: dari catwalk tengah (715, 414) turun ke kanan ke lantai (856, 544)
+    { x1: 715, y1: 414, x2: 856, y2: 544, label: "Tangga Kanan Bawah" },
+    // 2. Tangga Mezanin Kiri: dari mezanin kiri (216, 364) turun ke kanan ke catwalk tengah (245, 414)
+    { x1: 216, y1: 364, x2: 245, y2: 414, label: "Tangga Mezanin Kiri" },
+    // 3. Tangga Exit Atas: dari ledge kanan (746, 318) naik ke kanan ke platform pintu exit (887, 132)
+    { x1: 746, y1: 318, x2: 887, y2: 132, label: "Tangga Exit Atas" },
   ];
 
   // ─── TITIK INTERAKSI OBJEK (MENEMPEL PADA GAMBAR) ───────────
   // 1. Komputer Terminal Datalog Materi Direktori (Meja Tengah MFD)
-  const terminalObj = { x: 630, y: 414 - 55, w: 65, h: 55, label: "Terminal Datalog" };
+  const terminalObj = { x: 635, y: 345, w: 65, h: 69, label: "Terminal Datalog" };
 
-  // 2. Komputer Terminal Directory Architect (Catwalk Atas Kanan)
-  const architectStationObj = { x: 660, y: 105 - 60, w: 75, h: 60, label: "Directory Architect" };
+  // 2. Komputer Terminal Directory Architect (Konsol Atas Kanan)
+  const architectStationObj = { x: 765, y: 165, w: 65, h: 80, label: "Directory Architect" };
 
   // 3. Pintu Keluar / Portal Stage 6 (Pintu Hijau Atas Kanan)
-  const portalObj = { x: 922, y: 42, w: 58, h: 88, label: "Portal Stage 6" };
+  const portalObj = { x: 898, y: 44, w: 58, h: 88, label: "Portal Stage 6" };
 
   // ─── RINTANGAN KOLAM HAZARD DI LANTAI BAWAH ──────────────────
-  const hazardLava = { x: 301, y: 532, w: 147, h: 44, label: "Kolam Lava" };
-  const hazardElectric = { x: 558, y: 532, w: 164, h: 44, label: "Kolam Listrik" };
+  const hazardLava = { x: 301, y: 540, w: 147, h: 36, label: "Kolam Lava" };
+  const hazardElectric = { x: 558, y: 540, w: 164, h: 36, label: "Kolam Listrik" };
 
   // ─── REFS GAME LOOP ──────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
@@ -408,12 +396,19 @@ export default function Stage5Page() {
         style={{
           width: `${GAME_WIDTH}px`,
           height: `${GAME_HEIGHT}px`,
-          backgroundImage: "url('/stage5bg.jpg')",
+          backgroundImage: "url('/stage5bg.jpeg')",
           backgroundSize: "100% 100%",
         }}
       >
+        {/* Gambar Latar Belakang Stage 5 */}
+        <img
+          src="/stage5bg.jpeg"
+          alt="Stage 5 Background"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none z-0"
+        />
+
         {/* Overlay lembut sci-fi */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/30 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/30 pointer-events-none z-10" />
 
         {/* ─── TOAST ALERT TELEMETRI ────────────────────────────────── */}
         {alertMessage && (
