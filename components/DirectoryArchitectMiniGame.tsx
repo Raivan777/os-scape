@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import LaserHeadMiniGame from "./LaserHeadMiniGame";
+import DirectorySearchLab from "./DirectorySearchLab";
 
 interface DirectoryArchitectMiniGameProps {
   onComplete?: () => void;
@@ -23,8 +24,8 @@ export default function DirectoryArchitectMiniGame({
   onOpenMaterial,
   onOpenQuiz,
 }: DirectoryArchitectMiniGameProps) {
-  // Tab pilihan sub-modul: "directory" (Arsitektur Direktori) atau "disk" (Laser Head Disk Scheduling)
-  const [activeTab, setActiveTab] = useState<"directory" | "disk">("directory");
+  // Tab pilihan sub-modul: "directory" (Arsitektur Direktori), "search" (Search Lab), atau "disk" (Disk Scheduling)
+  const [activeTab, setActiveTab] = useState<"directory" | "search" | "disk">("directory");
 
   // Level Arsitektur: 1 = Single-Level, 2 = Two-Level (MFD/UFD), 3 = Hierarchical Tree
   const [currentLevel, setCurrentLevel] = useState<number>(1);
@@ -194,7 +195,7 @@ export default function DirectoryArchitectMiniGame({
           </div>
         </div>
 
-        {/* Tab Switcher: Directory Architect vs Disk Head Scheduler */}
+        {/* Tab Switcher: Directory Architect vs Search Lab vs Disk Head Scheduler */}
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl bg-black/50 p-1 border border-white/10 text-xs font-bold font-mono">
             <button
@@ -207,6 +208,17 @@ export default function DirectoryArchitectMiniGame({
               }`}
             >
               📂 Directory Architect
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("search")}
+              className={`rounded-lg px-3 py-1.5 transition ${
+                activeTab === "search"
+                  ? "bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              🔎 Search Lab
             </button>
             <button
               type="button"
@@ -537,8 +549,13 @@ export default function DirectoryArchitectMiniGame({
             </div>
           )}
         </div>
+      ) : activeTab === "search" ? (
+        /* Konten Tab 2: Directory Search Lab */
+        <div className="mt-4">
+          <DirectorySearchLab />
+        </div>
       ) : (
-        /* Konten Tab 2: Laser Head Disk Scheduling */
+        /* Konten Tab 3: Laser Head Disk Scheduling */
         <div className="mt-4">
           <LaserHeadMiniGame
             onCalibrationComplete={onComplete}

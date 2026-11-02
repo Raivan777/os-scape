@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DirectoryArchitectMiniGame from "@/components/DirectoryArchitectMiniGame";
-import DiskMaterialModal from "@/components/DiskMaterialModal";
-import DiskQuizModal from "@/components/DiskQuizModal";
+import DirectoryMaterialModal from "@/components/DirectoryMaterialModal";
+import DirectoryQuizModal from "@/components/DirectoryQuizModal";
 
 export default function Stage5Page() {
   const router = useRouter();
@@ -35,6 +35,10 @@ export default function Stage5Page() {
   const [isWalking, setIsWalking] = useState(false);
   const [isHurt, setIsHurt] = useState(false);
 
+  // ─── STATE MODE DEBUG HITBOX (B1) ─────────────────────────────
+  // Aktif melalui tombol keyboard 'h' (toggle) atau query ?debug=1
+  const [debugMode, setDebugMode] = useState(false);
+
   // ─── STATE TOAST NOTIFIKASI ───────────────────────────────────
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const alertTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -57,7 +61,7 @@ export default function Stage5Page() {
   const [isNearArchitectStation, setIsNearArchitectStation] = useState(false);
   const [isNearPortal, setIsNearPortal] = useState(false);
 
-  // ─── PLATFORM HORIZONTAL SESUAI GAMBAR stage5bg.jpg ──────────
+  // ─── PLATFORM HORIZONTAL SESUAI GAMBAR stage5bg.jpg (B2 & B3) ──
   // Pijakan transparan murni untuk physics collider
   const platforms = [
     // 1. Lantai Bawah Kiri (Area Pintu Masuk)
@@ -66,14 +70,14 @@ export default function Stage5Page() {
     { x: 448, y: 518, w: 110, h: 20, label: "Jembatan Tengah" },
     // 3. Lantai Bawah Kanan (Depan Tangga Bawah)
     { x: 722, y: 536, w: 302, h: 40, label: "Lantai Kanan" },
-    // 4. Kotak Kargo Kecil di Kanan Bawah
-    { x: 848, y: 465, w: 76, h: 71, label: "Pijakan Kotak 1" },
-    // 5. Tumpukan Kotak Kargo Tinggi di Kanan Bawah
-    { x: 924, y: 390, w: 68, h: 146, label: "Pijakan Kotak 2" },
-    // 6. Catwalk Lantai Tengah (Meja Datalog & Jalur Utama)
-    { x: 280, y: 413, w: 570, h: 20, label: "Catwalk Tengah" },
+    // 4. Kotak Kargo Kecil di Kanan Bawah (Pijakan Kotak 1)
+    { x: 848, y: 462, w: 76, h: 74, label: "Pijakan Kotak 1" },
+    // 5. Tumpukan Peti Tinggi di Kanan Bawah (Pijakan Kotak 2)
+    { x: 912, y: 368, w: 78, h: 168, label: "Pijakan Kotak 2" },
+    // 6. Catwalk Lantai Tengah (Meja Datalog Direktori & Jalur Utama)
+    { x: 250, y: 414, w: 560, h: 20, label: "Catwalk Tengah" },
     // 7. Mezanin Kiri di atas Pintu Masuk
-    { x: 0, y: 385, w: 216, h: 20, label: "Mezanin Kiri" },
+    { x: 0, y: 362, w: 216, h: 20, label: "Mezanin Kiri" },
     // 8. Platform Tengah Terangkat (di atas tangga tengah)
     { x: 455, y: 304, w: 110, h: 20, label: "Platform Tengah Atas" },
     // 9. Ledge Melayang Kiri (Konektor Balok Oranye)
@@ -84,41 +88,65 @@ export default function Stage5Page() {
     { x: 327, y: 255, w: 98, h: 18, label: "Pod Gantung Kiri" },
     // 12. Piringan Gantung Kanan (Suspended Pod R)
     { x: 595, y: 255, w: 98, h: 18, label: "Pod Gantung Kanan" },
-    // 13. Catwalk Atas Kiri (Di bawah Rak Senjata)
+    // 13. Bracket Pod Kiri (B3: Menjembatani selisih 150 px ke catwalk 105)
+    { x: 345, y: 180, w: 65, h: 16, label: "Bracket Pod Kiri" },
+    // 14. Bracket Pod Kanan (B3: Menjembatani selisih 150 px ke catwalk 105)
+    { x: 620, y: 180, w: 65, h: 16, label: "Bracket Pod Kanan" },
+    // 15. Step Blok 1 (Anak tangga bawah pada blok mesin kanan)
+    { x: 770, y: 260, w: 46, h: 18, label: "Step Blok 1" },
+    // 16. Step Blok 2 (Anak tangga atas pada blok mesin kanan)
+    { x: 812, y: 200, w: 74, h: 18, label: "Step Blok 2" },
+    // 17. Step Catwalk Kanan (Transisi ketinggian catwalk kanan)
+    { x: 748, y: 145, w: 46, h: 18, label: "Step Catwalk Kanan" },
+    // 18. Catwalk Atas Kiri (Di bawah Rak Senjata)
     { x: 0, y: 105, w: 465, h: 20, label: "Catwalk Atas Kiri" },
-    // 14. Catwalk Atas Kanan (Terminal Directory Architect)
-    { x: 558, y: 105, w: 225, h: 20, label: "Catwalk Atas Kanan" },
-    // 15. Platform Depan Pintu Keluar Portal Stage 6
-    { x: 868, y: 75, w: 156, h: 20, label: "Platform Pintu Exit" },
+    // 19. Catwalk Atas Kanan (Terminal Directory Architect)
+    { x: 558, y: 105, w: 190, h: 20, label: "Catwalk Atas Kanan" },
+    // 20. Platform Depan Pintu Keluar Portal Stage 6
+    { x: 885, y: 130, w: 110, h: 20, label: "Platform Pintu Exit" },
   ];
 
-  // ─── TANGGA REALISTIS (RAMP MENGIKUTI VISUAL GAMBAR) ─────────
+  // ─── TANGGA REALISTIS (RAMP MENGIKUTI VISUAL GAMBAR stage5bg.jpg) ─
   const stairs = [
-    // 1. Tangga Kanan Bawah: dari (729, 536) naik ke kanan menuju (848, 413)
-    { x1: 729, y1: 536, x2: 848, y2: 413 },
-    // 2. Tangga Tengah: dari (329, 413) naik ke kanan menuju (455, 304)
-    { x1: 329, y1: 413, x2: 455, y2: 304 },
-    // 3. Tangga Mezanin Kiri: dari (216, 385) turun ke kanan menuju (280, 424)
-    { x1: 216, y1: 385, x2: 280, y2: 424 },
-    // 4. Tangga Atas Kanan Menuju Pintu Exit: dari (780, 145) naik ke kanan menuju (868, 75)
-    { x1: 780, y1: 145, x2: 868, y2: 75 },
+    // 1. Tangga Kanan Bawah: dari (712, 414) catwalk tengah turun ke kanan menuju (848, 536) lantai kanan
+    { x1: 712, y1: 414, x2: 848, y2: 536, label: "Tangga Kanan Bawah" },
+    // 2. Tangga Tengah: dari (329, 414) naik ke kanan menuju (455, 304) platform tengah atas
+    { x1: 329, y1: 414, x2: 455, y2: 304, label: "Tangga Tengah" },
+    // 3. Tangga Mezanin Kiri: dari (217, 366) turun ke kanan menuju (252, 410) catwalk tengah
+    { x1: 217, y1: 366, x2: 252, y2: 410, label: "Tangga Mezanin Kiri" },
+    // 4. Tangga Atas Kanan Menuju Pintu Exit: dari (817, 197) naik ke kanan menuju (890, 134) platform exit
+    { x1: 817, y1: 197, x2: 890, y2: 134, label: "Tangga Exit Atas" },
   ];
 
   // ─── TITIK INTERAKSI OBJEK (MENEMPEL PADA GAMBAR) ───────────
-  // 1. Komputer Terminal Datalog Materi (Meja Tengah MFD)
-  const terminalObj = { x: 630, y: 413 - 55, w: 65, h: 55 };
+  // 1. Komputer Terminal Datalog Materi Direktori (Meja Tengah MFD)
+  const terminalObj = { x: 630, y: 414 - 55, w: 65, h: 55, label: "Terminal Datalog" };
 
   // 2. Komputer Terminal Directory Architect (Catwalk Atas Kanan)
-  const architectStationObj = { x: 760, y: 105 - 60, w: 75, h: 60 };
+  const architectStationObj = { x: 660, y: 105 - 60, w: 75, h: 60, label: "Directory Architect" };
 
   // 3. Pintu Keluar / Portal Stage 6 (Pintu Hijau Atas Kanan)
-  const portalObj = { x: 910, y: 75 - 75, w: 70, h: 75 };
+  const portalObj = { x: 922, y: 42, w: 58, h: 88, label: "Portal Stage 6" };
+
+  // ─── RINTANGAN KOLAM HAZARD DI LANTAI BAWAH ──────────────────
+  const hazardLava = { x: 301, y: 532, w: 147, h: 44, label: "Kolam Lava" };
+  const hazardElectric = { x: 558, y: 532, w: 164, h: 44, label: "Kolam Listrik" };
 
   // ─── REFS GAME LOOP ──────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
 
   playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+
+  // Deteksi mode debug dari query parameter URL ?debug=1 saat awal mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("debug") === "1") {
+        setDebugMode(true);
+      }
+    }
+  }, []);
 
   // Reset Posisi Pemain jika Jatuh ke Kolam Hazard
   const resetPlayerToSpawn = (reason?: string) => {
@@ -143,6 +171,12 @@ export default function Stage5Page() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+
+      // Toggle Mode Debug Hitbox dengan tombol 'h'
+      if (key === "h") {
+        setDebugMode((prev) => !prev);
+        return;
+      }
 
       // Interaksi Tombol E
       if (key === "e") {
@@ -234,7 +268,7 @@ export default function Stage5Page() {
         const footY = p.y + PLAYER_H;
         const prevFootY = footY - p.vy;
 
-        // 4. Deteksi Pijakan Tangga (Ramp Math Mulus)
+        // 4. Deteksi Pijakan Tangga (Ramp Math: Mulus untuk naik ke kanan maupun turun ke kanan)
         let onStairs = false;
         for (const st of stairs) {
           const minX = Math.min(st.x1, st.x2);
@@ -244,6 +278,7 @@ export default function Stage5Page() {
             const t = (footX - st.x1) / (st.x2 - st.x1);
             const rampY = st.y1 + t * (st.y2 - st.y1);
 
+            // Toleransi tapak kaki pada bidang miring tangga
             if (footY >= rampY - 14 && footY <= rampY + 16) {
               p.y = rampY - PLAYER_H;
               p.vy = 0;
@@ -273,8 +308,8 @@ export default function Stage5Page() {
         }
 
         // 6. Rintangan Kolam Hazard di Lantai Bawah
-        const inLavaPool = footX > 301 && footX < 448 && footY >= 532;
-        const inElectricPool = footX > 558 && footX < 722 && footY >= 532;
+        const inLavaPool = footX > hazardLava.x && footX < hazardLava.x + hazardLava.w && footY >= hazardLava.y;
+        const inElectricPool = footX > hazardElectric.x && footX < hazardElectric.x + hazardElectric.w && footY >= hazardElectric.y;
         const outOfBounds = p.y > GAME_HEIGHT;
 
         if (inLavaPool || inElectricPool || outOfBounds) {
@@ -316,15 +351,27 @@ export default function Stage5Page() {
         <div className="flex items-center gap-2.5">
           <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
           <span className="font-bold tracking-wider text-cyan-300 uppercase font-mono">
-            STAGE 5 // DIRECTORY & STORAGE VAULT
+            STAGE 5 // STRUKTUR &amp; ORGANISASI DIREKTORI
           </span>
           <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300 font-mono">
-            File System Core
+            Directory System Core
           </span>
         </div>
 
-        {/* Kontrol Cepat Modal & Navigasi */}
+        {/* Kontrol Cepat Modal, Debug Hitbox, & Navigasi */}
         <div className="flex items-center gap-2 text-[10px] font-mono">
+          {/* Tombol Toggle Debug Mode (B1) */}
+          <button
+            type="button"
+            onClick={() => setDebugMode((prev) => !prev)}
+            className={`rounded px-2.5 py-1 font-bold transition border ${
+              debugMode
+                ? "border-red-400 bg-red-950/80 text-red-200 shadow-[0_0_10px_#ef4444]"
+                : "border-white/10 bg-white/5 text-gray-400 hover:text-white"
+            }`}
+          >
+            [H] Debug Hitbox: {debugMode ? "ON" : "OFF"}
+          </button>
           <button
             type="button"
             onClick={() => setShowArchitectTerminal(true)}
@@ -337,7 +384,7 @@ export default function Stage5Page() {
             onClick={() => setShowMaterial(true)}
             className="rounded-md border border-cyan-400/40 bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-200 hover:bg-cyan-500/30 transition"
           >
-            📖 Datalog
+            📖 Datalog Direktori
           </button>
           <button
             type="button"
@@ -392,6 +439,101 @@ export default function Stage5Page() {
           />
         ))}
 
+        {/* ─── DEBUG HITBOX OVERLAY (B1: Aktif lewat tombol 'h' atau ?debug=1) ─ */}
+        {debugMode && (
+          <div className="absolute inset-0 pointer-events-none z-50">
+            {/* SVG untuk Garis Tangga */}
+            <svg className="absolute inset-0 w-full h-full">
+              {stairs.map((st, idx) => (
+                <g key={`debug-stair-${idx}`}>
+                  <line
+                    x1={st.x1}
+                    y1={st.y1}
+                    x2={st.x2}
+                    y2={st.y2}
+                    stroke="#22c55e"
+                    strokeWidth="4"
+                    strokeDasharray="4 2"
+                  />
+                  <circle cx={st.x1} cy={st.y1} r="4" fill="#22c55e" />
+                  <circle cx={st.x2} cy={st.y2} r="4" fill="#22c55e" />
+                  <text
+                    x={(st.x1 + st.x2) / 2}
+                    y={(st.y1 + st.y2) / 2 - 6}
+                    fill="#4ade80"
+                    fontSize="10"
+                    fontWeight="bold"
+                    textAnchor="middle"
+                    className="font-mono bg-black"
+                  >
+                    Tangga {idx + 1}: {st.label}
+                  </text>
+                </g>
+              ))}
+            </svg>
+
+            {/* Platform Hitboxes: Kotak merah semi-transparan dengan nomor */}
+            {platforms.map((plat, idx) => (
+              <div
+                key={`debug-plat-${idx}`}
+                className="absolute border border-red-500 bg-red-500/25 text-[9px] font-mono text-red-100 flex items-start justify-start p-0.5 overflow-hidden leading-none select-none"
+                style={{
+                  left: `${plat.x}px`,
+                  top: `${plat.y}px`,
+                  width: `${plat.w}px`,
+                  height: `${plat.h}px`,
+                }}
+              >
+                <span className="bg-red-950/80 px-1 py-0.5 rounded text-[8px] font-bold">
+                  #{idx + 1} {plat.label}
+                </span>
+              </div>
+            ))}
+
+            {/* Kolam Lava: Oranye semi-transparan */}
+            <div
+              className="absolute border-2 border-orange-500 bg-orange-500/30 text-[9px] font-mono text-orange-200 flex items-center justify-center font-bold"
+              style={{
+                left: `${hazardLava.x}px`,
+                top: `${hazardLava.y}px`,
+                width: `${hazardLava.w}px`,
+                height: `${hazardLava.h}px`,
+              }}
+            >
+              🔥 Kolam Lava
+            </div>
+
+            {/* Kolam Listrik: Biru semi-transparan */}
+            <div
+              className="absolute border-2 border-cyan-400 bg-cyan-500/30 text-[9px] font-mono text-cyan-200 flex items-center justify-center font-bold"
+              style={{
+                left: `${hazardElectric.x}px`,
+                top: `${hazardElectric.y}px`,
+                width: `${hazardElectric.w}px`,
+                height: `${hazardElectric.h}px`,
+              }}
+            >
+              ⚡ Kolam Listrik
+            </div>
+
+            {/* Interactive Objects: Kotak kuning semi-transparan */}
+            {[terminalObj, architectStationObj, portalObj].map((obj, idx) => (
+              <div
+                key={`debug-obj-${idx}`}
+                className="absolute border-2 border-yellow-400 bg-yellow-400/25 text-[9px] font-mono text-yellow-200 flex items-center justify-center font-bold"
+                style={{
+                  left: `${obj.x}px`,
+                  top: `${obj.y}px`,
+                  width: `${obj.w}px`,
+                  height: `${obj.h}px`,
+                }}
+              >
+                🟡 {obj.label}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* ─── INTERAKSI 1: KOMPUTER TERMINAL DATALOG (MEJA TENGAH) ──── */}
         <div
           className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
@@ -406,7 +548,7 @@ export default function Stage5Page() {
           {isNearTerminal && (
             <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
               <span className="rounded-md border border-cyan-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
-                Tekan <kbd className="rounded bg-cyan-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Baca Datalog Direktori &amp; Disk
+                Tekan <kbd className="rounded bg-cyan-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Baca Datalog Direktori
               </span>
             </div>
           )}
@@ -490,7 +632,7 @@ export default function Stage5Page() {
           ← Kembali ke Menu Utama
         </Link>
         <span className="font-mono text-[11px] text-gray-300">
-          Stage 5: Baca Datalog di Meja Tengah, Selesaikan Terminal Architect di Atas, &amp; Buka Portal Stage 6!
+          Stage 5: Baca Datalog Direktori di Meja Tengah, Selesaikan Terminal Architect di Atas, &amp; Buka Portal Stage 6!
         </span>
         <button
           type="button"
@@ -522,11 +664,11 @@ export default function Stage5Page() {
         </div>
       )}
 
-      {/* ─── MODAL 2: DATALOG MATERI PEMBELAJARAN ──────────────────── */}
-      <DiskMaterialModal isOpen={showMaterial} onClose={() => setShowMaterial(false)} />
+      {/* ─── MODAL 2: DATALOG MATERI PEMBELAJARAN STRUKTUR DIREKTORI ─── */}
+      <DirectoryMaterialModal isOpen={showMaterial} onClose={() => setShowMaterial(false)} />
 
       {/* ─── MODAL 3: KUIS FIREWALL PINTU 5 / PORTAL STAGE 6 ────────── */}
-      <DiskQuizModal isOpen={showQuiz} onClose={() => setShowQuiz(false)} />
+      <DirectoryQuizModal isOpen={showQuiz} onClose={() => setShowQuiz(false)} />
 
       {/* ─── KEYFRAME ANIMASI WADDLE ASTRONOT ──────────────────────── */}
       <style jsx>{`
