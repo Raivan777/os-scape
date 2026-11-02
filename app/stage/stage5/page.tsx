@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import DiskBackground from "@/components/DiskBackground";
-import LaserHeadMiniGame from "@/components/LaserHeadMiniGame";
+import Stage5ZeroGBackground from "@/components/Stage5ZeroGBackground";
+import Stage5EducationalNodes from "@/components/Stage5EducationalNodes";
+import DirectoryArchitectMiniGame from "@/components/DirectoryArchitectMiniGame";
 import DiskMaterialModal from "@/components/DiskMaterialModal";
 import DiskQuizModal from "@/components/DiskQuizModal";
 
@@ -28,7 +29,7 @@ export default function Stage5Page() {
   const BOX_H = 56;
 
   // Titik Awal Pemain
-  const SPAWN_X = 60;
+  const SPAWN_X = 50;
   const SPAWN_Y = GROUND_Y - PLAYER_H;
 
   // 1. State Pemain & Fisika
@@ -40,52 +41,64 @@ export default function Stage5Page() {
   const [isWalking, setIsWalking] = useState(false);
 
   // 2. State Objek Kotak Kargo Magnetik
-  const [boxX, setBoxX] = useState(260);
+  const [boxX, setBoxX] = useState(250);
   const [boxY, setBoxY] = useState(GROUND_Y - BOX_H);
   const [boxVelocityY, setBoxVelocityY] = useState(0);
 
   // 3. Rintangan Bergerak: Laser Shredder Beam Vertikal
-  const [laserBeamY, setLaserBeamY] = useState(250);
+  const [laserBeamY, setLaserBeamY] = useState(260);
   const [laserBeamDir, setLaserBeamDir] = useState<"up" | "down">("down");
 
-  // 4. State Modal & Mini-Game
+  // 4. State Modal & Terminal Mini-Game
   const [showMaterial, setShowMaterial] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [showMiniGame, setShowMiniGame] = useState(false);
-  const [isCalibrationDone, setIsCalibrationDone] = useState(false);
+  const [showArchitectTerminal, setShowArchitectTerminal] = useState(false);
+
+  // 5. Dokumen Digital Melayang yang Dapat Dikoleksi (Collectible Levitating Documents)
+  const [collectedDocs, setCollectedDocs] = useState<number[]>([]);
+  const collectibleDocuments = [
+    { id: 1, x: 260, y: 395, name: "core_kernel.bin", color: "cyan" },
+    { id: 2, x: 440, y: 250, name: "mfd_table.dat", color: "purple" },
+    { id: 3, x: 625, y: 195, name: "ufd_catalog.hex", color: "emerald" },
+    { id: 4, x: 745, y: 125, name: "tree_root.idx", color: "amber" },
+  ];
 
   // Status Kedekatan dengan Objek Interaktif
   const [isNearTerminal, setIsNearTerminal] = useState(false);
-  const [isNearCalibrator, setIsNearCalibrator] = useState(false);
+  const [isNearArchitectStation, setIsNearArchitectStation] = useState(false);
   const [isNearPortal, setIsNearPortal] = useState(false);
 
-  // Daftar Platform Pijakan Bertema Sektor Disk
+  // Daftar Platform: Panel Modular Melayang & Tangga Magnetik (Magnetic Stairs)
   const platforms = [
-    { x: 0, y: GROUND_Y, w: 360, h: 80, label: "PLATTER-SECTOR A" }, // Lantai Kiri
-    { x: 560, y: GROUND_Y, w: 440, h: 80, label: "PLATTER-SECTOR B" }, // Lantai Kanan
-    { x: 230, y: 390, w: 140, h: 22, label: "TRACK 50" }, // Pijakan 1
-    { x: 440, y: 300, w: 180, h: 22, label: "TERMINAL TRACK" }, // Pijakan 2 (Terminal Datalog)
-    { x: 690, y: 220, w: 180, h: 22, label: "CALIBRATION DOCK" }, // Pijakan 3 (Station Mini-game)
-    { x: 910, y: 150, w: 90, h: 22, label: "GATE PORTAL 6" }, // Pijakan Portal
+    { x: 0, y: GROUND_Y, w: 340, h: 80, isStairs: false, label: "MODULAR HULL A" }, // Lantai Kiri
+    { x: 560, y: GROUND_Y, w: 440, h: 80, isStairs: false, label: "MODULAR HULL B" }, // Lantai Kanan
+    // Tangga Magnetik 1 & 2 (Magnetic Stairs)
+    { x: 240, y: 440, w: 85, h: 20, isStairs: true, label: "MAG_STAIR 01" },
+    { x: 315, y: 375, w: 85, h: 20, isStairs: true, label: "MAG_STAIR 02" },
+    // Platform Modular Tengah (Terminal Datalog & Blueprint)
+    { x: 415, y: 300, w: 175, h: 22, isStairs: false, label: "BLUEPRINT DOCK" },
+    // Tangga Magnetik 3
+    { x: 605, y: 240, w: 80, h: 20, isStairs: true, label: "MAG_STAIR 03" },
+    // Platform Melayang Tinggi (Directory Architect Terminal Station)
+    { x: 695, y: 190, w: 195, h: 24, isStairs: false, label: "ARCHITECT DOCK" },
+    // Tangga Magnetik Menuju Portal Akhir
+    { x: 900, y: 150, w: 100, h: 22, isStairs: true, label: "PORTAL GATE" },
   ];
 
-  // Rintangan 1: Lubang Fluks Magnetik (Magnetic Flux Hazard Pit)
-  const hazardPit = { x: 360, y: 530, w: 200, h: 70 };
+  // Rintangan 1: Lubang Fluks Magnetik (Hazard Pit) di antara lantai dasar
+  const hazardPit = { x: 340, y: 530, w: 220, h: 70 };
 
-  // Rintangan 2: Rintangan Laser Shredder Bergerak (X: 640)
-  const laserHazard = { x: 645, w: 24, h: 100 };
+  // Rintangan 2: Sinar Laser Shredder Bergerak (X: 635)
+  const laserHazard = { x: 640, w: 22, h: 90 };
 
-  // Rintangan 3: Platform Bad Sector yang Berkedip Glitch
-  const badSectorPlatform = { x: 120, y: 280, w: 90, h: 18 };
+  // Objek Terminal Datalog Materi (Platform Tengah)
+  const terminalObj = { x: 475, y: 300 - 55, w: 45, h: 55 };
 
-  // Objek Terminal Datalog Materi
-  const terminalObj = { x: 510, y: 300 - 55, w: 45, h: 55 };
-
-  // Objek Stasiun Kalibrasi Laser Head (Mini-Game Launcher)
-  const calibratorStationObj = { x: 760, y: 220 - 65, w: 60, h: 65 };
+  // Objek Terminal Stasiun DIRECTORY ARCHITECT (Platform Atas)
+  const architectStationObj = { x: 765, y: 190 - 75, w: 80, h: 75 };
 
   // Objek Portal Akhir Stage (Pintu 6)
-  const portalObj = { x: 925, y: 150 - 90, w: 60, h: 90 };
+  const portalObj = { x: 930, y: 150 - 90, w: 60, h: 90 };
 
   // Refs untuk Game Loop
   const keysPressed = useRef<Set<string>>(new Set());
@@ -112,8 +125,8 @@ export default function Stage5Page() {
 
       // Interaksi Tombol E
       if (key === "e") {
-        if (isNearCalibrator && !showMiniGame) {
-          setShowMiniGame(true);
+        if (isNearArchitectStation && !showArchitectTerminal) {
+          setShowArchitectTerminal(true);
           return;
         }
         if (isNearTerminal && !showMaterial) {
@@ -129,12 +142,12 @@ export default function Stage5Page() {
       if (key === "escape") {
         setShowMaterial(false);
         setShowQuiz(false);
-        setShowMiniGame(false);
+        setShowArchitectTerminal(false);
         return;
       }
 
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
-        if (!showMiniGame) {
+        if (!showArchitectTerminal) {
           e.preventDefault();
         }
       }
@@ -153,15 +166,14 @@ export default function Stage5Page() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isNearTerminal, isNearCalibrator, isNearPortal, showMaterial, showQuiz, showMiniGame]);
+  }, [isNearTerminal, isNearArchitectStation, isNearPortal, showMaterial, showQuiz, showArchitectTerminal]);
 
   // Game Loop Platformer 60 FPS
   useEffect(() => {
     let animId: number;
 
     const gameLoop = () => {
-      // Hentikan fisika jika ada modal yang sedang terbuka
-      if (!showMaterial && !showQuiz && !showMiniGame) {
+      if (!showMaterial && !showQuiz && !showArchitectTerminal) {
         let p = { ...playerRef.current };
         let b = { ...boxRef.current };
         const keys = keysPressed.current;
@@ -170,10 +182,10 @@ export default function Stage5Page() {
         setLaserBeamY((prevY) => {
           let nextY = prevY;
           if (laserBeamDir === "down") {
-            nextY += 1.8;
-            if (nextY >= 360) setLaserBeamDir("up");
+            nextY += 1.6;
+            if (nextY >= 350) setLaserBeamDir("up");
           } else {
-            nextY -= 1.8;
+            nextY -= 1.6;
             if (nextY <= 170) setLaserBeamDir("down");
           }
           return nextY;
@@ -220,7 +232,7 @@ export default function Stage5Page() {
         }
 
         if (b.y > GAME_HEIGHT) {
-          b.x = 260;
+          b.x = 250;
           b.y = GROUND_Y - BOX_H;
           b.vy = 0;
         }
@@ -267,7 +279,7 @@ export default function Stage5Page() {
           p.jumping = false;
         }
 
-        // 6. Tabrakan Pemain dengan Platform Normal & Platform Bad Sector
+        // 6. Tabrakan Pemain dengan Platform & Tangga Magnetik
         for (const plat of platforms) {
           if (
             p.x + PLAYER_W > plat.x &&
@@ -281,25 +293,24 @@ export default function Stage5Page() {
           }
         }
 
-        // Platform Bad Sector
-        if (
-          p.x + PLAYER_W > badSectorPlatform.x &&
-          p.x < badSectorPlatform.x + badSectorPlatform.w &&
-          p.y + PLAYER_H >= badSectorPlatform.y &&
-          p.y + PLAYER_H - p.vy <= badSectorPlatform.y + 14
-        ) {
-          p.y = badSectorPlatform.y - PLAYER_H;
-          p.vy = 0;
-          p.jumping = false;
+        // 7. Pengambilan Dokumen Digital Melayang (Collectible Items)
+        for (const doc of collectibleDocuments) {
+          if (!collectedDocs.includes(doc.id)) {
+            const distDoc =
+              Math.hypot(p.x + PLAYER_W / 2 - doc.x, p.y + PLAYER_H / 2 - doc.y);
+            if (distDoc < 35) {
+              setCollectedDocs((prev) => [...prev, doc.id]);
+            }
+          }
         }
 
-        // 7. Rintangan 1: Celah Flukus Magnetik (Hazard Pit)
+        // 8. Rintangan 1: Celah Fluks Magnetik (Hazard Pit)
         const inHazardPit =
           p.x + PLAYER_W > hazardPit.x + 10 &&
           p.x < hazardPit.x + hazardPit.w - 10 &&
           p.y + PLAYER_H >= hazardPit.y;
 
-        // 8. Rintangan 2: Tabrakan dengan Sinar Laser Shredder Bergerak
+        // 9. Rintangan 2: Tabrakan dengan Sinar Laser Shredder Bergerak
         const hitLaserBeam =
           p.x + PLAYER_W > laserHazard.x &&
           p.x < laserHazard.x + laserHazard.w &&
@@ -311,14 +322,14 @@ export default function Stage5Page() {
           return;
         }
 
-        // 9. Deteksi Kedekatan Objek
+        // 10. Deteksi Kedekatan Objek Interaktif
         const distTermX = Math.abs(p.x + PLAYER_W / 2 - (terminalObj.x + terminalObj.w / 2));
         const distTermY = Math.abs(p.y + PLAYER_H / 2 - (terminalObj.y + terminalObj.h / 2));
         setIsNearTerminal(distTermX < 65 && distTermY < 65);
 
-        const distCalibX = Math.abs(p.x + PLAYER_W / 2 - (calibratorStationObj.x + calibratorStationObj.w / 2));
-        const distCalibY = Math.abs(p.y + PLAYER_H / 2 - (calibratorStationObj.y + calibratorStationObj.h / 2));
-        setIsNearCalibrator(distCalibX < 75 && distCalibY < 75);
+        const distArchX = Math.abs(p.x + PLAYER_W / 2 - (architectStationObj.x + architectStationObj.w / 2));
+        const distArchY = Math.abs(p.y + PLAYER_H / 2 - (architectStationObj.y + architectStationObj.h / 2));
+        setIsNearArchitectStation(distArchX < 85 && distArchY < 85);
 
         const distPortalX = Math.abs(p.x + PLAYER_W / 2 - (portalObj.x + portalObj.w / 2));
         const distPortalY = Math.abs(p.y + PLAYER_H / 2 - (portalObj.y + portalObj.h / 2));
@@ -340,60 +351,65 @@ export default function Stage5Page() {
 
     animId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animId);
-  }, [showMaterial, showQuiz, showMiniGame, laserBeamDir]);
+  }, [showMaterial, showQuiz, showArchitectTerminal, laserBeamDir, collectedDocs]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black p-3 md:p-4 select-none">
       {/* HUD Info Atas */}
-      <div className="mb-3 flex w-full max-w-[1000px] flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-500/30 bg-[#09061a]/80 px-4 py-2.5 text-xs text-gray-300 backdrop-blur-md shadow-[0_0_20px_rgba(6,182,212,0.2)]">
+      <div className="mb-3 flex w-full max-w-[1000px] flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-500/40 bg-[#09061c]/85 px-4 py-2.5 text-xs text-gray-300 backdrop-blur-md shadow-[0_0_25px_rgba(6,182,212,0.25)]">
         <div className="flex items-center gap-2.5">
           <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
           <span className="font-bold tracking-wider text-cyan-300 uppercase font-mono">
-            STAGE 5 // PENJADWALAN HEAD DISK
+            STAGE 5 // ZERO-G DIRECTORY & STORAGE VAULT
           </span>
           <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300 font-mono">
-            Storage Core Vault
+            Space Station Core
           </span>
         </div>
 
+        {/* Counter Dokumen Digital Terkoleksi */}
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 rounded-lg bg-black/50 border border-cyan-500/30 px-2.5 py-1 text-[11px] font-mono text-cyan-200">
+            <span>📄 Dokumen Terkoleksi:</span>
+            <span className="font-bold text-amber-300">{collectedDocs.length}/4</span>
+          </div>
           <button
             type="button"
-            onClick={() => setShowMaterial(true)}
-            className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-300 hover:bg-cyan-500/20"
+            onClick={() => setShowArchitectTerminal(true)}
+            className="rounded-lg border border-purple-400/40 bg-purple-500/20 px-2.5 py-1 text-[11px] font-bold text-purple-200 hover:bg-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.5)] transition"
           >
-            📖 Materi Disk [E]
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowMiniGame(true)}
-            className="rounded-lg border border-purple-400/40 bg-purple-500/20 px-2.5 py-1 text-[11px] font-bold text-purple-200 hover:bg-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
-          >
-            💽 Kalibrasi Laser Head
+            💻 Directory Architect [E]
           </button>
           <button
             type="button"
             onClick={() => setShowQuiz(true)}
             className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/20"
           >
-            🛡️ Kuis Pintu 5
+            🛡️ Firewall 5
           </button>
         </div>
       </div>
 
-      {/* Arena Game 2D Platformer Koridor Storage (1000px x 600px) */}
+      {/* Arena Game 2D Platformer Koridor Storage & Direktori (1000px x 600px) */}
       <div
-        className="relative overflow-hidden rounded-2xl border-2 border-cyan-500/40 bg-[#070415] shadow-[0_0_60px_rgba(6,182,212,0.25)]"
+        className="relative overflow-hidden rounded-2xl border-2 border-cyan-500/50 bg-[#060412] shadow-[0_0_60px_rgba(6,182,212,0.3)]"
         style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
       >
-        {/* Background Visual Kaya Bertema Hard Disk & Storage Core */}
-        <DiskBackground />
+        {/* 1. Latar Belakang Zero-Gravity Space Station Interior (Cartoon Sci-Fi Debris & Cables) */}
+        <Stage5ZeroGBackground />
 
-        {/* 1. Platform Pijakan Bertema Sektor & Silinder Disk */}
+        {/* 2. Tiga Node Tampilan Holografis Edukasi Direktori Melayang (Educational Nodes) */}
+        <Stage5EducationalNodes />
+
+        {/* 3. Platform Modular & Tangga Magnetik dengan Pendorong Anti-Gravitasi & Medan Energi */}
         {platforms.map((plat, idx) => (
           <div
             key={idx}
-            className="absolute rounded-t-lg border-t-2 border-cyan-400/80 bg-gradient-to-b from-[#1c1242] via-[#0f0927] to-[#080518] shadow-[0_4px_25px_rgba(0,0,0,0.9)]"
+            className={`absolute rounded-t-lg transition-all ${
+              plat.isStairs
+                ? "border-t-2 border-purple-400/90 bg-gradient-to-b from-[#241352] to-[#0e0724] shadow-[0_4px_18px_rgba(168,85,247,0.4)]"
+                : "border-t-2 border-cyan-400/90 bg-gradient-to-b from-[#161338] via-[#0d0a24] to-[#060414] shadow-[0_4px_25px_rgba(0,0,0,0.85)]"
+            }`}
             style={{
               left: `${plat.x}px`,
               top: `${plat.y}px`,
@@ -401,31 +417,46 @@ export default function Stage5Page() {
               height: `${plat.h}px`,
             }}
           >
-            {/* Tekstur Sektor & Label Track */}
-            <div className="h-1.5 w-full bg-gradient-to-r from-cyan-400/50 via-purple-500/40 to-cyan-400/50" />
-            <div className="p-1.5 flex justify-between items-center text-[9px] font-mono text-cyan-300/60">
+            {/* Garis Aksen Modular Plat */}
+            <div
+              className={`h-1.5 w-full ${
+                plat.isStairs
+                  ? "bg-gradient-to-r from-purple-400 via-cyan-400 to-purple-400"
+                  : "bg-gradient-to-r from-cyan-400/60 via-purple-500/50 to-cyan-400/60"
+              }`}
+            />
+            <div className="px-2 py-1 flex justify-between items-center text-[8px] font-mono text-cyan-300/70">
               <span>{plat.label}</span>
-              <span className="text-[8px] text-gray-500">15K RPM</span>
+              <span className="text-[7px] text-purple-400">ZERO-G</span>
+            </div>
+
+            {/* Pendorong Anti-Gravitasi (Thruster Housing & Plasma Cones) & Medan Energi di Bawah Platform */}
+            <div className="absolute -bottom-8 left-0 right-0 flex justify-around pointer-events-none">
+              {/* Thruster 1 (Kiri) */}
+              <div className="flex flex-col items-center">
+                <div className="h-2 w-5 rounded-b-md bg-slate-800 border-x border-b border-cyan-400/50" />
+                {/* Plasma Jet Cone Biru-Ungu */}
+                <div className="h-6 w-3 bg-gradient-to-b from-cyan-300 via-blue-500 to-transparent blur-[1px] animate-pulse" />
+                {/* Gelombang Medan Energi Magnetik Repulsor */}
+                <div className="h-1 w-6 rounded-full bg-cyan-400/50 blur-[2px] animate-ping" />
+              </div>
+
+              {/* Thruster 2 (Kanan) */}
+              <div className="flex flex-col items-center">
+                <div className="h-2 w-5 rounded-b-md bg-slate-800 border-x border-b border-purple-400/50" />
+                <div
+                  className="h-6 w-3 bg-gradient-to-b from-purple-300 via-purple-600 to-transparent blur-[1px] animate-pulse"
+                  style={{ animationDelay: "0.4s" }}
+                />
+                <div className="h-1 w-6 rounded-full bg-purple-400/50 blur-[2px] animate-ping" style={{ animationDelay: "0.4s" }} />
+              </div>
             </div>
           </div>
         ))}
 
-        {/* 2. Rintangan 3: Platform Bad Sector yang Glitchy */}
+        {/* 4. Rintangan 1: Lubang Fluks Magnetik (Magnetic Hazard Pit) */}
         <div
-          className="absolute rounded-md border-t-2 border-rose-500/90 bg-gradient-to-b from-rose-950/60 to-black p-1 text-[8px] font-mono font-bold text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.5)] animate-pulse"
-          style={{
-            left: `${badSectorPlatform.x}px`,
-            top: `${badSectorPlatform.y}px`,
-            width: `${badSectorPlatform.w}px`,
-            height: `${badSectorPlatform.h}px`,
-          }}
-        >
-          ⚠️ BAD_SECTOR
-        </div>
-
-        {/* 3. Rintangan 1: Lubang Fluks Magnetik (Magnetic Flux Hazard Pit) */}
-        <div
-          className="absolute flex flex-col items-center justify-center rounded-lg border-2 border-rose-500/90 bg-rose-950/50 shadow-[0_0_35px_rgba(244,63,94,0.8)] animate-pulse"
+          className="absolute flex flex-col items-center justify-center rounded-lg border-2 border-rose-500/90 bg-rose-950/60 shadow-[0_0_35px_rgba(244,63,94,0.8)] animate-pulse"
           style={{
             left: `${hazardPit.x}px`,
             top: `${hazardPit.y}px`,
@@ -434,14 +465,14 @@ export default function Stage5Page() {
           }}
         >
           <span className="text-xs md:text-sm font-black tracking-widest text-rose-300 animate-bounce">
-            ⚡ BAHAYA FLUKS MAGNETIK ⚡
+            ⚡ BAHAYA RADIASI FLUKS ⚡
           </span>
           <span className="text-[10px] text-rose-400 font-mono">
-            Distorsi Medan Spindel - Terpental ke Titik Awal
+            Anomali Medan Gravitasi - Reset Posisi
           </span>
         </div>
 
-        {/* 4. Rintangan 2: Sinar Laser Shredder Bergerak Naik Turun */}
+        {/* 5. Rintangan 2: Sinar Laser Shredder Bergerak Naik Turun */}
         <div
           className="absolute flex flex-col items-center justify-between"
           style={{
@@ -456,7 +487,7 @@ export default function Stage5Page() {
           <div className="h-2 w-full rounded bg-cyan-400 shadow-[0_0_10px_#22d3ee]" />
         </div>
 
-        {/* 5. Kotak Kargo Silinder Magnetik (Pushable Box) */}
+        {/* 6. Kotak Kargo Silinder Magnetik (Pushable Box) */}
         <div
           className="absolute z-20 flex flex-col items-center justify-center rounded-xl border-2 border-cyan-400/90 bg-gradient-to-br from-cyan-800 via-purple-900 to-[#120a30] shadow-[0_0_25px_rgba(6,182,212,0.6)] cursor-grab active:cursor-grabbing"
           style={{
@@ -467,12 +498,36 @@ export default function Stage5Page() {
           }}
         >
           <span className="text-xl">🧲</span>
-          <span className="text-[9px] font-black text-cyan-200 tracking-wider">PLATTER</span>
+          <span className="text-[9px] font-black text-cyan-200 tracking-wider">MODUL</span>
         </div>
 
-        {/* 6. Terminal Interaktif Datalog Materi Disk */}
+        {/* 7. Dokumen Digital Melayang di Udara (Collectible Floating Documents) */}
+        {collectibleDocuments.map((doc) => {
+          const isCollected = collectedDocs.includes(doc.id);
+          if (isCollected) return null;
+          return (
+            <div
+              key={doc.id}
+              className="absolute z-20 flex flex-col items-center pointer-events-none animate-[zeroGDrift_4s_ease-in-out_infinite]"
+              style={{
+                left: `${doc.x}px`,
+                top: `${doc.y}px`,
+                animationDelay: `${doc.id * 0.6}s`,
+              }}
+            >
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-300 bg-cyan-950/80 shadow-[0_0_15px_#22d3ee] animate-bounce">
+                <span className="text-xs">📄</span>
+              </div>
+              <span className="mt-0.5 rounded bg-black/70 px-1 text-[7px] font-mono text-cyan-200 border border-cyan-500/30">
+                {doc.name}
+              </span>
+            </div>
+          );
+        })}
+
+        {/* 8. Terminal Interaktif Datalog Materi (Platform Tengah) */}
         <div
-          className="absolute z-10 flex flex-col items-center cursor-pointer"
+          className="absolute z-20 flex flex-col items-center cursor-pointer"
           style={{
             left: `${terminalObj.x}px`,
             top: `${terminalObj.y}px`,
@@ -494,33 +549,87 @@ export default function Stage5Page() {
           <div className="h-3 w-5 bg-purple-500/50 rounded-t" />
         </div>
 
-        {/* 7. Stasiun Kalibrasi Laser Head (Mini-Game Launcher Terminal) */}
+        {/* ========================================================
+            9. [MINIGAME TERMINAL - DIRECTORY ARCHITECT]
+            Stasiun terminal komputer sci-fi futuristis yang sangat detail
+            terletak di atas platform modular magnetik melayang.
+            Dilengkapi antarmuka holografis besar bercahaya dan banyak
+            ikon dokumen digital melayang tanpa bobot di sekitarnya.
+            (NO CHARACTERS ON ASSET).
+           ======================================================== */}
         <div
-          className="absolute z-10 flex flex-col items-center cursor-pointer"
+          className="absolute z-20 flex flex-col items-center cursor-pointer group"
           style={{
-            left: `${calibratorStationObj.x}px`,
-            top: `${calibratorStationObj.y}px`,
-            width: `${calibratorStationObj.w}px`,
-            height: `${calibratorStationObj.h}px`,
+            left: `${architectStationObj.x}px`,
+            top: `${architectStationObj.y}px`,
+            width: `${architectStationObj.w}px`,
+            height: `${architectStationObj.h}px`,
           }}
-          onClick={() => setShowMiniGame(true)}
+          onClick={() => setShowArchitectTerminal(true)}
         >
-          <div className="absolute -top-7 whitespace-nowrap animate-bounce">
-            <span className="rounded bg-purple-400 px-2 py-0.5 text-[10px] font-black text-black shadow-[0_0_12px_rgba(168,85,247,0.8)]">
-              {isNearCalibrator ? "[E] Kalibrasi Head" : "Laser Calibrator"}
+          {/* Tooltip Interaksi [E] */}
+          <div className="absolute -top-9 whitespace-nowrap animate-bounce">
+            <span className="rounded bg-gradient-to-r from-purple-400 to-cyan-400 px-2.5 py-0.5 text-[10px] font-black text-black shadow-[0_0_15px_rgba(168,85,247,0.9)]">
+              {isNearArchitectStation ? "[E] Directory Architect" : "Terminal Architect"}
             </span>
           </div>
-          <div className="flex h-12 w-14 items-center justify-center rounded-xl border-2 border-purple-400 bg-purple-950/80 shadow-[0_0_30px_rgba(168,85,247,0.7)]">
-            <span className="text-2xl animate-spin" style={{ animationDuration: "6s" }}>
-              🎯
+
+          {/* Ikon-Ikon Dokumen Digital Melayang di Sekitar Konsol (Levitating Document Items) */}
+          <div className="absolute -left-6 top-1 animate-[zeroGDrift_4.5s_ease-in-out_infinite]">
+            <span className="rounded-md bg-cyan-950/90 border border-cyan-400/70 px-1 py-0.5 text-[7px] font-mono text-cyan-200 shadow-[0_0_10px_#22d3ee]">
+              📄 sys.bin
             </span>
           </div>
-          <div className="h-3 w-6 bg-cyan-400/60 rounded-t" />
+          <div className="absolute -right-8 top-3 animate-[zeroGDrift_5.2s_ease-in-out_infinite]" style={{ animationDelay: "1.2s" }}>
+            <span className="rounded-md bg-purple-950/90 border border-purple-400/70 px-1 py-0.5 text-[7px] font-mono text-purple-200 shadow-[0_0_10px_#c084fc]">
+              📊 mfd.tab
+            </span>
+          </div>
+          <div className="absolute left-1/2 -translate-x-1/2 -top-5 animate-[zeroGDrift_6s_ease-in-out_infinite]" style={{ animationDelay: "2s" }}>
+            <span className="rounded-md bg-emerald-950/90 border border-emerald-400/70 px-1 py-0.5 text-[7px] font-mono text-emerald-200 shadow-[0_0_10px_#34d399]">
+              📁 tree.dir
+            </span>
+          </div>
+
+          {/* Konsol Sci-Fi Futuristik Detail & Layar Holografis Raksasa */}
+          <svg width="78" height="66" viewBox="0 0 78 66" className="drop-shadow-[0_0_20px_rgba(168,85,247,0.6)]">
+            {/* Basis Platform Konsol Magnetik */}
+            <polygon points="14,64 64,64 72,54 6,54" fill="#0f172a" stroke="#06b6d4" strokeWidth="1.5" />
+            <rect x="24" y="44" width="30" height="12" rx="2" fill="#1e1b4b" stroke="#a855f7" strokeWidth="1.2" />
+
+            {/* Keyboard / Input Interface Panel Bercahaya */}
+            <polygon points="20,44 58,44 64,54 14,54" fill="#090524" stroke="#22d3ee" strokeWidth="1" />
+            <line x1="24" y1="48" x2="54" y2="48" stroke="#38bdf8" strokeWidth="1" strokeDasharray="3 2" />
+            <line x1="22" y1="51" x2="56" y2="51" stroke="#a855f7" strokeWidth="1" strokeDasharray="4 2" />
+
+            {/* Holographic Projector Emitters (Kiri & Kanan) */}
+            <circle cx="12" cy="46" r="3.5" fill="#22d3ee" className="animate-ping" />
+            <circle cx="66" cy="46" r="3.5" fill="#a855f7" className="animate-ping" style={{ animationDelay: "0.5s" }} />
+
+            {/* Layar Holografis Raksasa (Massive Glowing Holographic Interface) */}
+            <rect x="8" y="4" width="62" height="36" rx="4" fill="#0c1736" fillOpacity="0.85" stroke="#38bdf8" strokeWidth="1.5" />
+
+            {/* Grid Grafis & Diagram File Tree pada Layar Hologram */}
+            <line x1="12" y1="12" x2="66" y2="12" stroke="#06b6d4" strokeWidth="1" opacity="0.6" />
+            <circle cx="18" cy="8" r="1.5" fill="#22d3ee" />
+            <circle cx="23" cy="8" r="1.5" fill="#a855f7" />
+            <circle cx="28" cy="8" r="1.5" fill="#34d399" />
+
+            {/* Mini File Tree Diagram di Layar */}
+            <path d="M20,18 L30,18 L30,24 L45,24" fill="none" stroke="#22d3ee" strokeWidth="1" />
+            <path d="M30,18 L30,30 L50,30" fill="none" stroke="#a855f7" strokeWidth="1" />
+            <rect x="16" y="15" width="8" height="6" rx="1" fill="#0891b2" />
+            <rect x="44" y="21" width="8" height="6" rx="1" fill="#7e22ce" />
+            <rect x="49" y="27" width="8" height="6" rx="1" fill="#059669" />
+
+            {/* Scanning Line Sweep Effect */}
+            <line x1="8" y1="22" x2="70" y2="22" stroke="#38bdf8" strokeWidth="1" strokeDasharray="6 4" opacity="0.7" />
+          </svg>
         </div>
 
-        {/* 8. Portal Menuju Stage 6 (The RAM Tetris) */}
+        {/* 10. Portal Akhir Stage (Pintu Menuju Stage 6) */}
         <div
-          className="absolute z-10 flex flex-col items-center justify-center cursor-pointer"
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
             left: `${portalObj.x}px`,
             top: `${portalObj.y}px`,
@@ -541,13 +650,13 @@ export default function Stage5Page() {
             <span className="text-2xl animate-spin inline-block" style={{ animationDuration: "8s" }}>
               🌀
             </span>
-            <span className="block text-[8px] font-black tracking-widest text-cyan-200 uppercase">
+            <span className="block text-[8px] font-black tracking-widest text-cyan-200 uppercase font-mono">
               PORTAL 6
             </span>
           </div>
         </div>
 
-        {/* 9. Karakter Astronot */}
+        {/* 11. Karakter Astronot Pemain (Front Sprite & Squash Stretch) */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -577,62 +686,54 @@ export default function Stage5Page() {
         </div>
       </div>
 
-      {/* Navigasi Cepat Bawah */}
+      {/* Navigasi Bawah */}
       <div className="mt-3 flex w-full max-w-[1000px] items-center justify-between text-xs text-gray-400">
         <Link href="/" className="hover:text-cyan-300 transition">
           ← Kembali ke Menu Utama
         </Link>
-        <span className="font-mono text-[11px]">
-          Target Stage 5: Kalibrasikan Head Silinder Disk & Taklukkan Algoritma FCFS, SSTF, SCAN!
+        <span className="font-mono text-[11px] text-gray-300">
+          Stage 5: Amati 3 Node Edukasi Direktori, Koleksi Dokumen, & Kelola File di Terminal!
         </span>
         <button
           type="button"
-          onClick={() => setShowMiniGame(true)}
-          className="text-purple-300 font-bold hover:underline"
+          onClick={() => setShowArchitectTerminal(true)}
+          className="text-purple-300 font-bold hover:underline font-mono"
         >
-          Buka Mini-game Layar Penuh ➔
+          Buka Terminal Architect ➔
         </button>
       </div>
 
-      {/* MODAL 1: Mini-Game Laser Head Calibration */}
-      {showMiniGame && (
+      {/* MODAL 1: Minigame Console Directory Architect (Sorting File & Disk Calibrator) */}
+      {showArchitectTerminal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 md:p-6 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
           <div className="relative w-full max-w-4xl max-h-[95vh] overflow-y-auto">
             <div className="absolute top-3 right-3 z-30">
               <button
                 type="button"
-                onClick={() => setShowMiniGame(false)}
+                onClick={() => setShowArchitectTerminal(false)}
                 className="rounded-lg border border-white/20 bg-black/80 px-3 py-1.5 text-xs text-gray-300 transition hover:bg-white/20 hover:text-white"
               >
-                ✕ Kembali ke Arena (ESC)
+                ✕ Kembali ke Stasiun (ESC)
               </button>
             </div>
-            <LaserHeadMiniGame
-              onCalibrationComplete={() => {
-                setIsCalibrationDone(true);
-              }}
-              onOpenMaterial={() => {
-                setShowMaterial(true);
-              }}
-              onOpenQuiz={() => {
-                setShowQuiz(true);
-              }}
+            <DirectoryArchitectMiniGame
+              onOpenMaterial={() => setShowMaterial(true)}
+              onOpenQuiz={() => setShowQuiz(true)}
             />
           </div>
         </div>
       )}
 
-      {/* MODAL 2: Datalog Materi Penjadwalan Disk */}
+      {/* MODAL 2: Datalog Materi Pembelajaran Penjadwalan Disk & Storage */}
       <DiskMaterialModal isOpen={showMaterial} onClose={() => setShowMaterial(false)} />
 
       {/* MODAL 3: Kuis Firewall Pintu 5 */}
       <DiskQuizModal isOpen={showQuiz} onClose={() => setShowQuiz(false)} />
 
-      {/* Style Keyframe Animasi Waddle */}
+      {/* Keyframe Waddle Steps */}
       <style jsx>{`
         @keyframes waddle {
-          0%,
-          100% {
+          0%, 100% {
             transform: rotate(0deg);
           }
           25% {
@@ -645,8 +746,18 @@ export default function Stage5Page() {
         .animate-waddle {
           animation: waddle 0.25s ease-in-out infinite;
         }
+        @keyframes zeroGDrift {
+          0% {
+            transform: translateY(0px) translateX(0px) rotate(0deg);
+          }
+          50% {
+            transform: translateY(-12px) translateX(6px) rotate(8deg);
+          }
+          100% {
+            transform: translateY(-4px) translateX(-5px) rotate(-6deg);
+          }
+        }
       `}</style>
     </main>
   );
 }
-
