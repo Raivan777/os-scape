@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function Stage2Platformer() {
+  const router = useRouter();
+
   // Dimensi dasar arena platformer
   const GAME_WIDTH = 1000;
   const GAME_HEIGHT = 600;
@@ -80,14 +83,30 @@ export default function Stage2Platformer() {
     },
   ];
 
-  // 5. Elemen Penanda Interaksi di Atas Layar (Trigger Placeholder)
+  // 5. Portal Menuju Stage Berikutnya (Stage 3) - Terletak di Platform 2 (Warna Biru Neon)
+  // Platform 2: x: -5, y: 248, w: 386, h: 43
+  // Diletakkan menapak di atas Platform 2 (y: 248 - 75 = 173 px)
+  const nextStagePortal = {
+    x: -11, // Berada di sebelah kiri Platform 2
+    y: 173, // Menapak di atas Platform 2 (248 - 75 = 173 px)
+    w: 56,
+    h: 75,
+    label: "PORTAL KE STAGE 3",
+    targetUrl: "/stage/stage3",
+  };
+
+  // 6. Elemen Penanda Interaksi di Atas Layar (Trigger Placeholder)
   const markerMateri = { x: 220, y: 50, w: 140, h: 45, label: "MATERI" };
   const markerMiniGame = { x: 640, y: 50, w: 160, h: 45, label: "MINI GAME" };
 
-  // 6. Daftar 3 Pasang Portal Teleportasi (Total 6 Portal)
-  // Pasangan 1 (Cyan), Pasangan 2 (Ungu), Pasangan 3 (Oranye)
+  // 7. Daftar 3 Pasang Portal Teleportasi Internal (Total 6 Portal)
+  // Desain: Garis lurus vertikal polos tanpa penjepit/dudukan logam.
+  // Aturan Warna Pasangan:
+  // - Pasangan 1: Keduanya BIRU NEON (Portal Masuk 1 & Portal Keluar 1)
+  // - Pasangan 2: Keduanya UNGU NEON (Portal Masuk 2 & Portal Keluar 2)
+  // - Pasangan 3: Keduanya MERAH NEON (Portal Masuk 3 & Portal Keluar 3)
   const portals = [
-    // Pasangan 1 (Warna Cyan)
+    // Pasangan 1 (BIRU NEON)
     {
       id: "p1-in",
       name: "portal masuk 1",
@@ -97,12 +116,6 @@ export default function Stage2Platformer() {
       y: 364,
       w: 44,
       h: 65,
-      color: "cyan",
-      borderColor: "border-cyan-400",
-      bgColor: "bg-cyan-950/60",
-      glowColor: "shadow-[0_0_20px_rgba(34,211,238,0.7)]",
-      badgeBg: "bg-cyan-400 text-black",
-      vortexColor: "text-cyan-300",
     },
     {
       id: "p1-out",
@@ -113,97 +126,82 @@ export default function Stage2Platformer() {
       y: 183,
       w: 44,
       h: 65,
-      color: "cyan",
-      borderColor: "border-cyan-400",
-      bgColor: "bg-cyan-950/60",
-      glowColor: "shadow-[0_0_20px_rgba(34,211,238,0.7)]",
-      badgeBg: "bg-cyan-400 text-black",
-      vortexColor: "text-cyan-300",
     },
-    // Pasangan 2 (Warna Ungu)
+    // Pasangan 2 (UNGU NEON)
     {
       id: "p2-in",
       name: "portal masuk 2",
       pair: 2,
       targetId: "p2-out",
-      x: 991,
+      x: 964,
       y: 126,
       w: 44,
       h: 65,
-      color: "purple",
-      borderColor: "border-purple-400",
-      bgColor: "bg-purple-950/60",
-      glowColor: "shadow-[0_0_20px_rgba(192,132,252,0.7)]",
-      badgeBg: "bg-purple-400 text-black",
-      vortexColor: "text-purple-300",
     },
     {
       id: "p2-out",
       name: "portal keluar 2",
       pair: 2,
       targetId: "p2-in",
-      x: 991,
+      x: 964,
       y: 507,
       w: 44,
       h: 65,
-      color: "purple",
-      borderColor: "border-purple-400",
-      bgColor: "bg-purple-950/60",
-      glowColor: "shadow-[0_0_20px_rgba(192,132,252,0.7)]",
-      badgeBg: "bg-purple-400 text-black",
-      vortexColor: "text-purple-300",
     },
-    // Pasangan 3 (Warna Oranye)
+    // Pasangan 3 (MERAH NEON)
     {
       id: "p3-in",
       name: "portal masuk 3",
       pair: 3,
       targetId: "p3-out",
-      x: 817,
+      x: 805,
       y: 242,
       w: 44,
       h: 65,
-      color: "orange",
-      borderColor: "border-amber-400",
-      bgColor: "bg-amber-950/60",
-      glowColor: "shadow-[0_0_20px_rgba(251,191,36,0.7)]",
-      badgeBg: "bg-amber-400 text-black",
-      vortexColor: "text-amber-300",
     },
     {
       id: "p3-out",
       name: "portal keluar 3",
       pair: 3,
       targetId: "p3-in",
-      x: 812,
+      x: 798,
       y: 125,
       w: 45,
       h: 65,
-      color: "orange",
-      borderColor: "border-amber-400",
-      bgColor: "bg-amber-950/60",
-      glowColor: "shadow-[0_0_20px_rgba(251,191,36,0.7)]",
-      badgeBg: "bg-amber-400 text-black",
-      vortexColor: "text-amber-300",
     },
   ];
 
   // State Toast Notifikasi Teleportasi
   const [teleportToast, setTeleportToast] = useState<string | null>(null);
 
-  // Refs untuk Game Loop & Cooldown Teleport
+  // State Kedekatan dengan Portal Stage 3
+  const [isNearNextStagePortal, setIsNearNextStagePortal] = useState(false);
+
+  // Refs untuk Game Loop, Cooldown, dan Navigasi
   const teleportCooldownRef = useRef<number>(0);
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
+  const isNearNextPortalRef = useRef(false);
+  const isTransitioningRef = useRef(false);
 
   playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
 
   // Timer Toast Notifikasi Teleport
   useEffect(() => {
     if (!teleportToast) return;
-    const t = setTimeout(() => setTeleportToast(null), 2200);
+    const t = setTimeout(() => setTeleportToast(null), 2400);
     return () => clearTimeout(t);
   }, [teleportToast]);
+
+  // Fungsi Pemicu Masuk ke Stage 3
+  const enterStage3 = () => {
+    if (isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
+    setTeleportToast("🚀 Memasuki Portal Menuju Stage 3...");
+    setTimeout(() => {
+      router.push(nextStagePortal.targetUrl);
+    }, 500);
+  };
 
   // Reset Posisi Pemain jika Jatuh ke Bawah Layar
   const resetPlayerToSpawn = () => {
@@ -215,7 +213,7 @@ export default function Stage2Platformer() {
     playerRef.current = { x: SPAWN_X, y: SPAWN_Y, vy: 0, jumping: false };
   };
 
-  // Keyboard Event Listeners (A, D, W, Panah, Spasi)
+  // Keyboard Event Listeners (A, D, W, Panah, Spasi, E)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
@@ -223,6 +221,11 @@ export default function Stage2Platformer() {
       // Mencegah scroll default browser saat menekan tombol panah / spasi
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
         e.preventDefault();
+      }
+
+      // Tombol E untuk interaksi masuk portal stage berikutnya
+      if (key === "e" && isNearNextPortalRef.current) {
+        enterStage3();
       }
 
       keysPressed.current.add(key);
@@ -287,7 +290,7 @@ export default function Stage2Platformer() {
           else if (moveX < 0 && p.x >= barrier.x + barrier.w - 4 && nextX < barrier.x + barrier.w) {
             nextX = barrier.x + barrier.w;
           }
-          // Koreksi posisi jika pemain entah bagaimana berada di dalam penghalang
+          // Koreksi posisi jika pemain berada di dalam penghalang
           else if (p.x + PLAYER_W > barrier.x && p.x < barrier.x + barrier.w) {
             if (p.x + PLAYER_W / 2 < barrier.x + barrier.w / 2) {
               nextX = barrier.x - PLAYER_W;
@@ -365,7 +368,7 @@ export default function Stage2Platformer() {
         }
       }
 
-      // 6. Deteksi Teleportasi 3 Pasang Portal
+      // 6. Deteksi Teleportasi 3 Pasang Portal Internal
       const now = Date.now();
       if (now > teleportCooldownRef.current) {
         for (const portal of portals) {
@@ -390,7 +393,24 @@ export default function Stage2Platformer() {
         }
       }
 
-      // 7. Cek Jika Jatuh ke Bawah Layar
+      // 7. Deteksi Kedekatan & Masuk ke Portal Stage 3 di Platform 2
+      const distNextPortalX = Math.abs(p.x + PLAYER_W / 2 - (nextStagePortal.x + nextStagePortal.w / 2));
+      const distNextPortalY = Math.abs(p.y + PLAYER_H / 2 - (nextStagePortal.y + nextStagePortal.h / 2));
+      const nearPortal = distNextPortalX < 70 && distNextPortalY < 75;
+      setIsNearNextStagePortal(nearPortal);
+      isNearNextPortalRef.current = nearPortal;
+
+      const isTouchingNextStagePortal =
+        p.x + PLAYER_W > nextStagePortal.x + 10 &&
+        p.x < nextStagePortal.x + nextStagePortal.w - 10 &&
+        p.y + PLAYER_H > nextStagePortal.y + 12 &&
+        p.y < nextStagePortal.y + nextStagePortal.h;
+
+      if (isTouchingNextStagePortal && !isTransitioningRef.current) {
+        enterStage3();
+      }
+
+      // 8. Cek Jika Jatuh ke Bawah Layar
       if (p.y > GAME_HEIGHT) {
         resetPlayerToSpawn();
         return;
@@ -419,8 +439,11 @@ export default function Stage2Platformer() {
             STAGE 2 // KALIBRASI TATA LETAK, PORTAL & PENGHALANG
           </span>
         </div>
-        <div className="font-mono text-[11px] text-gray-400">
-          Kontrol: <strong className="text-white">A / D</strong> (Jalan), <strong className="text-white">W / Spasi</strong> (Lompat)
+        <div className="font-mono text-[11px] text-gray-400 flex flex-wrap items-center gap-2.5">
+          <span>Kontrol: <strong className="text-white">A / D</strong> (Jalan), <strong className="text-white">W / Spasi</strong> (Lompat), <strong className="text-cyan-300">E</strong> (Masuk Portal)</span>
+          <span className="text-cyan-300 font-bold">● P1 & Stage 3: Biru</span>
+          <span className="text-purple-400 font-bold">● P2: Ungu</span>
+          <span className="text-rose-400 font-bold">● P3: Merah</span>
         </div>
       </div>
 
@@ -541,45 +564,137 @@ export default function Stage2Platformer() {
           </div>
         ))}
 
-        {/* 6. Daftar 3 Pasang Portal Teleportasi (Total 6 Portal) */}
-        {portals.map((portal) => (
-          <div
-            key={portal.id}
-            className="absolute z-20 flex flex-col items-center justify-end select-none pointer-events-none"
-            style={{
-              left: `${portal.x}px`,
-              top: `${portal.y}px`,
-              width: `${portal.w}px`,
-              height: `${portal.h}px`,
-            }}
-          >
-            {/* Label Nama Portal */}
-            <div className="absolute -top-6 whitespace-nowrap animate-bounce">
-              <span
-                className={`rounded px-1.5 py-0.5 text-[8px] font-mono font-black uppercase shadow-md ${portal.badgeBg}`}
-              >
-                {portal.name}
+        {/* 6. Daftar 3 Pasang Portal Teleportasi Internal (Garis Lurus Vertikal Murni Tanpa Penjepit/Dudukan) */}
+        {portals.map((portal) => {
+          // Aturan Warna:
+          // Pasangan 1: Keduanya BIRU NEON
+          // Pasangan 2: Keduanya UNGU NEON
+          // Pasangan 3: Keduanya MERAH NEON
+          const isBlue = portal.pair === 1;
+          const isPurple = portal.pair === 2;
+          const isRed = portal.pair === 3;
+
+          const badgeClass = isRed
+            ? "bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.95)]"
+            : isPurple
+            ? "bg-purple-400 text-black shadow-[0_0_12px_rgba(192,132,252,0.95)]"
+            : "bg-cyan-400 text-black shadow-[0_0_12px_rgba(34,211,238,0.95)]";
+
+          const bloomClass = isRed
+            ? "bg-gradient-to-r from-transparent via-rose-500/40 to-transparent"
+            : isPurple
+            ? "bg-gradient-to-r from-transparent via-purple-500/40 to-transparent"
+            : "bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent";
+
+          const beamClass = isRed
+            ? "bg-gradient-to-b from-rose-200 via-red-500 to-rose-600 shadow-[0_0_15px_#ff0055,0_0_28px_#ef4444,0_0_42px_rgba(239,68,68,0.85)]"
+            : isPurple
+            ? "bg-gradient-to-b from-purple-200 via-fuchsia-500 to-indigo-600 shadow-[0_0_15px_#c084fc,0_0_28px_#a855f7,0_0_42px_rgba(168,85,247,0.85)]"
+            : "bg-gradient-to-b from-cyan-200 via-cyan-400 to-blue-500 shadow-[0_0_15px_#00f0ff,0_0_28px_#06b6d4,0_0_42px_rgba(2,132,199,0.85)]";
+
+          const pingClass = isRed
+            ? "bg-rose-100 shadow-[0_0_6px_#ff0055]"
+            : isPurple
+            ? "bg-purple-100 shadow-[0_0_6px_#c084fc]"
+            : "bg-cyan-100 shadow-[0_0_6px_#22d3ee]";
+
+          return (
+            <div
+              key={portal.id}
+              className="absolute z-20 flex flex-col items-center justify-end select-none pointer-events-none"
+              style={{
+                left: `${portal.x}px`,
+                top: `${portal.y}px`,
+                width: `${portal.w}px`,
+                height: `${portal.h}px`,
+              }}
+            >
+              {/* Label Nama Portal (Tetap di posisi -top-6 animate-bounce) */}
+              <div className="absolute -top-6 whitespace-nowrap animate-bounce z-30">
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[8px] font-mono font-black uppercase shadow-md ${badgeClass}`}
+                >
+                  {portal.name}
+                </span>
+              </div>
+
+              {/* Portal Garis Lurus Vertikal Murni (Tanpa Penjepit / Dudukan Logam) */}
+              <div className="relative flex h-full w-full items-center justify-center overflow-visible">
+                {/* Outer Glow / Pendaran Luar Lebar */}
+                <div
+                  className={`absolute inset-y-0 w-8 blur-xs pointer-events-none ${bloomClass}`}
+                />
+
+                {/* Batang Berkas Cahaya Laser Vertikal Utama */}
+                <div
+                  className={`relative flex h-full w-2.5 items-center justify-center rounded-full ${beamClass}`}
+                >
+                  {/* Inti Laser Putih Terang di Tengah */}
+                  <div className="h-full w-0.5 rounded-full bg-white shadow-[0_0_6px_#ffffff] opacity-95" />
+
+                  {/* Kilatan Aliran Energi Bergerak Vertikal Naik-Turun */}
+                  <div className="absolute inset-x-0 h-7 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 animate-beam-flow" />
+                </div>
+
+                {/* Partikel Listrik Cincin Horisontal Berdenyut di Sekeliling Garis */}
+                <div
+                  className={`absolute top-1/4 h-0.5 w-5 rounded-full animate-ping ${pingClass}`}
+                />
+                <div
+                  className={`absolute top-2/3 h-0.5 w-5 rounded-full animate-ping ${pingClass}`}
+                  style={{ animationDelay: "0.5s" }}
+                />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* 7. PORTAL MENUJU STAGE BERIKUTNYA (STAGE 3) DI PLATFORM 2 (Portal Tunggal: BIRU NEON) */}
+        <div
+          className="absolute z-25 flex flex-col items-center justify-end select-none cursor-pointer group hover:scale-105 transition-transform"
+          style={{
+            left: `${nextStagePortal.x}px`,
+            top: `${nextStagePortal.y}px`,
+            width: `${nextStagePortal.w}px`,
+            height: `${nextStagePortal.h}px`,
+          }}
+          onClick={enterStage3}
+        >
+          {/* Badge Interaksi Saat Dekat dengan Karakter */}
+          {isNearNextStagePortal && (
+            <div className="absolute -top-8 whitespace-nowrap animate-bounce z-40 pointer-events-none">
+              <span className="rounded-md border border-cyan-300 bg-black/90 px-2 py-0.5 font-mono text-[9px] font-black text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.8)]">
+                [E] Masuk Stage 3 ➔
               </span>
+            </div>
+          )}
+
+          {/* Label Nama Portal Stage 3 */}
+          <div className="absolute -top-6 whitespace-nowrap z-30">
+            <span className="rounded bg-cyan-400 px-2 py-0.5 text-[8px] font-mono font-black text-black uppercase shadow-[0_0_12px_rgba(34,211,238,0.95)]">
+              {nextStagePortal.label}
+            </span>
+          </div>
+
+          {/* Portal Garis Lurus Vertikal Murni untuk Stage 3 (BIRU NEON) */}
+          <div className="relative flex h-full w-full items-center justify-center overflow-visible">
+            {/* Outer Glow Pendaran Lebar */}
+            <div className="absolute inset-y-0 w-10 bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent blur-xs pointer-events-none" />
+
+            {/* Batang Laser Vertikal Utama (Biru Neon) */}
+            <div className="relative flex h-full w-3 items-center justify-center rounded-full bg-gradient-to-b from-cyan-100 via-cyan-400 to-blue-500 shadow-[0_0_20px_#00f0ff,0_0_35px_#06b6d4,0_0_50px_rgba(2,132,199,0.85)]">
+              <div className="h-full w-1 rounded-full bg-white shadow-[0_0_8px_#ffffff] opacity-95" />
+              <div className="absolute inset-x-0 h-9 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 animate-beam-flow" />
             </div>
 
-            {/* Gerbang Portal Berbentuk Arch */}
+            {/* Partikel Cincin Energi Berkilau */}
+            <div className="absolute top-1/4 h-0.5 w-6 rounded-full bg-cyan-100 shadow-[0_0_8px_#22d3ee] animate-ping" />
             <div
-              className={`relative flex h-full w-full items-center justify-center rounded-t-full border-2 ${portal.borderColor} ${portal.bgColor} ${portal.glowColor} backdrop-blur-xs`}
-            >
-              {/* Animasi Vortex Energi Berputar */}
-              <span
-                className={`text-xl ${portal.vortexColor} inline-block animate-spin select-none`}
-                style={{ animationDuration: "6s" }}
-              >
-                🌀
-              </span>
-              {/* Garis Vertikal Partikel Energi */}
-              <div
-                className={`absolute inset-x-2 bottom-0 top-3 border-x border-dashed ${portal.borderColor} opacity-40`}
-              />
-            </div>
+              className="absolute top-2/3 h-0.5 w-6 rounded-full bg-cyan-100 shadow-[0_0_8px_#22d3ee] animate-ping"
+              style={{ animationDelay: "0.4s" }}
+            />
           </div>
-        ))}
+        </div>
 
         {/* Notifikasi Toast Teleportasi Mengambang */}
         {teleportToast && (
@@ -588,7 +703,7 @@ export default function Stage2Platformer() {
           </div>
         )}
 
-        {/* 7. Karakter Pemain (Astronaut) */}
+        {/* 8. Karakter Pemain (Astronaut) */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -624,14 +739,14 @@ export default function Stage2Platformer() {
           ← Kembali ke Stage 1
         </Link>
         <span className="font-mono text-[11px] text-gray-500">
-          Tip: Kamu bisa menyesuaikan nilai X, Y, Width, dan Height pada array platforms & barriers di kode
+          Tip: Kamu bisa menyesuaikan nilai X, Y, Width, dan Height pada array platforms, barriers & portal di kode
         </span>
-        <Link href="/" className="hover:text-cyan-300 transition">
-          Menu Utama ⌂
+        <Link href="/stage/stage3" className="hover:text-cyan-300 transition font-bold">
+          Langsung ke Stage 3 →
         </Link>
       </div>
 
-      {/* Style Keyframe Animasi Waddle */}
+      {/* Style Keyframe Animasi Waddle & Aliran Energi Laser */}
       <style jsx>{`
         @keyframes waddle {
           0%,
@@ -647,6 +762,23 @@ export default function Stage2Platformer() {
         }
         .animate-waddle {
           animation: waddle 0.25s ease-in-out infinite;
+        }
+
+        @keyframes beamFlow {
+          0% {
+            transform: translateY(-100%);
+            opacity: 0.2;
+          }
+          50% {
+            opacity: 0.95;
+          }
+          100% {
+            transform: translateY(100%);
+            opacity: 0.2;
+          }
+        }
+        .animate-beam-flow {
+          animation: beamFlow 1.6s ease-in-out infinite;
         }
       `}</style>
     </main>
