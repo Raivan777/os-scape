@@ -158,9 +158,9 @@ export default function Stage3Page() {
   // 2. Mini Game Tetap di Komputer Tengah (Page Frame Mapper)
   const terminalObj = { x: 475, y: 295 - 54, w: 54, h: 54 };
 
-  // 3. Portal di Ujung Kiri Pijakan Atas (Stage 4 Gate)
-  const laserDoor = { x: 30, y: 166 - 76, w: 54, h: 76 };
-  const portalObj = { x: 30, y: 166 - 76, w: 54, h: 76 };
+  // 3. Portal di Catwalk Kiri Atas (Stage 4 Gate) - Pas menyatu dengan pintu di gambar background
+  const laserDoor = { x: 160, y: 166 - 96, w: 64, h: 96 };
+  const portalObj = { x: 160, y: 166 - 96, w: 64, h: 96 };
 
   // 4. Komputer Tengah Kanan (Switch Pembuka Tembok Kuning) - Pas di komputer gambar dek kanan
   const consoleMidRightObj = { x: 805, y: 295 - 48, w: 46, h: 48 };
@@ -1094,7 +1094,7 @@ export default function Stage3Page() {
 
           {/* Efek visual portal hanya aktif ketika isAllModesCompleted */}
           {isAllModesCompleted && (
-            <div className="h-full w-full rounded-xl border-2 border-emerald-400 bg-emerald-950/40 shadow-[0_0_35px_rgba(52,211,153,0.7)] flex flex-col items-center justify-center animate-pulse">
+            <div className="h-full w-full rounded-t-2xl rounded-b-sm border-2 border-emerald-400/90 bg-emerald-950/40 shadow-[0_0_35px_rgba(52,211,153,0.7)] flex flex-col items-center justify-center animate-pulse">
               <IconTransitGateway unlocked={true} />
               <span className="text-[7px] font-mono font-bold tracking-widest mt-1 text-emerald-300">
                 TRANSIT OPEN

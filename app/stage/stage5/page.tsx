@@ -4,42 +4,402 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DirectoryArchitectMiniGame from "@/components/DirectoryArchitectMiniGame";
-import DirectoryMaterialModal from "@/components/DirectoryMaterialModal";
-import DirectoryQuizModal from "@/components/DirectoryQuizModal";
+import DiskMaterialModal from "@/components/DiskMaterialModal";
+
+// ─── TIPE DATA ENTITAS LEVEL ─────────────────────────────────────
+export interface Platform {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string;
+  isWall?: boolean;
+}
+
+export interface Stair {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  label: string;
+}
+
+export interface Laser {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string;
+}
+
+export interface LevelObjects {
+  material: { x: number; y: number; w: number; h: number; label: string };
+  laserTerminal: { x: number; y: number; w: number; h: number; label: string };
+  architect: { x: number; y: number; w: number; h: number; label: string };
+  keyItem: { x: number; y: number; w: number; h: number; label: string };
+  portal: { x: number; y: number; w: number; h: number; label: string };
+  spawn: { x: number; y: number; w: number; h: number; label: string };
+}
+
+// ─── KONFIGURASI BAWAAN (DEFAULT LEVEL CONFIG) ───────────────────
+const DEFAULT_PLATFORMS: Platform[] = [
+  { x: 0, y: 536, w: 1024, h: 40, label: "GROUND FLOOR" },
+  { x: 446, y: 518, w: 112, h: 18, label: "CENTER BRIDGE" },
+  { x: 840, y: 465, w: 80, h: 71, label: "CRATE SMALL", isWall: true },
+  { x: 920, y: 390, w: 75, h: 146, label: "CRATE TALL", isWall: true },
+  { x: 230, y: 412, w: 620, h: 20, label: "MID CATWALK" },
+  { x: 0, y: 385, w: 216, h: 20, label: "MEZZANINE L" },
+  { x: 450, y: 304, w: 115, h: 20, label: "CENTER RAISED" },
+  { x: 245, y: 312, w: 60, h: 18, label: "FLOAT LEDGE L" },
+  { x: 705, y: 312, w: 60, h: 18, label: "FLOAT LEDGE R" },
+  { x: 325, y: 255, w: 100, h: 18, label: "HANGING POD L" },
+  { x: 595, y: 255, w: 100, h: 18, label: "HANGING POD R" },
+  { x: 0, y: 105, w: 465, h: 20, label: "TOP CATWALK L" },
+  { x: 560, y: 105, w: 220, h: 20, label: "TOP CATWALK R" },
+  { x: 870, y: 75, w: 154, h: 20, label: "EXIT DECK" },
+];
+
+const DEFAULT_STAIRS: Stair[] = [
+  { x1: 730, y1: 536, x2: 850, y2: 412, label: "Tangga Kanan Bawah" },
+  { x1: 330, y1: 412, x2: 450, y2: 304, label: "Tangga Tengah" },
+  { x1: 216, y1: 385, x2: 280, y2: 424, label: "Tangga Mezanin Kiri" },
+  { x1: 780, y1: 145, x2: 870, y2: 75, label: "Tangga Menuju Exit" },
+];
+
+const DEFAULT_LASERS: Laser[] = [
+  { x: 450, y: 508, w: 105, h: 10, label: "Laser Jembatan Bawah" },
+  { x: 180, y: 320, w: 10, h: 90, label: "Laser Merah 2 (Ruang Kunci 15-16)" },
+];
+
+const DEFAULT_OBJECTS: LevelObjects = {
+  material: { x: 155, y: 476, w: 75, h: 60, label: "Komputer Materi" },
+  laserTerminal: { x: 620, y: 45, w: 65, h: 60, label: "Komputer Bypass Laser 2" },
+  architect: { x: 760, y: 45, w: 75, h: 60, label: "Terminal Mini Game" },
+  keyItem: { x: 100, y: 340, w: 32, h: 32, label: "Kunci Ruang 15-16" },
+  portal: { x: 910, y: 0, w: 70, h: 75, label: "Portal Stage 6" },
+  spawn: { x: 65, y: 472, w: 44, h: 64, label: "Titik Spawn Karakter" },
+};
+
+// ─── KOMPONEN VISUAL LASER LISTRIK BERTEGANGAN TINGGI ───────────
+function ElectricLaser({
+  laser,
+  isDeactivated,
+}: {
+  laser: Laser;
+  isDeactivated?: boolean;
+}) {
+  const isHorizontal = laser.w >= laser.h;
+  const length = isHorizontal ? laser.w : laser.h;
+  const thickness = isHorizontal ? laser.h : laser.w;
+  const mid = thickness / 2;
+
+  if (isDeactivated) {
+    return (
+      <div
+        className="absolute z-25 pointer-events-none select-none transition-opacity duration-500"
+        style={{
+          left: `${laser.x}px`,
+          top: `${laser.y}px`,
+          width: `${laser.w}px`,
+          height: `${laser.h}px`,
+        }}
+      >
+        {/* Terminal elektroda yang mati saat laser 2 dinonaktifkan */}
+        {isHorizontal ? (
+          <>
+            <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-4 bg-zinc-800 border border-zinc-600 rounded-sm opacity-60 flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-slate-500" />
+            </div>
+            <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-4 bg-zinc-800 border border-zinc-600 rounded-sm opacity-60 flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-slate-500" />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="absolute left-1/2 -top-1.5 -translate-x-1/2 w-4 h-3 bg-zinc-800 border border-zinc-600 rounded-sm opacity-60 flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-slate-500" />
+            </div>
+            <div className="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-4 h-3 bg-zinc-800 border border-zinc-600 rounded-sm opacity-60 flex items-center justify-center">
+              <div className="w-1 h-1 rounded-full bg-slate-500" />
+            </div>
+          </>
+        )}
+        <div className="absolute inset-0 flex items-center justify-center opacity-40">
+          <span className="text-[7px] font-mono text-cyan-300 font-bold tracking-widest whitespace-nowrap bg-black/80 px-1 py-0.5 rounded border border-cyan-700/50">
+            [OFFLINE]
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Koordinat sambaran petir / busur listrik jagged
+  const pathA = isHorizontal
+    ? `M 0,${mid} L ${0.08 * length},${mid - 3.5} L ${0.2 * length},${mid + 4} L ${0.32 * length},${mid - 5} L ${0.45 * length},${mid + 5.5} L ${0.58 * length},${mid - 4.5} L ${0.72 * length},${mid + 5} L ${0.85 * length},${mid - 3.5} L ${0.93 * length},${mid + 2} L ${length},${mid}`
+    : `M ${mid},0 L ${mid - 3.5},${0.08 * length} L ${mid + 4},${0.2 * length} L ${mid - 5},${0.32 * length} L ${mid + 5.5},${0.45 * length} L ${mid - 4.5},${0.58 * length} L ${mid + 5},${0.72 * length} L ${mid - 3.5},${0.85 * length} L ${mid + 2},${0.93 * length} L ${mid},${length}`;
+
+  const pathB = isHorizontal
+    ? `M 0,${mid} L ${0.12 * length},${mid + 5} L ${0.26 * length},${mid - 5} L ${0.39 * length},${mid + 4.5} L ${0.52 * length},${mid - 4} L ${0.66 * length},${mid + 6} L ${0.8 * length},${mid - 5} L ${length},${mid}`
+    : `M ${mid},0 L ${mid + 5},${0.12 * length} L ${mid - 5},${0.26 * length} L ${mid + 4.5},${0.39 * length} L ${mid - 4},${0.52 * length} L ${mid + 6},${0.66 * length} L ${mid - 5},${0.8 * length} L ${mid},${length}`;
+
+  const pathC = isHorizontal
+    ? `M 0,${mid} L ${0.18 * length},${mid - 3} L ${0.35 * length},${mid + 4} L ${0.55 * length},${mid - 3} L ${0.75 * length},${mid + 3} L ${length},${mid}`
+    : `M ${mid},0 L ${mid - 3},${0.18 * length} L ${mid + 4},${0.35 * length} L ${mid - 3},${0.55 * length} L ${mid + 3},${0.75 * length} L ${mid},${length}`;
+
+  const branch1 = isHorizontal
+    ? `M ${0.32 * length},${mid - 5} Q ${0.35 * length},${mid - 11} ${0.38 * length},${mid - 8}`
+    : `M ${mid - 5},${0.32 * length} Q ${mid - 11},${0.35 * length} ${mid - 8},${0.38 * length}`;
+
+  const branch2 = isHorizontal
+    ? `M ${0.66 * length},${mid + 6} Q ${0.7 * length},${mid + 12} ${0.74 * length},${mid + 8}`
+    : `M ${mid + 6},${0.66 * length} Q ${mid + 12},${0.7 * length} ${mid + 8},${0.74 * length}`;
+
+  return (
+    <div
+      className="absolute z-25 pointer-events-none select-none electric-hazard-container"
+      style={{
+        left: `${laser.x}px`,
+        top: `${laser.y}px`,
+        width: `${laser.w}px`,
+        height: `${laser.h}px`,
+      }}
+    >
+      {/* 1. Kanal Plasma Radiasi Merah */}
+      <div
+        className={`absolute inset-0 bg-red-600/35 blur-[3px] animate-pulse ${
+          isHorizontal ? "scale-y-125" : "scale-x-125"
+        }`}
+      />
+
+      {/* 2. Gelombang Arus Listrik & Busur Petir (SVG) */}
+      <svg
+        className="absolute inset-0 overflow-visible w-full h-full"
+        style={{ filter: "drop-shadow(0 0 6px #ef4444) drop-shadow(0 0 12px #dc2626)" }}
+      >
+        {/* Lapisan Luar: Cahaya Plasma Merah Pekat */}
+        <path
+          d={pathA}
+          fill="none"
+          stroke="#ef4444"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="electric-arc-glow"
+        />
+
+        {/* Lapisan Tengah: Busur Petir Merah Menyala */}
+        <path
+          d={pathB}
+          fill="none"
+          stroke="#ff0055"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="electric-arc-fast"
+        />
+
+        {/* Lapisan Inti Listrik: Sambaran Putih Murni Bertegangan Tinggi */}
+        <path
+          d={pathA}
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="electric-arc-core"
+        />
+
+        {/* Lapisan Percikan Cepat Emas / Neon */}
+        <path
+          d={pathC}
+          fill="none"
+          stroke="#fef08a"
+          strokeWidth="1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="electric-arc-sub"
+        />
+
+        {/* Percikan Listrik Mencabang */}
+        <path
+          d={branch1}
+          fill="none"
+          stroke="#fca5a5"
+          strokeWidth="1.3"
+          className="electric-spark-branch"
+        />
+        <path
+          d={branch2}
+          fill="none"
+          stroke="#fca5a5"
+          strokeWidth="1.3"
+          className="electric-spark-branch-alt"
+        />
+      </svg>
+
+      {/* 3. Terminal Elektroda Emisi Listrik di Ujung-Ujungnya */}
+      {isHorizontal ? (
+        <>
+          <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-2.5 h-4 bg-zinc-950 border border-red-500 rounded-sm flex items-center justify-center shadow-[0_0_8px_#ef4444]">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+          </div>
+          <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-2.5 h-4 bg-zinc-950 border border-red-500 rounded-sm flex items-center justify-center shadow-[0_0_8px_#ef4444]">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="absolute left-1/2 -top-2 -translate-x-1/2 w-4 h-2.5 bg-zinc-950 border border-red-500 rounded-sm flex items-center justify-center shadow-[0_0_8px_#ef4444]">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+          </div>
+          <div className="absolute left-1/2 -bottom-2 -translate-x-1/2 w-4 h-2.5 bg-zinc-950 border border-red-500 rounded-sm flex items-center justify-center shadow-[0_0_8px_#ef4444]">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping" />
+          </div>
+        </>
+      )}
+
+      {/* 4. Butiran Percikan Listrik Meletup (Spark Particles) */}
+      <div
+        className="absolute w-1.5 h-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_0_6px_#ffffff] electric-spark-dot-1"
+        style={{
+          left: isHorizontal ? `${0.25 * length}px` : `${mid}px`,
+          top: isHorizontal ? `${mid}px` : `${0.25 * length}px`,
+        }}
+      />
+      <div
+        className="absolute w-1.5 h-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-200 shadow-[0_0_6px_#facc15] electric-spark-dot-2"
+        style={{
+          left: isHorizontal ? `${0.7 * length}px` : `${mid}px`,
+          top: isHorizontal ? `${mid}px` : `${0.7 * length}px`,
+        }}
+      />
+    </div>
+  );
+}
 
 export default function Stage5Page() {
   const router = useRouter();
 
-  // ─── KONSTANTA KANVAS (16:9 Sesuai Gambar stage5bg.jpg) ────────
+  // ─── KONSTANTA KANVAS ─────────────────────────────────────────
   const GAME_WIDTH = 1024;
   const GAME_HEIGHT = 576;
-  const GROUND_Y = 544;
+  const GROUND_Y = 536;
 
-  // ─── DIMENSI & FISIKA KARAKTER ASTRONOT ───────────────────────
+  // ─── DIMENSI & FISIKA KARAKTER (PERSIS SEPERTI STAGE 3) ────────
   const PLAYER_W = 44;
   const PLAYER_H = 64;
   const MOVE_SPEED = 4.2;
-  const JUMP_POWER = -12.8;
+  const JUMP_POWER = -12.5;
   const GRAVITY = 0.58;
 
-  // Spawn point di depan pintu masuk kiri bawah
-  const SPAWN_X = 65;
-  const SPAWN_Y = GROUND_Y - PLAYER_H;
+  // ─── STATE ENTITAS LEVEL (DARI STORAGE/DEFAULT) ────────────────
+  const [platforms, setPlatforms] = useState<Platform[]>(DEFAULT_PLATFORMS);
+  const [stairsList, setStairsList] = useState<Stair[]>(DEFAULT_STAIRS);
+  const [lasers, setLasers] = useState<Laser[]>(DEFAULT_LASERS);
+  const [levelObjects, setLevelObjects] = useState<LevelObjects>(DEFAULT_OBJECTS);
 
-  // ─── STATE PEMAIN & FISIKA ────────────────────────────────────
-  const [playerX, setPlayerX] = useState(SPAWN_X);
-  const [playerY, setPlayerY] = useState(SPAWN_Y);
+  // ─── STATE ALUR QUEST & PROGRES GAMEPLAY ───────────────────────
+  // 1. Harus buka/baca materi di komputer bawah kiri dahulu
+  const [hasReadMaterial, setHasReadMaterial] = useState(false);
+  // 2. Mematikan laser merah 2 di komputer dekat mini game
+  const [isLaser2Deactivated, setIsLaser2Deactivated] = useState(false);
+  // 3. Mengambil kunci di ruangan antara platform 15 dan 16
+  const [hasArchitectKey, setHasArchitectKey] = useState(false);
+  // 4. Status Penyelesaian Mini Game Directory Architect
+  const [isMiniGameCompleted, setIsMiniGameCompleted] = useState(false);
+
+  // Status Kedekatan dengan Objek Interaktif
+  const [isNearMaterial, setIsNearMaterial] = useState(false);
+  const [isNearLaserTerminal, setIsNearLaserTerminal] = useState(false);
+  const [isNearArchitectStation, setIsNearArchitectStation] = useState(false);
+  const [isNearKey, setIsNearKey] = useState(false);
+  const [isNearPortal, setIsNearPortal] = useState(false);
+
+  // ─── STATE PEMAIN ─────────────────────────────────────────────
+  const [playerX, setPlayerX] = useState(DEFAULT_OBJECTS.spawn.x);
+  const [playerY, setPlayerY] = useState(DEFAULT_OBJECTS.spawn.y);
   const [velocityY, setVelocityY] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
-  const [isHurt, setIsHurt] = useState(false);
+  const [screenFlash, setScreenFlash] = useState(false);
 
-  // ─── STATE MODE DEBUG HITBOX (B1) ─────────────────────────────
-  // Aktif melalui tombol keyboard 'h' (toggle) atau query ?debug=1
-  const [debugMode, setDebugMode] = useState(false);
+  // ─── STATE MODAL & TERMINAL ───────────────────────────────────
+  const [showMaterial, setShowMaterial] = useState(false);
+  const [showArchitectTerminal, setShowArchitectTerminal] = useState(false);
 
-  // ─── STATE TOAST NOTIFIKASI ───────────────────────────────────
+  // Load konfigurasi kustom dari localStorage agar platform buatan user tetap aktif
+  useEffect(() => {
+    try {
+      const savedCompleted = localStorage.getItem("stage5_minigame_completed");
+      if (savedCompleted === "true") {
+        setIsMiniGameCompleted(true);
+      }
+
+      const savedPlats = localStorage.getItem("stage5_custom_platforms");
+      if (savedPlats) {
+        const p = JSON.parse(savedPlats);
+        if (Array.isArray(p) && p.length > 0) setPlatforms(p);
+      }
+      const savedStairs = localStorage.getItem("stage5_custom_stairs");
+      if (savedStairs) {
+        const s = JSON.parse(savedStairs);
+        if (Array.isArray(s) && s.length > 0) setStairsList(s);
+      }
+      const savedLasers = localStorage.getItem("stage5_custom_lasers");
+      if (savedLasers) {
+        const l = JSON.parse(savedLasers);
+        if (Array.isArray(l)) {
+          if (l.length < 2) {
+            setLasers([...l, DEFAULT_LASERS[1]]);
+          } else {
+            setLasers(l);
+          }
+        }
+      }
+      const savedObjects = localStorage.getItem("stage5_custom_objects");
+      if (savedObjects) {
+        const o = JSON.parse(savedObjects);
+        if (o && o.material && o.spawn) {
+          setLevelObjects({
+            ...DEFAULT_OBJECTS,
+            ...o,
+          });
+          setPlayerX(o.spawn.x);
+          setPlayerY(o.spawn.y);
+        }
+      }
+    } catch (e) {
+      console.error("Gagal membaca storage custom:", e);
+    }
+  }, []);
+
+  // Refs untuk fisika game loop 60fps agar selalu instan tanpa re-render lag
+  const platformsRef = useRef(platforms);
+  platformsRef.current = platforms;
+
+  const stairsRef = useRef(stairsList);
+  stairsRef.current = stairsList;
+
+  const lasersRef = useRef(lasers);
+  lasersRef.current = lasers;
+
+  const levelObjectsRef = useRef(levelObjects);
+  levelObjectsRef.current = levelObjects;
+
+  const isLaser2DeactivatedRef = useRef(isLaser2Deactivated);
+  isLaser2DeactivatedRef.current = isLaser2Deactivated;
+
+  const hasArchitectKeyRef = useRef(hasArchitectKey);
+  hasArchitectKeyRef.current = hasArchitectKey;
+
+  const hasReadMaterialRef = useRef(hasReadMaterial);
+  hasReadMaterialRef.current = hasReadMaterial;
+
+  const isMiniGameCompletedRef = useRef(isMiniGameCompleted);
+  isMiniGameCompletedRef.current = isMiniGameCompleted;
+
+  // ─── TOAST NOTIFIKASI ─────────────────────────────────────────
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const alertTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -48,149 +408,127 @@ export default function Stage5Page() {
     setAlertMessage(msg);
     alertTimeoutRef.current = setTimeout(() => {
       setAlertMessage(null);
-    }, 4000);
+    }, 3800);
   };
 
-  // ─── STATE MODAL & TERMINAL ───────────────────────────────────
-  const [showMaterial, setShowMaterial] = useState(false);
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [showArchitectTerminal, setShowArchitectTerminal] = useState(false);
+  const triggerLaserDeath = () => {
+    setScreenFlash(true);
+    triggerAlert("💥 TERKENA SENSOR LASER MERAH! Respawn ke Titik Awal.");
+    setTimeout(() => setScreenFlash(false), 350);
+  };
 
-  // Status Kedekatan dengan Objek Interaktif di Gambar
-  const [isNearTerminal, setIsNearTerminal] = useState(false);
-  const [isNearArchitectStation, setIsNearArchitectStation] = useState(false);
-  const [isNearPortal, setIsNearPortal] = useState(false);
-
-  // ─── PLATFORM HORIZONTAL SESUAI GAMBAR stage5bg.jpeg ──────────
-  // Pijakan transparan murni untuk physics collider
-  const platforms = [
-    // 1. Lantai Bawah Kiri (Area Pintu Masuk)
-    { x: 0, y: 544, w: 301, h: 32, label: "Lantai Kiri" },
-    // 2. Jembatan Tengah di antara kolam lava & listrik
-    { x: 448, y: 544, w: 110, h: 32, label: "Jembatan Tengah" },
-    // 3. Lantai Bawah Kanan (Depan Tangga Bawah)
-    { x: 722, y: 544, w: 302, h: 32, label: "Lantai Kanan" },
-    // 4. Kotak Kargo Kecil di Kanan Bawah (Pijakan Kotak 1)
-    { x: 856, y: 461, w: 68, h: 83, label: "Pijakan Kotak 1" },
-    // 5. Tumpukan Peti Tinggi di Kanan Bawah (Pijakan Kotak 2)
-    { x: 908, y: 368, w: 80, h: 176, label: "Pijakan Kotak 2" },
-    // 6. Catwalk Lantai Tengah (Meja Datalog Direktori & Jalur Utama)
-    { x: 245, y: 414, w: 470, h: 20, label: "Catwalk Tengah" },
-    // 7. Mezanin Kiri di atas Pintu Masuk
-    { x: 0, y: 364, w: 216, h: 20, label: "Mezanin Kiri" },
-    // 8. Platform Tengah Terangkat (Di bawah Hologram Tree)
-    { x: 463, y: 298, w: 98, h: 20, label: "Platform Tengah Atas" },
-    // 9. Ledge Melayang Kiri (Konektor Dinding Kiri)
-    { x: 248, y: 310, w: 50, h: 18, label: "Ledge Kiri" },
-    // 10. Ledge Melayang Kanan (Platform di bawah Tangga Exit)
-    { x: 712, y: 318, w: 149, h: 20, label: "Ledge Kanan" },
-    // 11. Piringan Gantung Kiri (Suspended Pod L - Thruster Merah)
-    { x: 324, y: 262, w: 100, h: 20, label: "Pod Gantung Kiri" },
-    // 12. Piringan Gantung Kanan (Suspended Pod R - Thruster Biru)
-    { x: 595, y: 262, w: 96, h: 20, label: "Pod Gantung Kanan" },
-    // 13. Catwalk Atas Kiri (Di bawah Rak Senjata)
-    { x: 0, y: 105, w: 465, h: 20, label: "Catwalk Atas Kiri" },
-    // 14. Ledge Konsol Directory Architect (Di bawah Terminal Architect)
-    { x: 755, y: 245, w: 85, h: 20, label: "Ledge Directory Architect" },
-    // 15. Platform Depan Pintu Keluar Portal Stage 6
-    { x: 887, y: 132, w: 101, h: 20, label: "Platform Pintu Exit" },
-  ];
-
-  // ─── TANGGA REALISTIS (RAMP MENGIKUTI VISUAL GAMBAR stage5bg.jpeg) ─
-  const stairs = [
-    // 1. Tangga Kanan Bawah: dari catwalk tengah (715, 414) turun ke kanan ke lantai (856, 544)
-    { x1: 715, y1: 414, x2: 856, y2: 544, label: "Tangga Kanan Bawah" },
-    // 2. Tangga Mezanin Kiri: dari mezanin kiri (216, 364) turun ke kanan ke catwalk tengah (245, 414)
-    { x1: 216, y1: 364, x2: 245, y2: 414, label: "Tangga Mezanin Kiri" },
-    // 3. Tangga Exit Atas: dari ledge kanan (746, 318) naik ke kanan ke platform pintu exit (887, 132)
-    { x1: 746, y1: 318, x2: 887, y2: 132, label: "Tangga Exit Atas" },
-  ];
-
-  // ─── TITIK INTERAKSI OBJEK (MENEMPEL PADA GAMBAR) ───────────
-  // 1. Komputer Terminal Datalog Materi Direktori (Meja Tengah MFD)
-  const terminalObj = { x: 635, y: 345, w: 65, h: 69, label: "Terminal Datalog" };
-
-  // 2. Komputer Terminal Directory Architect (Konsol Atas Kanan)
-  const architectStationObj = { x: 765, y: 165, w: 65, h: 80, label: "Directory Architect" };
-
-  // 3. Pintu Keluar / Portal Stage 6 (Pintu Hijau Atas Kanan)
-  const portalObj = { x: 898, y: 44, w: 58, h: 88, label: "Portal Stage 6" };
-
-  // ─── RINTANGAN KOLAM HAZARD DI LANTAI BAWAH ──────────────────
-  const hazardLava = { x: 301, y: 540, w: 147, h: 36, label: "Kolam Lava" };
-  const hazardElectric = { x: 558, y: 540, w: 164, h: 36, label: "Kolam Listrik" };
-
-  // ─── REFS GAME LOOP ──────────────────────────────────────────
+  // ─── REFS GAME LOOP ───────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
-
   playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
 
-  // Deteksi mode debug dari query parameter URL ?debug=1 saat awal mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("debug") === "1") {
-        setDebugMode(true);
-      }
-    }
-  }, []);
+  // ─── ACTION HANDLERS INTERAKSI ────────────────────────────────
+  const handleOpenMaterial = () => {
+    setShowMaterial(true);
+    setHasReadMaterial(true);
+    hasReadMaterialRef.current = true;
+    triggerAlert("📖 Datalog Materi dipelajari! Protokol bypass Laser 2 kini tersimpan di memori.");
+  };
 
-  // Reset Posisi Pemain jika Jatuh ke Kolam Hazard
-  const resetPlayerToSpawn = (reason?: string) => {
-    setIsHurt(true);
-    setTimeout(() => setIsHurt(false), 500);
-
-    setPlayerX(SPAWN_X);
-    setPlayerY(SPAWN_Y);
-    setVelocityY(0);
-    setIsJumping(false);
-    setIsWalking(false);
-    playerRef.current = { x: SPAWN_X, y: SPAWN_Y, vy: 0, jumping: false };
-
-    if (reason === "lava") {
-      triggerAlert("🔥 Terkena Kolam Lava! Karakter dikembalikan ke pintu masuk.");
-    } else if (reason === "electric") {
-      triggerAlert("⚡ Terkena Kolam Listrik Plasma! Karakter dikembalikan ke pintu masuk.");
+  const handleBypassLaser2 = () => {
+    if (!hasReadMaterialRef.current) {
+      triggerAlert("⚠️ AKSES DITOLAK: Anda harus membaca Datalog Materi di Komputer Bawah Kiri terlebih dahulu!");
+    } else if (isLaser2DeactivatedRef.current) {
+      triggerAlert("ℹ️ Laser Merah 2 sudah berstatus DINONAKTIFKAN (Aman).");
+    } else {
+      setIsLaser2Deactivated(true);
+      isLaser2DeactivatedRef.current = true;
+      triggerAlert("⚡ KODE TERVERIFIKASI! Laser Merah 2 berhasil DINONAKTIFKAN. Ruangan kunci 15-16 kini aman!");
     }
   };
 
-  // Keyboard Event Listener
+  const handleCollectKey = () => {
+    if (!hasArchitectKeyRef.current) {
+      setHasArchitectKey(true);
+      hasArchitectKeyRef.current = true;
+      triggerAlert("🔑 KUNCI AKSES DIPEROLEH! Terminal Directory Architect kini dapat dibuka.");
+    }
+  };
+
+  const handleOpenArchitect = () => {
+    if (!hasArchitectKeyRef.current) {
+      triggerAlert("🔒 TERMINAL TERKUNCI: Anda harus mengambil Kunci Akses di ruangan platform 15-16!");
+    } else {
+      setShowArchitectTerminal(true);
+    }
+  };
+
+  const handleMiniGameComplete = () => {
+    setIsMiniGameCompleted(true);
+    isMiniGameCompletedRef.current = true;
+    try {
+      localStorage.setItem("stage5_minigame_completed", "true");
+    } catch (_) {}
+    triggerAlert("🎉 MINI GAME SELESAI! Directory Architect berhasil tervalidasi. Portal Stage 6 kini TELAH TERBUKA!");
+  };
+
+  const handlePortalInteract = () => {
+    if (isMiniGameCompletedRef.current) {
+      triggerAlert("🚀 Berpindah ke Stage 6...");
+      router.push("/stage/stage6");
+    } else {
+      triggerAlert("🔒 PORTAL TERKUNCI: Selesaikan Terminal Directory Architect terlebih dahulu untuk membuka Portal Stage 6!");
+    }
+  };
+
+  // ─── KEYBOARD LISTENERS ───────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const key = e.key.toLowerCase();
-
-      // Toggle Mode Debug Hitbox dengan tombol 'h'
-      if (key === "h") {
-        setDebugMode((prev) => !prev);
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
         return;
       }
 
-      // Interaksi Tombol E
+      const key = e.key.toLowerCase();
+
+      // Interaksi tombol E
       if (key === "e") {
-        if (isNearArchitectStation && !showArchitectTerminal && !showMaterial && !showQuiz) {
-          setShowArchitectTerminal(true);
+        // 1. Interaksi Komputer Materi (Bawah Kiri)
+        if (isNearMaterial && !showMaterial && !showArchitectTerminal) {
+          handleOpenMaterial();
           return;
         }
-        if (isNearTerminal && !showMaterial && !showArchitectTerminal && !showQuiz) {
-          setShowMaterial(true);
+
+        // 2. Interaksi Komputer Bypass Laser 2 (Atas Kiri dekat Mini Game)
+        if (isNearLaserTerminal && !showMaterial && !showArchitectTerminal) {
+          handleBypassLaser2();
           return;
         }
-        if (isNearPortal && !showQuiz && !showMaterial && !showArchitectTerminal) {
-          setShowQuiz(true);
+
+        // 3. Interaksi Ambil Kunci di Ruangan Platform 15-16
+        if (isNearKey && !hasArchitectKeyRef.current) {
+          handleCollectKey();
+          return;
+        }
+
+        // 4. Interaksi Terminal Mini Game (Directory Architect)
+        if (isNearArchitectStation && !showArchitectTerminal && !showMaterial) {
+          handleOpenArchitect();
+          return;
+        }
+
+        // 5. Interaksi Portal Pintu Keluar Stage 6
+        if (isNearPortal && !showMaterial && !showArchitectTerminal) {
+          handlePortalInteract();
           return;
         }
       }
 
       if (key === "escape") {
         setShowMaterial(false);
-        setShowQuiz(false);
         setShowArchitectTerminal(false);
         return;
       }
 
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
-        if (!showArchitectTerminal && !showMaterial && !showQuiz) {
+        if (!showArchitectTerminal && !showMaterial) {
           e.preventDefault();
         }
       }
@@ -209,20 +547,29 @@ export default function Stage5Page() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isNearTerminal, isNearArchitectStation, isNearPortal, showMaterial, showQuiz, showArchitectTerminal]);
+  }, [
+    isNearMaterial,
+    isNearLaserTerminal,
+    isNearArchitectStation,
+    isNearKey,
+    isNearPortal,
+    showMaterial,
+    showArchitectTerminal,
+    isMiniGameCompleted,
+  ]);
 
-  // Game Loop Platformer 60 FPS
+  // ─── GAME LOOP FISIKA 60FPS ───────────────────────────────────
   useEffect(() => {
     let animId: number;
 
     const gameLoop = () => {
-      const isPaused = showMaterial || showQuiz || showArchitectTerminal;
+      const isPaused = showMaterial || showArchitectTerminal;
 
       if (!isPaused) {
-        let p = { ...playerRef.current };
+        const p = { ...playerRef.current };
         const keys = keysPressed.current;
 
-        // 1. Kontrol Horizontal Pemain
+        // 1. GERAKAN HORIZONTAL PEMAIN
         let moveX = 0;
         if (keys.has("a") || keys.has("arrowleft")) {
           moveX -= MOVE_SPEED;
@@ -235,88 +582,211 @@ export default function Stage5Page() {
 
         setIsWalking(moveX !== 0 && !p.jumping);
 
-        // 2. Lompat Pemain
+        // 2. LOMPAT PEMAIN
         const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
         if (wantsJump && !p.jumping) {
           p.vy = JUMP_POWER;
           p.jumping = true;
         }
 
-        // Terapkan Gravitasi
+        // 3. GRAVITASI
         p.vy += GRAVITY;
         p.y += p.vy;
 
-        // 3. Gerakan Horizontal dengan Batas Layar
         let nextPlayerX = p.x + moveX;
+
+        // ─── TABRAKAN TEMBOK / DINDING SOLID (BLOK KIRI & KANAN) ─────
+        for (const plat of platformsRef.current) {
+          if (plat.y >= GROUND_Y) continue;
+
+          const isSolidWall =
+            plat.isWall ||
+            (plat.h >= 28 &&
+              !plat.label.toUpperCase().includes("CATWALK") &&
+              !plat.label.toUpperCase().includes("FLOOR")) ||
+            plat.label.toLowerCase().includes("tembok") ||
+            plat.label.toLowerCase().includes("wall");
+
+          if (!isSolidWall) continue;
+
+          const isVerticalOverlap =
+            p.y + PLAYER_H > plat.y + 6 &&
+            p.y < plat.y + plat.h - 4;
+
+          if (isVerticalOverlap) {
+            if (moveX > 0 && p.x + PLAYER_W <= plat.x + 8 && nextPlayerX + PLAYER_W >= plat.x) {
+              nextPlayerX = plat.x - PLAYER_W;
+            } else if (moveX < 0 && p.x >= plat.x + plat.w - 8 && nextPlayerX <= plat.x + plat.w) {
+              nextPlayerX = plat.x + plat.w;
+            } else if (nextPlayerX + PLAYER_W > plat.x && nextPlayerX < plat.x + plat.w) {
+              const distFromLeft = Math.abs(nextPlayerX + PLAYER_W - plat.x);
+              const distFromRight = Math.abs(nextPlayerX - (plat.x + plat.w));
+              if (distFromLeft < distFromRight) {
+                nextPlayerX = plat.x - PLAYER_W;
+              } else {
+                nextPlayerX = plat.x + plat.w;
+              }
+            }
+          }
+        }
+
+        // 4. TABRAKAN PLAFON (LOGIKA KEJEDOT SAAT MELOMPAT KE ATAS)
+        if (p.vy < 0) {
+          for (const plat of platformsRef.current) {
+            if (plat.y >= GROUND_Y) continue;
+
+            const platBottom = plat.y + plat.h;
+            const isUnderPlatform =
+              nextPlayerX + PLAYER_W > plat.x + 4 &&
+              nextPlayerX < plat.x + plat.w - 4;
+
+            if (isUnderPlatform) {
+              if (p.y <= platBottom && p.y - p.vy >= platBottom - 8) {
+                p.y = platBottom;
+                p.vy = 1.0;
+              }
+            }
+          }
+
+          if (p.y <= 8) {
+            p.y = 8;
+            p.vy = 1.0;
+          }
+        }
+
+        // 5. TABRAKAN PLATFORM STATIS (PIJAKAN DARI ATAS)
+        for (const plat of platformsRef.current) {
+          const isOverPlatform =
+            p.x + PLAYER_W > plat.x &&
+            p.x < plat.x + plat.w &&
+            p.y + PLAYER_H >= plat.y &&
+            p.y + PLAYER_H - p.vy <= plat.y + 14;
+
+          if (isOverPlatform && p.vy >= 0) {
+            p.y = plat.y - PLAYER_H;
+            p.vy = 0;
+            p.jumping = false;
+          }
+        }
+
+        // 6. TANGGA REALISTIS (RAMP MATH PERSIS SEPERTI STAGE 3)
+        let stairsGroundY: number | null = null;
+        const charFootX = nextPlayerX + PLAYER_W * 0.5;
+        const footY = p.y + PLAYER_H;
+
+        for (const st of stairsRef.current) {
+          const minX = Math.min(st.x1, st.x2);
+          const maxX = Math.max(st.x1, st.x2);
+
+          if (charFootX >= minX && charFootX <= maxX && st.x1 !== st.x2) {
+            const t = (charFootX - st.x1) / (st.x2 - st.x1);
+            const rampY = st.y1 + t * (st.y2 - st.y1);
+
+            if (footY >= rampY - 18 && footY <= rampY + 22) {
+              stairsGroundY = rampY;
+              break;
+            }
+          }
+        }
+
+        if (stairsGroundY !== null) {
+          const prevFootY = footY - p.vy;
+          if (!p.jumping) {
+            if (Math.abs(footY - stairsGroundY) <= 16) {
+              p.y = stairsGroundY - PLAYER_H;
+              p.vy = 0;
+            }
+          } else if (p.vy >= 0) {
+            if (footY >= stairsGroundY && prevFootY <= stairsGroundY + 16) {
+              p.y = stairsGroundY - PLAYER_H;
+              p.vy = 0;
+              p.jumping = false;
+            }
+          }
+        }
+
+        // 7. LANTAI DASAR SOLID (FULL 1024 PX)
+        if (p.y + PLAYER_H >= GROUND_Y) {
+          p.y = GROUND_Y - PLAYER_H;
+          p.vy = 0;
+          p.jumping = false;
+        }
+
+        // 8. BATAS KANVAS
         if (nextPlayerX < 10) nextPlayerX = 10;
         if (nextPlayerX + PLAYER_W > GAME_WIDTH - 10) nextPlayerX = GAME_WIDTH - 10 - PLAYER_W;
         p.x = nextPlayerX;
 
-        const footX = p.x + PLAYER_W * 0.5;
-        const footY = p.y + PLAYER_H;
-        const prevFootY = footY - p.vy;
+        // 9. TABRAKAN LASER MERAH (MUTLAK MEMATIKAN)
+        for (let i = 0; i < lasersRef.current.length; i++) {
+          const l = lasersRef.current[i];
+          const isThisLaser2 =
+            i === 1 ||
+            l.label.toLowerCase().includes("laser 2") ||
+            l.label.toLowerCase().includes("laser merah 2");
 
-        // 4. Deteksi Pijakan Tangga (Ramp Math: Mulus untuk naik ke kanan maupun turun ke kanan)
-        let onStairs = false;
-        for (const st of stairs) {
-          const minX = Math.min(st.x1, st.x2);
-          const maxX = Math.max(st.x1, st.x2);
+          // Jika Laser 2 sudah dinonaktifkan, lewati pemeriksaan (aman untuk dilewati)
+          if (isThisLaser2 && isLaser2DeactivatedRef.current) {
+            continue;
+          }
 
-          if (footX >= minX && footX <= maxX) {
-            const t = (footX - st.x1) / (st.x2 - st.x1);
-            const rampY = st.y1 + t * (st.y2 - st.y1);
+          const hitLaser =
+            p.x + PLAYER_W > l.x + 3 &&
+            p.x < l.x + l.w - 3 &&
+            p.y + PLAYER_H > l.y + 3 &&
+            p.y < l.y + l.h - 3;
 
-            // Toleransi tapak kaki pada bidang miring tangga
-            if (footY >= rampY - 14 && footY <= rampY + 16) {
-              p.y = rampY - PLAYER_H;
-              p.vy = 0;
-              p.jumping = false;
-              onStairs = true;
-              break;
-            }
+          if (hitLaser) {
+            p.x = levelObjectsRef.current.spawn.x;
+            p.y = levelObjectsRef.current.spawn.y;
+            p.vy = 0;
+            p.jumping = false;
+            triggerLaserDeath();
+            break;
           }
         }
 
-        // 5. Deteksi Pijakan Platform Horizontal (One-Way Platform Mechanics)
-        if (!onStairs) {
-          for (const plat of platforms) {
-            if (
-              footX >= plat.x &&
-              footX <= plat.x + plat.w &&
-              footY >= plat.y &&
-              prevFootY <= plat.y + 14 &&
-              p.vy >= 0
-            ) {
-              p.y = plat.y - PLAYER_H;
-              p.vy = 0;
-              p.jumping = false;
-              break;
-            }
+        // 10. DETEKSI AMBIL KUNCI OTOMATIS SAAT TERTABRAK
+        if (!hasArchitectKeyRef.current) {
+          const k = levelObjectsRef.current.keyItem;
+          const touchKey =
+            p.x + PLAYER_W > k.x &&
+            p.x < k.x + k.w &&
+            p.y + PLAYER_H > k.y &&
+            p.y < k.y + k.h;
+
+          if (touchKey) {
+            handleCollectKey();
           }
         }
 
-        // 6. Rintangan Kolam Hazard di Lantai Bawah
-        const inLavaPool = footX > hazardLava.x && footX < hazardLava.x + hazardLava.w && footY >= hazardLava.y;
-        const inElectricPool = footX > hazardElectric.x && footX < hazardElectric.x + hazardElectric.w && footY >= hazardElectric.y;
-        const outOfBounds = p.y > GAME_HEIGHT;
+        // 11. DETEKSI KEDEKATAN OBJEK INTERAKTIF
+        const objs = levelObjectsRef.current;
 
-        if (inLavaPool || inElectricPool || outOfBounds) {
-          resetPlayerToSpawn(inLavaPool ? "lava" : inElectricPool ? "electric" : "fall");
-          return;
-        }
+        // Komputer Materi di Kiri Bawah
+        const distMatX = Math.abs(p.x + PLAYER_W / 2 - (objs.material.x + objs.material.w / 2));
+        const distMatY = Math.abs(p.y + PLAYER_H / 2 - (objs.material.y + objs.material.h / 2));
+        setIsNearMaterial(distMatX < 65 && distMatY < 55);
 
-        // 7. Deteksi Kedekatan Objek Interaktif
-        const distTermX = Math.abs(p.x + PLAYER_W / 2 - (terminalObj.x + terminalObj.w / 2));
-        const distTermY = Math.abs(p.y + PLAYER_H / 2 - (terminalObj.y + terminalObj.h / 2));
-        setIsNearTerminal(distTermX < 65 && distTermY < 65);
+        // Komputer Kontrol / Bypass Laser 2 di Kiri Komputer Mini Game
+        const distLaserTermX = Math.abs(p.x + PLAYER_W / 2 - (objs.laserTerminal.x + objs.laserTerminal.w / 2));
+        const distLaserTermY = Math.abs(p.y + PLAYER_H / 2 - (objs.laserTerminal.y + objs.laserTerminal.h / 2));
+        setIsNearLaserTerminal(distLaserTermX < 65 && distLaserTermY < 55);
 
-        const distArchX = Math.abs(p.x + PLAYER_W / 2 - (architectStationObj.x + architectStationObj.w / 2));
-        const distArchY = Math.abs(p.y + PLAYER_H / 2 - (architectStationObj.y + architectStationObj.h / 2));
-        setIsNearArchitectStation(distArchX < 75 && distArchY < 75);
+        // Stasiun Terminal Mini Game di Kanan Atas
+        const distArchX = Math.abs(p.x + PLAYER_W / 2 - (objs.architect.x + objs.architect.w / 2));
+        const distArchY = Math.abs(p.y + PLAYER_H / 2 - (objs.architect.y + objs.architect.h / 2));
+        setIsNearArchitectStation(distArchX < 65 && distArchY < 55);
 
-        const distPortalX = Math.abs(p.x + PLAYER_W / 2 - (portalObj.x + portalObj.w / 2));
-        const distPortalY = Math.abs(p.y + PLAYER_H / 2 - (portalObj.y + portalObj.h / 2));
-        setIsNearPortal(distPortalX < 70 && distPortalY < 75);
+        // Kunci di Ruangan Platform 15-16
+        const distKeyX = Math.abs(p.x + PLAYER_W / 2 - (objs.keyItem.x + objs.keyItem.w / 2));
+        const distKeyY = Math.abs(p.y + PLAYER_H / 2 - (objs.keyItem.y + objs.keyItem.h / 2));
+        setIsNearKey(distKeyX < 55 && distKeyY < 55);
+
+        // Portal Pintu Exit
+        const distPortalX = Math.abs(p.x + PLAYER_W / 2 - (objs.portal.x + objs.portal.w / 2));
+        const distPortalY = Math.abs(p.y + PLAYER_H / 2 - (objs.portal.y + objs.portal.h / 2));
+        setIsNearPortal(distPortalX < 70 && distPortalY < 65);
 
         // Update State
         setPlayerX(p.x);
@@ -330,56 +800,57 @@ export default function Stage5Page() {
 
     animId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animId);
-  }, [showMaterial, showQuiz, showArchitectTerminal]);
+  }, [showMaterial, showArchitectTerminal]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black p-3 md:p-4 select-none">
-      {/* ─── HUD INFO ATAS ────────────────────────────────────────── */}
+      {/* ─── HUD INFO ATAS (CLEAN & MINIMALIS) ──────────────────────── */}
       <div className="mb-3 flex w-full max-w-[1024px] flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-500/40 bg-[#09061c]/85 px-4 py-2 text-xs text-gray-300 backdrop-blur-md shadow-[0_0_25px_rgba(6,182,212,0.25)]">
         <div className="flex items-center gap-2.5">
           <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
           <span className="font-bold tracking-wider text-cyan-300 uppercase font-mono">
-            STAGE 5 // STRUKTUR &amp; ORGANISASI DIREKTORI
+            STAGE 5 // DIRECTORY &amp; STORAGE VAULT
           </span>
           <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-300 font-mono">
-            Directory System Core
+            File System Core
           </span>
+          {hasArchitectKey && (
+            <span className="rounded bg-yellow-500/20 border border-yellow-400/50 px-2 py-0.5 text-[10px] text-yellow-300 font-mono animate-pulse">
+              🔑 Kunci Akses Terbawa
+            </span>
+          )}
         </div>
 
-        {/* Kontrol Cepat Modal, Debug Hitbox, & Navigasi */}
+        {/* Kontrol & Navigasi */}
         <div className="flex items-center gap-2 text-[10px] font-mono">
-          {/* Tombol Toggle Debug Mode (B1) */}
           <button
             type="button"
-            onClick={() => setDebugMode((prev) => !prev)}
-            className={`rounded px-2.5 py-1 font-bold transition border ${
-              debugMode
-                ? "border-red-400 bg-red-950/80 text-red-200 shadow-[0_0_10px_#ef4444]"
-                : "border-white/10 bg-white/5 text-gray-400 hover:text-white"
+            onClick={handleOpenMaterial}
+            className="rounded-md border border-cyan-400/40 bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-200 hover:bg-cyan-500/30 transition shadow-[0_0_10px_rgba(34,211,238,0.2)]"
+          >
+            📖 Datalog Materi [E]
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenArchitect}
+            className={`rounded-md border px-2.5 py-1 font-bold transition shadow-sm ${
+              hasArchitectKey
+                ? "border-purple-400/60 bg-purple-500/25 text-purple-200 hover:bg-purple-500/35 shadow-[0_0_10px_rgba(168,85,247,0.3)] animate-pulse"
+                : "border-slate-700 bg-slate-900/60 text-slate-400 hover:text-white"
             }`}
           >
-            [H] Debug Hitbox: {debugMode ? "ON" : "OFF"}
+            {hasArchitectKey ? "💻 Directory Architect [E]" : "🔒 Directory Architect [Terkunci]"}
           </button>
           <button
             type="button"
-            onClick={() => setShowArchitectTerminal(true)}
-            className="rounded-md border border-purple-400/40 bg-purple-500/20 px-2.5 py-1 font-bold text-purple-200 hover:bg-purple-500/30 transition shadow-[0_0_10px_rgba(168,85,247,0.3)]"
+            onClick={handlePortalInteract}
+            className={`rounded-md border px-2.5 py-1 font-bold transition shadow-sm ${
+              isMiniGameCompleted
+                ? "border-emerald-400/60 bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/35 shadow-[0_0_12px_rgba(52,211,153,0.4)] animate-pulse"
+                : "border-slate-700 bg-slate-900/60 text-slate-400 hover:text-white"
+            }`}
           >
-            💻 Directory Architect
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowMaterial(true)}
-            className="rounded-md border border-cyan-400/40 bg-cyan-500/20 px-2.5 py-1 font-bold text-cyan-200 hover:bg-cyan-500/30 transition"
-          >
-            📖 Datalog Direktori
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowQuiz(true)}
-            className="rounded-md border border-emerald-400/40 bg-emerald-500/20 px-2.5 py-1 font-bold text-emerald-300 hover:bg-emerald-500/30 transition"
-          >
-            🛡️ Firewall 5
+            {isMiniGameCompleted ? "🌀 Portal Stage 6 [Buka]" : "🔒 Portal Stage 6 [Terkunci]"}
           </button>
           <Link
             href="/stage/stage3"
@@ -400,25 +871,40 @@ export default function Stage5Page() {
           backgroundSize: "100% 100%",
         }}
       >
-        {/* Gambar Latar Belakang Stage 5 */}
-        <img
-          src="/stage5bg.jpeg"
-          alt="Stage 5 Background"
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none z-0"
-        />
-
         {/* Overlay lembut sci-fi */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/30 pointer-events-none z-10" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/30 pointer-events-none" />
 
-        {/* ─── TOAST ALERT TELEMETRI ────────────────────────────────── */}
+        {/* ─── SCREEN FLASH MERAH SAAT TERKENA LASER ────────────────── */}
+        {screenFlash && (
+          <div className="absolute inset-0 bg-red-600/40 z-50 pointer-events-none animate-pulse" />
+        )}
+
+        {/* ─── TOAST NOTIFIKASI TELEMETRI (HUD) ─────────────────────── */}
         {alertMessage && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-all duration-300">
-            <div className="flex items-center gap-2 rounded-xl border border-cyan-400/80 bg-black/90 px-4 py-2 text-xs font-mono font-bold text-cyan-200 shadow-[0_0_25px_rgba(34,211,238,0.5)]">
+            <div className="flex items-center gap-2 rounded-xl border border-cyan-400/80 bg-black/95 px-4 py-2 text-xs font-mono font-bold text-cyan-200 shadow-[0_0_25px_rgba(34,211,238,0.5)]">
               <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
               <span>{alertMessage}</span>
             </div>
           </div>
         )}
+
+        {/* ─── FITUR SENSOR LASER LISTRIK MERAH (MUTLAK MEMATIKAN) ───── */}
+        {lasers.map((laser, idx) => {
+          const isThisLaser2 =
+            idx === 1 ||
+            laser.label.toLowerCase().includes("laser 2") ||
+            laser.label.toLowerCase().includes("laser merah 2");
+          const isDeactivated = isThisLaser2 && isLaser2Deactivated;
+
+          return (
+            <ElectricLaser
+              key={idx}
+              laser={laser}
+              isDeactivated={isDeactivated}
+            />
+          );
+        })}
 
         {/* ─── PIJAKAN PLATFORM TRANSPARAN (COLLISION HITBOXES) ──────── */}
         {platforms.map((plat, idx) => (
@@ -434,164 +920,146 @@ export default function Stage5Page() {
           />
         ))}
 
-        {/* ─── DEBUG HITBOX OVERLAY (B1: Aktif lewat tombol 'h' atau ?debug=1) ─ */}
-        {debugMode && (
-          <div className="absolute inset-0 pointer-events-none z-50">
-            {/* SVG untuk Garis Tangga */}
-            <svg className="absolute inset-0 w-full h-full">
-              {stairs.map((st, idx) => (
-                <g key={`debug-stair-${idx}`}>
-                  <line
-                    x1={st.x1}
-                    y1={st.y1}
-                    x2={st.x2}
-                    y2={st.y2}
-                    stroke="#22c55e"
-                    strokeWidth="4"
-                    strokeDasharray="4 2"
-                  />
-                  <circle cx={st.x1} cy={st.y1} r="4" fill="#22c55e" />
-                  <circle cx={st.x2} cy={st.y2} r="4" fill="#22c55e" />
-                  <text
-                    x={(st.x1 + st.x2) / 2}
-                    y={(st.y1 + st.y2) / 2 - 6}
-                    fill="#4ade80"
-                    fontSize="10"
-                    fontWeight="bold"
-                    textAnchor="middle"
-                    className="font-mono bg-black"
-                  >
-                    Tangga {idx + 1}: {st.label}
-                  </text>
-                </g>
-              ))}
-            </svg>
+        {/* ─── 1. INTERAKSI: KOMPUTER MATERI (BAWAH KIRI) ────────────── */}
+        <div
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
+          style={{
+            left: `${levelObjects.material.x}px`,
+            top: `${levelObjects.material.y}px`,
+            width: `${levelObjects.material.w}px`,
+            height: `${levelObjects.material.h}px`,
+          }}
+          onClick={handleOpenMaterial}
+        >
+          {isNearMaterial && (
+            <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
+              <span className="rounded-md border border-cyan-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
+                Tekan <kbd className="rounded bg-cyan-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Baca Datalog Direktori &amp; Disk
+              </span>
+            </div>
+          )}
+        </div>
 
-            {/* Platform Hitboxes: Kotak merah semi-transparan dengan nomor */}
-            {platforms.map((plat, idx) => (
-              <div
-                key={`debug-plat-${idx}`}
-                className="absolute border border-red-500 bg-red-500/25 text-[9px] font-mono text-red-100 flex items-start justify-start p-0.5 overflow-hidden leading-none select-none"
-                style={{
-                  left: `${plat.x}px`,
-                  top: `${plat.y}px`,
-                  width: `${plat.w}px`,
-                  height: `${plat.h}px`,
-                }}
-              >
-                <span className="bg-red-950/80 px-1 py-0.5 rounded text-[8px] font-bold">
-                  #{idx + 1} {plat.label}
+        {/* ─── 2. INTERAKSI: AKSES BYPASS LASER 2 (SEBELAH KIRI MINI GAME) ─ */}
+        <div
+          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
+          style={{
+            left: `${levelObjects.laserTerminal.x}px`,
+            top: `${levelObjects.laserTerminal.y}px`,
+            width: `${levelObjects.laserTerminal.w}px`,
+            height: `${levelObjects.laserTerminal.h}px`,
+          }}
+          onClick={handleBypassLaser2}
+        >
+          {isNearLaserTerminal && (
+            <div className="absolute -top-9 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
+              {!hasReadMaterial ? (
+                <span className="rounded-md border border-red-500/80 bg-black/95 px-2.5 py-1 text-[10px] font-mono font-bold text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                  ⚠️ Butuh Datalog Materi untuk Membuka Terminal Ini!
+                </span>
+              ) : isLaser2Deactivated ? (
+                <span className="rounded-md border border-emerald-400/80 bg-black/95 px-2.5 py-1 text-[10px] font-mono font-bold text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.5)]">
+                  Laser Telah Dinonaktifkan (Ruangan Terbuka)
+                </span>
+              ) : (
+                <span className="rounded-md border border-amber-400/80 bg-black/95 px-2.5 py-1 text-[10px] font-mono font-bold text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.5)]">
+                  Tekan <kbd className="rounded bg-amber-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Matikan Laser
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ─── 3. INTERAKSI: KUNCI RUANGAN PLATFORM 15-16 ─────────────── */}
+        {!hasArchitectKey && (
+          <div
+            className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
+            style={{
+              left: `${levelObjects.keyItem.x}px`,
+              top: `${levelObjects.keyItem.y}px`,
+              width: `${levelObjects.keyItem.w}px`,
+              height: `${levelObjects.keyItem.h}px`,
+            }}
+            onClick={handleCollectKey}
+          >
+            {/* Visual Kunci Memantul Emas */}
+            <div className="flex flex-col items-center justify-center pointer-events-none animate-bounce">
+              <span className="text-2xl drop-shadow-[0_0_15px_rgba(250,204,21,1)]">🔑</span>
+            </div>
+
+            {isNearKey && (
+              <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
+                <span className="rounded-md border border-yellow-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.5)]">
+                  Tekan <kbd className="rounded bg-yellow-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Ambil Kunci Akses
                 </span>
               </div>
-            ))}
-
-            {/* Kolam Lava: Oranye semi-transparan */}
-            <div
-              className="absolute border-2 border-orange-500 bg-orange-500/30 text-[9px] font-mono text-orange-200 flex items-center justify-center font-bold"
-              style={{
-                left: `${hazardLava.x}px`,
-                top: `${hazardLava.y}px`,
-                width: `${hazardLava.w}px`,
-                height: `${hazardLava.h}px`,
-              }}
-            >
-              🔥 Kolam Lava
-            </div>
-
-            {/* Kolam Listrik: Biru semi-transparan */}
-            <div
-              className="absolute border-2 border-cyan-400 bg-cyan-500/30 text-[9px] font-mono text-cyan-200 flex items-center justify-center font-bold"
-              style={{
-                left: `${hazardElectric.x}px`,
-                top: `${hazardElectric.y}px`,
-                width: `${hazardElectric.w}px`,
-                height: `${hazardElectric.h}px`,
-              }}
-            >
-              ⚡ Kolam Listrik
-            </div>
-
-            {/* Interactive Objects: Kotak kuning semi-transparan */}
-            {[terminalObj, architectStationObj, portalObj].map((obj, idx) => (
-              <div
-                key={`debug-obj-${idx}`}
-                className="absolute border-2 border-yellow-400 bg-yellow-400/25 text-[9px] font-mono text-yellow-200 flex items-center justify-center font-bold"
-                style={{
-                  left: `${obj.x}px`,
-                  top: `${obj.y}px`,
-                  width: `${obj.w}px`,
-                  height: `${obj.h}px`,
-                }}
-              >
-                🟡 {obj.label}
-              </div>
-            ))}
+            )}
           </div>
         )}
 
-        {/* ─── INTERAKSI 1: KOMPUTER TERMINAL DATALOG (MEJA TENGAH) ──── */}
+        {/* ─── 4. INTERAKSI: STASIUN DIRECTORY ARCHITECT (ATAS KANAN) ─── */}
         <div
           className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
-            left: `${terminalObj.x}px`,
-            top: `${terminalObj.y}px`,
-            width: `${terminalObj.w}px`,
-            height: `${terminalObj.h}px`,
+            left: `${levelObjects.architect.x}px`,
+            top: `${levelObjects.architect.y}px`,
+            width: `${levelObjects.architect.w}px`,
+            height: `${levelObjects.architect.h}px`,
           }}
-          onClick={() => setShowMaterial(true)}
-        >
-          {isNearTerminal && (
-            <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
-              <span className="rounded-md border border-cyan-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
-                Tekan <kbd className="rounded bg-cyan-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Baca Datalog Direktori
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ─── INTERAKSI 2: STASIUN DIRECTORY ARCHITECT (ATAS KANAN) ─── */}
-        <div
-          className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
-          style={{
-            left: `${architectStationObj.x}px`,
-            top: `${architectStationObj.y}px`,
-            width: `${architectStationObj.w}px`,
-            height: `${architectStationObj.h}px`,
-          }}
-          onClick={() => setShowArchitectTerminal(true)}
+          onClick={handleOpenArchitect}
         >
           {isNearArchitectStation && (
             <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
-              <span className="rounded-md border border-purple-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.5)]">
-                Tekan <kbd className="rounded bg-purple-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Akses Terminal Directory Architect
-              </span>
+              {!hasArchitectKey ? (
+                <span className="rounded-md border border-red-500/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                  🔒 Terkunci (Cari Kunci)
+                </span>
+              ) : (
+                <span className="rounded-md border border-purple-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.5)]">
+                  Tekan <kbd className="rounded bg-purple-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Buka Directory Architect
+                </span>
+              )}
             </div>
           )}
         </div>
 
-        {/* ─── INTERAKSI 3: PORTAL EXIT PINTU STAGE 6 (ATAS KANAN) ───── */}
+        {/* ─── 5. INTERAKSI: PINTU EXIT / PORTAL STAGE 6 (ATAS KANAN) ──── */}
         <div
           className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
-            left: `${portalObj.x}px`,
-            top: `${portalObj.y}px`,
-            width: `${portalObj.w}px`,
-            height: `${portalObj.h}px`,
+            left: `${levelObjects.portal.x}px`,
+            top: `${levelObjects.portal.y}px`,
+            width: `${levelObjects.portal.w}px`,
+            height: `${levelObjects.portal.h}px`,
           }}
-          onClick={() => setShowQuiz(true)}
+          onClick={handlePortalInteract}
         >
+          {/* Efek visual portal aktif ketika mini game telah diselesaikan */}
+          {isMiniGameCompleted && (
+            <div className="h-full w-full rounded-t-2xl rounded-b-sm border-2 border-emerald-400/90 bg-emerald-950/40 shadow-[0_0_35px_rgba(52,211,153,0.7)] flex flex-col items-center justify-center animate-pulse">
+              <span className="text-xl drop-shadow-[0_0_10px_#34d399]">🌀</span>
+              <span className="text-[7.5px] font-mono font-bold text-emerald-300 tracking-wider">PORTAL ON</span>
+            </div>
+          )}
+
           {isNearPortal && (
             <div className="absolute -top-8 whitespace-nowrap z-30 pointer-events-none animate-in fade-in duration-150">
-              <span className="rounded-md border border-emerald-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.5)]">
-                Tekan <kbd className="rounded bg-emerald-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Masuk Portal Stage 6
-              </span>
+              {isMiniGameCompleted ? (
+                <span className="rounded-md border border-emerald-400/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.5)]">
+                  Tekan <kbd className="rounded bg-emerald-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Masuk Portal Stage 6 ➔
+                </span>
+              ) : (
+                <span className="rounded-md border border-red-500/80 bg-black/90 px-2.5 py-1 text-[10px] font-mono font-bold text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                  🔒 Portal Terkunci (Selesaikan Mini Game Terlebih Dahulu)
+                </span>
+              )}
             </div>
           )}
         </div>
 
         {/* ─── KARAKTER ASTRONOT PEMAIN ──────────────────────────────── */}
         <div
-          className="absolute z-30 pointer-events-none transition-all duration-75"
+          className="absolute z-30 pointer-events-none"
           style={{
             left: `${playerX}px`,
             top: `${playerY}px`,
@@ -600,9 +1068,7 @@ export default function Stage5Page() {
           }}
         >
           <div
-            className={`h-full w-full transition-transform duration-100 ease-out ${
-              isHurt ? "opacity-50 brightness-150 animate-pulse" : ""
-            }`}
+            className="h-full w-full transition-transform duration-100 ease-out"
             style={{
               transformOrigin: "bottom center",
               transform: isJumping
@@ -627,11 +1093,11 @@ export default function Stage5Page() {
           ← Kembali ke Menu Utama
         </Link>
         <span className="font-mono text-[11px] text-gray-300">
-          Stage 5: Baca Datalog Direktori di Meja Tengah, Selesaikan Terminal Architect di Atas, &amp; Buka Portal Stage 6!
+          Stage 5: Baca Datalog di Komputer Bawah Kiri ➔ Matikan Laser 2 di Komputer Atas ➔ Ambil Kunci di Ruang 15-16 ➔ Selesaikan Mini Game ➔ Masuk Portal Stage 6!
         </span>
         <button
           type="button"
-          onClick={() => setShowArchitectTerminal(true)}
+          onClick={handleOpenArchitect}
           className="text-purple-300 font-bold hover:underline font-mono"
         >
           Terminal Architect ➔
@@ -652,20 +1118,17 @@ export default function Stage5Page() {
               </button>
             </div>
             <DirectoryArchitectMiniGame
+              onComplete={handleMiniGameComplete}
               onOpenMaterial={() => setShowMaterial(true)}
-              onOpenQuiz={() => setShowQuiz(true)}
             />
           </div>
         </div>
       )}
 
-      {/* ─── MODAL 2: DATALOG MATERI PEMBELAJARAN STRUKTUR DIREKTORI ─── */}
-      <DirectoryMaterialModal isOpen={showMaterial} onClose={() => setShowMaterial(false)} />
+      {/* ─── MODAL 2: DATALOG MATERI PEMBELAJARAN ──────────────────── */}
+      <DiskMaterialModal isOpen={showMaterial} onClose={() => setShowMaterial(false)} />
 
-      {/* ─── MODAL 3: KUIS FIREWALL PINTU 5 / PORTAL STAGE 6 ────────── */}
-      <DirectoryQuizModal isOpen={showQuiz} onClose={() => setShowQuiz(false)} />
-
-      {/* ─── KEYFRAME ANIMASI WADDLE ASTRONOT ──────────────────────── */}
+      {/* ─── KEYFRAME ANIMASI WADDLE & LASER LISTRIK ───────────────── */}
       <style jsx>{`
         @keyframes waddle {
           0%,
@@ -681,6 +1144,113 @@ export default function Stage5Page() {
         }
         .animate-waddle {
           animation: waddle 0.25s ease-in-out infinite;
+        }
+
+        /* ─── ANIMASI BUSUR LISTRIK & PERCIKAN TEGANGAN TINGGI ─── */
+        @keyframes electricFlicker {
+          0%, 100% {
+            opacity: 0.95;
+            filter: drop-shadow(0 0 6px #ef4444) drop-shadow(0 0 12px rgba(239, 68, 68, 0.9));
+          }
+          20% {
+            opacity: 0.75;
+            filter: drop-shadow(0 0 4px #ef4444) drop-shadow(0 0 8px rgba(239, 68, 68, 0.7));
+          }
+          40% {
+            opacity: 1;
+            filter: drop-shadow(0 0 10px #ff0055) drop-shadow(0 0 20px rgba(255, 0, 85, 1));
+          }
+          60% {
+            opacity: 0.85;
+            filter: drop-shadow(0 0 5px #ef4444) drop-shadow(0 0 10px rgba(239, 68, 68, 0.8));
+          }
+          80% {
+            opacity: 1;
+            filter: drop-shadow(0 0 12px #ff4444) drop-shadow(0 0 22px rgba(255, 68, 68, 1));
+          }
+        }
+        @keyframes electricJitterA {
+          0%, 100% {
+            transform: translate(0, 0) scale(1);
+          }
+          25% {
+            transform: translate(-1px, 1.5px) scaleY(1.2);
+          }
+          50% {
+            transform: translate(1px, -1px) scaleY(0.85);
+          }
+          75% {
+            transform: translate(-0.5px, -1.5px) scaleY(1.15);
+          }
+        }
+        @keyframes electricJitterB {
+          0%, 100% {
+            transform: translate(0, 0) scale(1);
+          }
+          20% {
+            transform: translate(1.5px, -1px) scale(0.95, 1.3);
+          }
+          45% {
+            transform: translate(-1px, 1.5px) scale(1.1, 0.8);
+          }
+          70% {
+            transform: translate(1px, 1px) scale(0.9, 1.2);
+          }
+          90% {
+            transform: translate(-1.5px, -0.5px) scale(1.05, 0.9);
+          }
+        }
+        @keyframes electricSparkPop {
+          0%, 100% {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.4);
+          }
+          30%, 70% {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1.4);
+          }
+        }
+        @keyframes electricBranchFlash {
+          0%, 100% {
+            opacity: 0;
+          }
+          15%, 35% {
+            opacity: 0.9;
+          }
+          50%, 80% {
+            opacity: 0;
+          }
+          85%, 95% {
+            opacity: 1;
+          }
+        }
+        .electric-hazard-container {
+          animation: electricFlicker 0.18s infinite steps(2, start);
+        }
+        .electric-arc-glow {
+          opacity: 0.65;
+          animation: electricJitterA 0.12s infinite alternate;
+        }
+        .electric-arc-fast {
+          animation: electricJitterB 0.08s infinite alternate;
+        }
+        .electric-arc-core {
+          animation: electricJitterA 0.06s infinite;
+        }
+        .electric-arc-sub {
+          animation: electricJitterB 0.1s infinite alternate-reverse;
+        }
+        .electric-spark-branch {
+          animation: electricBranchFlash 0.22s infinite;
+        }
+        .electric-spark-branch-alt {
+          animation: electricBranchFlash 0.31s infinite 0.1s;
+        }
+        .electric-spark-dot-1 {
+          animation: electricSparkPop 0.15s infinite ease-in-out;
+        }
+        .electric-spark-dot-2 {
+          animation: electricSparkPop 0.21s infinite ease-in-out 0.07s;
         }
       `}</style>
     </main>
