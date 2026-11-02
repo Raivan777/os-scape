@@ -44,39 +44,45 @@ export interface LevelObjects {
 // ─── KONFIGURASI BAWAAN (DEFAULT LEVEL CONFIG) ───────────────────
 const DEFAULT_PLATFORMS: Platform[] = [
   { x: 0, y: 536, w: 1024, h: 40, label: "GROUND FLOOR" },
-  { x: 446, y: 518, w: 112, h: 18, label: "CENTER BRIDGE" },
-  { x: 840, y: 465, w: 80, h: 71, label: "CRATE SMALL", isWall: true },
-  { x: 920, y: 390, w: 75, h: 146, label: "CRATE TALL", isWall: true },
-  { x: 230, y: 412, w: 620, h: 20, label: "MID CATWALK" },
-  { x: 0, y: 385, w: 216, h: 20, label: "MEZZANINE L" },
-  { x: 450, y: 304, w: 115, h: 20, label: "CENTER RAISED" },
-  { x: 245, y: 312, w: 60, h: 18, label: "FLOAT LEDGE L" },
-  { x: 705, y: 312, w: 60, h: 18, label: "FLOAT LEDGE R" },
-  { x: 325, y: 255, w: 100, h: 18, label: "HANGING POD L" },
-  { x: 595, y: 255, w: 100, h: 18, label: "HANGING POD R" },
-  { x: 0, y: 105, w: 465, h: 20, label: "TOP CATWALK L" },
-  { x: 560, y: 105, w: 220, h: 20, label: "TOP CATWALK R" },
-  { x: 870, y: 75, w: 154, h: 20, label: "EXIT DECK" },
+  { x: 975, y: 12, w: 49, h: 525, label: "CRATE TALL", isWall: true },
+  { x: 244, y: 414, w: 478, h: 26, label: "MID CATWALK" },
+  { x: 0, y: 364, w: 216, h: 20, label: "MEZZANINE L" },
+  { x: 461, y: 295, w: 101, h: 20, label: "CENTER RAISED" },
+  { x: 250, y: 314, w: 51, h: 27, label: "FLOAT LEDGE L" },
+  { x: 706, y: 317, w: 273, h: 28, label: "FLOAT LEDGE R" },
+  { x: 327, y: 258, w: 94, h: 16, label: "HANGING POD L" },
+  { x: 594, y: 257, w: 98, h: 19, label: "HANGING POD R" },
+  { x: 142, y: 104, w: 430, h: 19, label: "TOP CATWALK L" },
+  { x: 559, y: 104, w: 171, h: 20, label: "TOP CATWALK R" },
+  { x: 712, y: 141, w: 169, h: 20, label: "EXIT DECK" },
+  { x: 0, y: 20, w: 37, h: 343, label: "PLATFORM 13", isWall: true },
+  { x: 35, y: 261, w: 114, h: 26, label: "PLATFORM 14" },
+  { x: 117, y: 154, w: 16, h: 106, label: "PLATFORM 15", isWall: true },
+  { x: 36, y: 151, w: 16, h: 109, label: "PLATFORM 18", isWall: true },
+  { x: 902, y: 134, w: 94, h: 24, label: "PLATFORM 19" },
+  { x: 717, y: 130, w: 35, h: 20, label: "PLATFORM 20" },
+  { x: 711, y: 118, w: 30, h: 16, label: "PLATFORM 21" },
+  { x: 130, y: 136, w: 16, h: 123, label: "PLATFORM 22", isWall: true },
+  { x: 152, y: 122, w: 16, h: 140, label: "PLATFORM 23", isWall: true },
 ];
 
 const DEFAULT_STAIRS: Stair[] = [
-  { x1: 730, y1: 536, x2: 850, y2: 412, label: "Tangga Kanan Bawah" },
-  { x1: 330, y1: 412, x2: 450, y2: 304, label: "Tangga Tengah" },
-  { x1: 216, y1: 385, x2: 280, y2: 424, label: "Tangga Mezanin Kiri" },
-  { x1: 780, y1: 145, x2: 870, y2: 75, label: "Tangga Menuju Exit" },
+  { x1: 885, y1: 606, x2: 720, y2: 417, label: "Tangga Kanan Bawah" },
+  { x1: 769, y1: 309, x2: 895, y2: 146, label: "Tangga Tengah" },
+  { x1: 221, y1: 365, x2: 265, y2: 414, label: "Tangga Mezanin Kiri" },
 ];
 
 const DEFAULT_LASERS: Laser[] = [
-  { x: 450, y: 508, w: 105, h: 10, label: "Laser Jembatan Bawah" },
-  { x: 180, y: 320, w: 10, h: 90, label: "Laser Merah 2 (Ruang Kunci 15-16)" },
+  { x: 290, y: 326, w: 433, h: 6, label: "Laser Jembatan Bawah" },
+  { x: 37, y: 105, w: 118, h: 6, label: "Laser Merah 2" },
 ];
 
 const DEFAULT_OBJECTS: LevelObjects = {
-  material: { x: 155, y: 476, w: 75, h: 60, label: "Komputer Materi" },
-  laserTerminal: { x: 620, y: 45, w: 65, h: 60, label: "Komputer Bypass Laser 2" },
-  architect: { x: 760, y: 45, w: 75, h: 60, label: "Terminal Mini Game" },
-  keyItem: { x: 100, y: 340, w: 32, h: 32, label: "Kunci Ruang 15-16" },
-  portal: { x: 910, y: 0, w: 70, h: 75, label: "Portal Stage 6" },
+  material: { x: 46, y: 290, w: 75, h: 60, label: "Komputer Materi" },
+  laserTerminal: { x: 580, y: 33, w: 65, h: 60, label: "Komputer Bypass Laser 2" },
+  architect: { x: 769, y: 62, w: 75, h: 60, label: "Terminal Architect" },
+  keyItem: { x: 73, y: 218, w: 32, h: 32, label: "Kunci Ruang 15-16" },
+  portal: { x: 920, y: 46, w: 70, h: 75, label: "Portal Stage 6" },
   spawn: { x: 65, y: 472, w: 44, h: 64, label: "Titik Spawn Karakter" },
 };
 
@@ -336,39 +342,12 @@ export default function Stage5Page() {
         setIsMiniGameCompleted(true);
       }
 
-      const savedPlats = localStorage.getItem("stage5_custom_platforms");
-      if (savedPlats) {
-        const p = JSON.parse(savedPlats);
-        if (Array.isArray(p) && p.length > 0) setPlatforms(p);
-      }
-      const savedStairs = localStorage.getItem("stage5_custom_stairs");
-      if (savedStairs) {
-        const s = JSON.parse(savedStairs);
-        if (Array.isArray(s) && s.length > 0) setStairsList(s);
-      }
-      const savedLasers = localStorage.getItem("stage5_custom_lasers");
-      if (savedLasers) {
-        const l = JSON.parse(savedLasers);
-        if (Array.isArray(l)) {
-          if (l.length < 2) {
-            setLasers([...l, DEFAULT_LASERS[1]]);
-          } else {
-            setLasers(l);
-          }
-        }
-      }
-      const savedObjects = localStorage.getItem("stage5_custom_objects");
-      if (savedObjects) {
-        const o = JSON.parse(savedObjects);
-        if (o && o.material && o.spawn) {
-          setLevelObjects({
-            ...DEFAULT_OBJECTS,
-            ...o,
-          });
-          setPlayerX(o.spawn.x);
-          setPlayerY(o.spawn.y);
-        }
-      }
+      // Bersihkan data custom localStorage lama agar semua client (termasuk teman saat git pull)
+      // selalu tersinkron 100% menggunakan data resmi dari file Git ini
+      localStorage.removeItem("stage5_custom_platforms");
+      localStorage.removeItem("stage5_custom_stairs");
+      localStorage.removeItem("stage5_custom_lasers");
+      localStorage.removeItem("stage5_custom_objects");
     } catch (e) {
       console.error("Gagal membaca storage custom:", e);
     }
