@@ -29,7 +29,7 @@ export default function Stage2Platformer() {
   const [isWalking, setIsWalking] = useState(false);
 
   // 2. Daftar Pijakan (Platform) Sementara Berwarna Hijau Transparan
-  // Silakan sesuaikan koordinat x, y, w, h di bawah ini secara manual nanti
+  // Silakan sesuaikan koordinat x, y, w, h di bawah ini secara manual
   const platforms = [
     { id: 1, x: 40, y: 543, w: 581, h: 40, label: "Lantai Kiri" },
     { id: 2, x: 652, y: 572, w: 347, h: 26, label: "Lantai Kanan" },
@@ -51,11 +51,40 @@ export default function Stage2Platformer() {
     hRight: 26,       // Ketebalan Lantai Kanan (26 px)
   };
 
-  // 4. Elemen Penanda Interaksi di Atas Layar (Trigger Placeholder)
+  // 4. Garis Penghalang (Barriers)
+  // Mencegah pemain melompat / menyeberang di sebelah Platform 2, Platform 4, dan Platform 3
+  const barriers = [
+    {
+      id: 1,
+      label: "Penghalang Plat 2",
+      x: 381, // Tepat di ujung kanan Platform 2 (x: -5 + 386 = 381)
+      y: 0,
+      w: 14,
+      h: 295, // Menjulur dari langit-langit hingga menutup samping Platform 2
+    },
+    {
+      id: 2,
+      label: "Penghalang Plat 4",
+      x: 795, // Tepat di ujung kiri Platform 4 (x: 809 - 14 = 795)
+      y: 0,
+      w: 14,
+      h: 220, // Menjulur dari langit-langit hingga menutup samping kiri Platform 4
+    },
+    {
+      id: 3,
+      label: "Penghalang Plat 3",
+      x: 723, // Tepat di sebelah kiri Platform 3 (x: 737 - 14 = 723)
+      y: 70,
+      w: 14,
+      h: 270, // Menghalangi lompatan ke kiri dari Platform 3 (tinggi melampaui puncak lompatan)
+    },
+  ];
+
+  // 5. Elemen Penanda Interaksi di Atas Layar (Trigger Placeholder)
   const markerMateri = { x: 220, y: 50, w: 140, h: 45, label: "MATERI" };
   const markerMiniGame = { x: 640, y: 50, w: 160, h: 45, label: "MINI GAME" };
 
-  // 5. Daftar 3 Pasang Portal Teleportasi (Total 6 Portal)
+  // 6. Daftar 3 Pasang Portal Teleportasi (Total 6 Portal)
   // Pasangan 1 (Cyan), Pasangan 2 (Ungu), Pasangan 3 (Oranye)
   const portals = [
     // Pasangan 1 (Warna Cyan)
@@ -240,14 +269,63 @@ export default function Stage2Platformer() {
         p.jumping = true;
       }
 
-      // Terapkan Gravitasi ke Pemain
+      // 3. Terapkan Pergerakan Horizontal & Collision Penghalang (Barriers)
+      let nextX = Math.max(0, Math.min(p.x + moveX, GAME_WIDTH - PLAYER_W));
+
+      for (const barrier of barriers) {
+        // Cek overlap vertikal antara pemain dan penghalang
+        const vOverlap =
+          p.y + PLAYER_H > barrier.y + 2 &&
+          p.y < barrier.y + barrier.h - 2;
+
+        if (vOverlap) {
+          // Menabrak sisi kiri penghalang saat bergerak ke kanan
+          if (moveX > 0 && p.x + PLAYER_W <= barrier.x + 4 && nextX + PLAYER_W > barrier.x) {
+            nextX = barrier.x - PLAYER_W;
+          }
+          // Menabrak sisi kanan penghalang saat bergerak ke kiri
+          else if (moveX < 0 && p.x >= barrier.x + barrier.w - 4 && nextX < barrier.x + barrier.w) {
+            nextX = barrier.x + barrier.w;
+          }
+          // Koreksi posisi jika pemain entah bagaimana berada di dalam penghalang
+          else if (p.x + PLAYER_W > barrier.x && p.x < barrier.x + barrier.w) {
+            if (p.x + PLAYER_W / 2 < barrier.x + barrier.w / 2) {
+              nextX = barrier.x - PLAYER_W;
+            } else {
+              nextX = barrier.x + barrier.w;
+            }
+          }
+        }
+      }
+      p.x = nextX;
+
+      // 4. Terapkan Gravitasi & Pergerakan Vertikal & Collision Penghalang
       p.vy += GRAVITY;
-      p.y += p.vy;
+      let nextY = p.y + p.vy;
 
-      // Batasi Posisi X di Dalam Layar
-      p.x = Math.max(0, Math.min(p.x + moveX, GAME_WIDTH - PLAYER_W));
+      for (const barrier of barriers) {
+        // Cek overlap horizontal antara pemain dan penghalang
+        const hOverlap =
+          p.x + PLAYER_W > barrier.x + 2 &&
+          p.x < barrier.x + barrier.w - 2;
 
-      // 3. Sistem Collision Pijakan (Platforms) & Ramp Zone
+        if (hOverlap) {
+          // Mendarat di atas penghalang jika jatuh dari atas
+          if (p.vy > 0 && p.y + PLAYER_H <= barrier.y + 12 && nextY + PLAYER_H >= barrier.y) {
+            nextY = barrier.y - PLAYER_H;
+            p.vy = 0;
+            p.jumping = false;
+          }
+          // Membentur bagian bawah penghalang saat melompat ke atas (head-bump)
+          else if (p.vy < 0 && p.y >= barrier.y + barrier.h - 12 && nextY <= barrier.y + barrier.h) {
+            nextY = barrier.y + barrier.h;
+            p.vy = 0;
+          }
+        }
+      }
+      p.y = nextY;
+
+      // 5. Sistem Collision Pijakan (Platforms) & Ramp Zone
       let onRamp = false;
       const playerFootX = p.x + PLAYER_W / 2;
 
@@ -287,7 +365,7 @@ export default function Stage2Platformer() {
         }
       }
 
-      // 4. Deteksi Teleportasi 3 Pasang Portal
+      // 6. Deteksi Teleportasi 3 Pasang Portal
       const now = Date.now();
       if (now > teleportCooldownRef.current) {
         for (const portal of portals) {
@@ -312,7 +390,7 @@ export default function Stage2Platformer() {
         }
       }
 
-      // 5. Cek Jika Jatuh ke Bawah Layar
+      // 7. Cek Jika Jatuh ke Bawah Layar
       if (p.y > GAME_HEIGHT) {
         resetPlayerToSpawn();
         return;
@@ -338,7 +416,7 @@ export default function Stage2Platformer() {
         <div className="flex items-center gap-2.5">
           <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
           <span className="font-bold tracking-wider text-cyan-300 uppercase font-mono">
-            STAGE 2 // KALIBRASI TATA LETAK & PLATFORM
+            STAGE 2 // KALIBRASI TATA LETAK, PORTAL & PENGHALANG
           </span>
         </div>
         <div className="font-mono text-[11px] text-gray-400">
@@ -439,7 +517,31 @@ export default function Stage2Platformer() {
           </div>
         </div>
 
-        {/* 5. Daftar 3 Pasang Portal Teleportasi (Total 6 Portal) */}
+        {/* 5. Garis Penghalang (Barriers) */}
+        {barriers.map((bar) => (
+          <div
+            key={bar.id}
+            className="absolute z-15 flex flex-col items-center justify-center select-none overflow-hidden rounded-md border-2 border-rose-500 bg-rose-950/70 shadow-[0_0_20px_rgba(244,63,94,0.7)] backdrop-blur-xs"
+            style={{
+              left: `${bar.x}px`,
+              top: `${bar.y}px`,
+              width: `${bar.w}px`,
+              height: `${bar.h}px`,
+            }}
+          >
+            {/* Efek Garis Laser Berdenyut di Tengah */}
+            <div className="absolute inset-y-0 w-1 bg-rose-400 shadow-[0_0_8px_#f43f5e] animate-pulse" />
+
+            {/* Label Teks Vertikal */}
+            <span
+              className="z-10 font-mono text-[8px] font-black uppercase tracking-wider text-rose-200 drop-shadow whitespace-nowrap opacity-90 [writing-mode:vertical-rl]"
+            >
+              ⛔ {bar.label}
+            </span>
+          </div>
+        ))}
+
+        {/* 6. Daftar 3 Pasang Portal Teleportasi (Total 6 Portal) */}
         {portals.map((portal) => (
           <div
             key={portal.id}
@@ -486,7 +588,7 @@ export default function Stage2Platformer() {
           </div>
         )}
 
-        {/* 6. Karakter Pemain (Astronaut) */}
+        {/* 7. Karakter Pemain (Astronaut) */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -522,7 +624,7 @@ export default function Stage2Platformer() {
           ← Kembali ke Stage 1
         </Link>
         <span className="font-mono text-[11px] text-gray-500">
-          Tip: Kamu bisa menyesuaikan nilai X, Y, Width, dan Height pada array platforms di kode
+          Tip: Kamu bisa menyesuaikan nilai X, Y, Width, dan Height pada array platforms & barriers di kode
         </span>
         <Link href="/" className="hover:text-cyan-300 transition">
           Menu Utama ⌂
