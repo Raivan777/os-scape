@@ -1,1171 +1,624 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  calculateBankerSafety,
-  evaluateResourceRequest,
-  createInitialDiningState,
-  triggerDeadlockScenario,
-  stepDiningSimulation,
-  DiningPhilosophersSnapshot,
-} from "../utils/deadlockAlgorithms";
+import React, { useState } from "react";
 
 interface AlienLifeSupportMiniGameProps {
-  onGameComplete?: () => void;
-  onOpenMaterial?: () => void;
+  onUnlockLock: (lockType: "green" | "blue" | "purple") => void;
+  unlockedLocks: {
+    green: boolean;
+    blue: boolean;
+    purple: boolean;
+  };
+  onClose?: () => void;
   onOpenQuiz?: () => void;
 }
 
-// Preset Misi Cerita untuk Alien Life-Support Banker
-interface MissionScenario {
-  id: number;
-  title: string;
-  difficulty: "EASY" | "MEDIUM" | "HARD";
-  story: string;
-  resourceNames: string[];
-  processNames: string[];
-  available: number[];
-  allocation: number[][];
-  max: number[][];
-  incomingRequest: {
-    processIndex: number;
-    request: number[];
-    isSafeToGrant: boolean;
-    explanation: string;
-  };
-}
-
-const MISSIONS: MissionScenario[] = [
-  {
-    id: 1,
-    title: "Misi 1: Krisis Oksigen Pod Sektor Kiri",
-    difficulty: "EASY",
-    story:
-      "Kapal OMNI mengalami penurunan tekanan pada dua sektor utama. Alokasikan tabung O2 dan H2O secara bijak agar modul pod dapat beroperasi tanpa membekukan sirkulasi penopang hidup.",
-    resourceNames: ["O2", "H2O"],
-    processNames: ["Pod P0 (Cryo)", "Pod P1 (Habitat)", "Pod P2 (Med-Bay)"],
-    available: [3, 2],
-    allocation: [
-      [1, 0],
-      [1, 1],
-      [1, 1],
-    ],
-    max: [
-      [3, 2],
-      [2, 2],
-      [2, 2],
-    ],
-    incomingRequest: {
-      processIndex: 1,
-      request: [1, 0],
-      isSafeToGrant: true,
-      explanation:
-        "Aman! Jika Pod P1 dialokasikan [1 O2, 0 H2O], Need P1 menjadi [0, 1] dan Available menjadi [2, 2]. Pod P1 dapat langsung menyelesaikan tugasnya dan mengembalikan seluruh sumber daya!",
-    },
-  },
-  {
-    id: 2,
-    title: "Misi 2: Jebakan Sumber Daya Reaktor Plasma",
-    difficulty: "MEDIUM",
-    story:
-      "Tiga jenis tabung (O2, H2O, Plasma) diatur oleh Life-Support Core. Sebuah permintaan mendesak datang dari modul Bio-Shield. Hati-hati, menyetujui permintaan ini dapat menjerumuskan kapal ke dalam Unsafe State!",
-    resourceNames: ["O2", "H2O", "PLS"],
-    processNames: ["P0 (Cryo)", "P1 (Bio-Shield)", "P2 (Hydroponics)", "P3 (Core Nav)"],
-    available: [2, 1, 1],
-    allocation: [
-      [2, 0, 1],
-      [1, 1, 0],
-      [1, 1, 1],
-      [0, 0, 2],
-    ],
-    max: [
-      [4, 2, 2],
-      [2, 2, 2],
-      [3, 1, 1],
-      [1, 2, 2],
-    ],
-    incomingRequest: {
-      processIndex: 0,
-      request: [1, 0, 1],
-      isSafeToGrant: false,
-      explanation:
-        "BAHAYA! Jika permintaan P0 disetujui, sisa Available menjadi [1, 1, 0]. Tidak ada satu pun proses yang kebutuhan sisa (Need)-nya dapat dipenuhi dengan sisa sumber daya tersebut. Sistem jatuh ke UNSAFE STATE (Deadlock)!",
-    },
-  },
-  {
-    id: 3,
-    title: "Misi 3: OMNI Void Lockdown Protocol",
-    difficulty: "HARD",
-    story:
-      "Protokol darurat tingkat tinggi: 5 modul kapal saling bersaing memperebutkan tabung penopang hidup kritis. Sebagai Kepala Banker, kamu harus menganalisis apakah alokasi cadangan warp akan melumpuhkan seluruh kapal.",
-    resourceNames: ["O2", "H2O", "PLS"],
-    processNames: [
-      "P0 (Chamber A)",
-      "P1 (Chamber B)",
-      "P2 (Chamber C)",
-      "P3 (Chamber D)",
-      "P4 (Chamber E)",
-    ],
-    available: [3, 3, 2],
-    allocation: [
-      [0, 1, 0],
-      [2, 0, 0],
-      [3, 0, 2],
-      [2, 1, 1],
-      [0, 0, 2],
-    ],
-    max: [
-      [7, 5, 3],
-      [3, 2, 2],
-      [9, 0, 2],
-      [2, 2, 2],
-      [4, 3, 3],
-    ],
-    incomingRequest: {
-      processIndex: 1,
-      request: [1, 0, 2],
-      isSafeToGrant: true,
-      explanation:
-        "AMAN! Meskipun alokasi tampak ketat, setelah P1 diberi [1, 0, 2], sistem masih memiliki Safe Sequence: < P1 ➔ P3 ➔ P4 ➔ P0 ➔ P2 >. Semua proses dapat selesai tanpa macet!",
-    },
-  },
-];
-
 export default function AlienLifeSupportMiniGame({
-  onGameComplete,
-  onOpenMaterial,
+  onUnlockLock,
+  unlockedLocks,
+  onClose,
   onOpenQuiz,
 }: AlienLifeSupportMiniGameProps) {
-  // Mode Utama: "game" (Permainan Misi Banker) atau "lab" (Laboratorium Eksperimen 3 Algoritma)
-  const [activeMainTab, setActiveMainTab] = useState<"game" | "lab">("game");
+  const [activeLockTab, setActiveLockTab] = useState<"green" | "blue" | "purple">("green");
 
-  // ─────────────────────────────────────────────────────────────
-  // STATE PERMAINAN MISI BANKER
-  // ─────────────────────────────────────────────────────────────
-  const [currentMissionIdx, setCurrentMissionIdx] = useState<number>(0);
-  const currentMission = MISSIONS[currentMissionIdx];
+  // State Gembok Hijau (Safety Check)
+  const [selectedSequence, setSelectedSequence] = useState<string[]>([]);
+  const [greenFeedback, setGreenFeedback] = useState<{ success: boolean; msg: string } | null>(null);
+  const [showGreenHint, setShowGreenHint] = useState(false);
 
-  const [availableTanks, setAvailableTanks] = useState<number[]>(currentMission.available);
-  const [allocationMatrix, setAllocationMatrix] = useState<number[][]>(currentMission.allocation);
-  const [maxMatrix, setMaxMatrix] = useState<number[][]>(currentMission.max);
+  // State Gembok Biru (Resource-Request)
+  const [selectedBlueDecision, setSelectedBlueDecision] = useState<"GRANT" | "WAIT" | null>(null);
+  const [blueFeedback, setBlueFeedback] = useState<{ success: boolean; msg: string } | null>(null);
+  const [showBlueHint, setShowBlueHint] = useState(false);
 
-  const [integrity, setIntegrity] = useState<number>(100);
-  const [score, setScore] = useState<number>(0);
-  const [decisionFeedback, setDecisionFeedback] = useState<{
-    correct: boolean;
-    title: string;
-    message: string;
-    isDeadlock: boolean;
-  } | null>(null);
-  const [hasEvaluatedSafety, setHasEvaluatedSafety] = useState<boolean>(false);
+  // State Gembok Ungu (Deadlock Detection)
+  const [hasTappedCircle, setHasTappedCircle] = useState(false);
+  const [selectedFork, setSelectedFork] = useState<number | null>(null);
+  const [purpleFeedback, setPurpleFeedback] = useState<{ success: boolean; msg: string } | null>(null);
+  const [showPurpleHint, setShowPurpleHint] = useState(false);
 
-  // Sync state ketika misi berganti
-  useEffect(() => {
-    setAvailableTanks([...currentMission.available]);
-    setAllocationMatrix(currentMission.allocation.map((r) => [...r]));
-    setMaxMatrix(currentMission.max.map((r) => [...r]));
-    setDecisionFeedback(null);
-    setHasEvaluatedSafety(false);
-  }, [currentMissionIdx]);
-
-  // Hitung Need Matrix saat ini
-  const needMatrix = useMemo(() => {
-    return allocationMatrix.map((row, i) =>
-      row.map((val, j) => Math.max(0, maxMatrix[i][j] - val))
-    );
-  }, [allocationMatrix, maxMatrix]);
-
-  // Evaluasi Banker untuk request misi saat ini
-  const missionEvaluation = useMemo(() => {
-    const req = currentMission.incomingRequest;
-    return evaluateResourceRequest(
-      allocationMatrix,
-      maxMatrix,
-      availableTanks,
-      req.processIndex,
-      req.request,
-      currentMission.processNames,
-      currentMission.resourceNames
-    );
-  }, [allocationMatrix, maxMatrix, availableTanks, currentMission]);
-
-  // Handler Keputusan Pemain: GRANT (Setujui)
-  const handleGrantDecision = () => {
-    const req = currentMission.incomingRequest;
-    if (req.isSafeToGrant) {
-      setScore((s) => s + 100);
-      setDecisionFeedback({
-        correct: true,
-        title: "KEPUTUSAN TEPAT // ALOKASI DISAHKAN",
-        message: `Bagus sekali! ${req.explanation} Modul berhasil menyelesaikan misinya dan mengembalikan seluruh sumber daya!`,
-        isDeadlock: false,
-      });
-
-      const newAvail = [...availableTanks];
-      for (let j = 0; j < currentMission.resourceNames.length; j++) {
-        newAvail[j] += allocationMatrix[req.processIndex][j];
+  // 1. Logika Gembok Hijau (Safety Check)
+  const handlePickAlien = (alien: string) => {
+    if (unlockedLocks.green) return;
+    if (selectedSequence.includes(alien)) {
+      setSelectedSequence(selectedSequence.filter((a) => a !== alien));
+      setGreenFeedback(null);
+    } else {
+      if (selectedSequence.length < 3) {
+        setSelectedSequence([...selectedSequence, alien]);
+        setGreenFeedback(null);
       }
-      setAvailableTanks(newAvail);
+    }
+  };
+
+  const handleCheckGreen = () => {
+    if (selectedSequence.length !== 3) {
+      setGreenFeedback({
+        success: false,
+        msg: "Pilih urutan ketiga alien (A, B, C) secara lengkap terlebih dahulu sebelum memeriksa jawaban.",
+      });
+      return;
+    }
+
+    const seqStr = selectedSequence.join(" → ");
+    if (seqStr === "A → C → B") {
+      setGreenFeedback({
+        success: true,
+        msg: "Tepat sekali! Urutan A → C → B memungkinkan semua alien selesai: A selesai (tabung bebas jadi 4), C selesai (tabung bebas jadi 5), lalu B selesai (tabung bebas jadi 7). Gembok Hijau Terbuka (+100 poin)!",
+      });
+      onUnlockLock("green");
     } else {
-      setIntegrity((integ) => Math.max(10, integ - 35));
-      setDecisionFeedback({
-        correct: false,
-        title: "ALARM DEADLOCK // SISTEM TERKUNCI!",
-        message: `BAHAYA FATAL! ${req.explanation} Semua proses kini saling menunggu tabung sumber daya. Kapal OMNI mengalami krisis penopang hidup!`,
-        isDeadlock: true,
+      setGreenFeedback({
+        success: false,
+        msg: `Urutan ${seqStr} belum aman. Tabung tersedia saat ini hanya 2, perhatikan sisa kebutuhan masing-masing alien. Jawaban salah tidak mengurangi nyawa, silakan coba lagi!`,
       });
     }
   };
 
-  // Handler Keputusan Pemain: DENY / WAIT (Tolak & Tunda)
-  const handleDenyDecision = () => {
-    const req = currentMission.incomingRequest;
-    if (!req.isSafeToGrant) {
-      setScore((s) => s + 100);
-      setDecisionFeedback({
-        correct: true,
-        title: "KEPUTUSAN BRILIAN // DEADLOCK DIGAGALKAN",
-        message: `Tepat sekali! ${req.explanation} Sebagai Banker yang handal, kamu berhasil menyelamatkan kapal dari jebakan kondisi Unsafe State!`,
-        isDeadlock: false,
+  // 2. Logika Gembok Biru (Resource-Request)
+  const handleCheckBlue = () => {
+    if (!selectedBlueDecision) {
+      setBlueFeedback({
+        success: false,
+        msg: "Pilih salah satu keputusan (GRANT atau WAIT) terlebih dahulu sebelum memeriksa jawaban.",
       });
+      return;
+    }
+
+    if (selectedBlueDecision === "GRANT") {
+      setBlueFeedback({
+        success: true,
+        msg: "Tepat sekali! Jawaban adalah GRANT (Setujui). Jika C diberi 2 tabung, kebutuhan C terpenuhi seluruhnya sehingga C langsung selesai dan melepaskan 3 tabung. Sisa tabung (3) cukup untuk menyelesaikan A dan B. Sistem tetap berada dalam Safe State! Gembok Biru Terbuka (+100 poin)!",
+      });
+      onUnlockLock("blue");
     } else {
-      setIntegrity((integ) => Math.max(10, integ - 15));
-      setDecisionFeedback({
-        correct: false,
-        title: "PERINGATAN INEFISIENSI // ALOKASI SEHARUSNYA AMAN",
-        message: `Permintaan ini sebenarnya memiliki Safe Sequence yang valid! Menundanya menyebabkan penurunan efisiensi sistem penopang hidup.`,
-        isDeadlock: false,
+      setBlueFeedback({
+        success: false,
+        msg: "Kurang tepat. Menahan permintaan C tidak diperlukan karena memberikan 2 tabung ke C justru mempercepat C mengembalikan seluruh 3 tabungnya ke sistem. Jawaban salah tidak mengurangi nyawa, silakan coba lagi!",
       });
     }
   };
 
-  const handleNextMission = () => {
-    if (currentMissionIdx < MISSIONS.length - 1) {
-      setCurrentMissionIdx((prev) => prev + 1);
-    } else {
-      if (onGameComplete) onGameComplete();
+  // 3. Logika Gembok Ungu (Deadlock Detection & Dining Philosophers)
+  const handleTapCycle = () => {
+    setHasTappedCircle(true);
+    setPurpleFeedback({
+      success: false,
+      msg: "Lingkaran siklus terdeteksi! Semua 5 filsuf menahan garpu kiri dan menunggu garpu tetangganya (Circular Wait). Sekarang pilih salah satu garpu di bawah, lalu klik 'Periksa Jawaban' untuk melepaskannya!",
+    });
+  };
+
+  const handleCheckPurple = () => {
+    if (!hasTappedCircle) {
+      setPurpleFeedback({
+        success: false,
+        msg: "Tap lingkaran diagram filsuf di atas terlebih dahulu untuk mendeteksi siklus Deadlock.",
+      });
+      return;
     }
+
+    if (selectedFork === null) {
+      setPurpleFeedback({
+        success: false,
+        msg: "Pilih salah satu garpu (F0 s.d F4) yang ingin dilepaskan terlebih dahulu.",
+      });
+      return;
+    }
+
+    setPurpleFeedback({
+      success: true,
+      msg: `Garpu F${selectedFork} berhasil dilepaskan! Rantai Circular Wait terputus secara permanen, proses dapat makan dan melepas garpu berikutnya bergiliran. Gembok Ungu Terbuka (+100 poin)!`,
+    });
+    onUnlockLock("purple");
   };
 
-  // ─────────────────────────────────────────────────────────────
-  // STATE LABORATORIUM 3 ALGORITMA
-  // ─────────────────────────────────────────────────────────────
-  const [labSubTab, setLabSubTab] = useState<"safety" | "request" | "philosophers">("safety");
-
-  // LAB 1: Banker's Safety Check
-  const [labSafetyAlloc] = useState<number[][]>([
-    [0, 1, 0],
-    [2, 0, 0],
-    [3, 0, 2],
-    [2, 1, 1],
-    [0, 0, 2],
-  ]);
-  const [labSafetyMax] = useState<number[][]>([
-    [7, 5, 3],
-    [3, 2, 2],
-    [9, 0, 2],
-    [2, 2, 2],
-    [4, 3, 3],
-  ]);
-  const [labSafetyAvail] = useState<number[]>([3, 3, 2]);
-  const labProcessNames = ["P0", "P1", "P2", "P3", "P4"];
-  const labResourceNames = ["O2", "H2O", "PLS"];
-
-  const safetyResult = useMemo(() => {
-    return calculateBankerSafety(
-      labSafetyAlloc,
-      labSafetyMax,
-      labSafetyAvail,
-      labProcessNames,
-      labResourceNames
-    );
-  }, [labSafetyAlloc, labSafetyMax, labSafetyAvail]);
-
-  // LAB 2: Banker's Resource-Request
-  const [reqProcessIdx, setReqProcessIdx] = useState<number>(1);
-  const [customRequestInput, setCustomRequestInput] = useState<number[]>([1, 0, 2]);
-
-  const customReqResult = useMemo(() => {
-    return evaluateResourceRequest(
-      labSafetyAlloc,
-      labSafetyMax,
-      labSafetyAvail,
-      reqProcessIdx,
-      customRequestInput,
-      labProcessNames,
-      labResourceNames
-    );
-  }, [labSafetyAlloc, labSafetyMax, labSafetyAvail, reqProcessIdx, customRequestInput]);
-
-  // LAB 3: Dining Philosophers Simulator
-  const [diningState, setDiningState] = useState<DiningPhilosophersSnapshot>(() =>
-    createInitialDiningState("NAIVE_DEADLOCK")
-  );
-  const [diningAutoPlay, setDiningAutoPlay] = useState<boolean>(false);
-  const [diningStrategy, setDiningStrategy] = useState<
-    "NAIVE_DEADLOCK" | "ASYMMETRIC" | "RESOURCE_LIMITER" | "TIMEOUT_PREEMPTION"
-  >("NAIVE_DEADLOCK");
-
-  // Timer loop untuk Dining Philosophers autoplay
-  useEffect(() => {
-    if (!diningAutoPlay) return;
-
-    const interval = setInterval(() => {
-      setDiningState((prev) => stepDiningSimulation(prev, diningStrategy));
-    }, 1200);
-
-    return () => clearInterval(interval);
-  }, [diningAutoPlay, diningStrategy]);
-
-  // Switch strategy
-  const handleStrategyChange = (
-    newStrat: "NAIVE_DEADLOCK" | "ASYMMETRIC" | "RESOURCE_LIMITER" | "TIMEOUT_PREEMPTION"
-  ) => {
-    setDiningStrategy(newStrat);
-    setDiningState((prev) => ({
-      ...prev,
-      activeStrategy: newStrat,
-      explanation: `Strategi diubah menjadi: ${newStrat}. Jalankan simulasi atau klik Step untuk mengamati!`,
-    }));
-  };
+  const allUnlocked = unlockedLocks.green && unlockedLocks.blue && unlockedLocks.purple;
 
   return (
-    <div className="relative flex flex-col w-full rounded-2xl border border-purple-500/40 bg-[#090616]/95 text-[#e9e4ff] shadow-[0_0_80px_rgba(168,85,247,0.3)] overflow-hidden">
-      {/* Header Utama Mini-Game */}
-      <div className="flex flex-wrap items-center justify-between border-b border-purple-500/30 px-6 py-4 bg-purple-950/20">
+    <div className="relative flex flex-col w-full rounded-2xl border border-cyan-500/40 bg-[#071324]/95 text-gray-100 shadow-[0_0_60px_rgba(34,211,238,0.25)] overflow-hidden">
+      {/* Header Modal */}
+      <div className="flex flex-wrap items-center justify-between border-b border-cyan-500/20 px-6 py-4 bg-cyan-950/30">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <span className="flex h-3.5 w-3.5 rounded-full bg-cyan-400 animate-ping" />
-            <span className="absolute inset-0 rounded-full bg-cyan-500" />
-          </div>
+          <span className="flex h-3 w-3 rounded-full bg-cyan-400 animate-pulse" />
           <div>
-            <h2 className="text-lg md:text-xl font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300">
-              ALIEN LIFE-SUPPORT BANKER // CORE TERMINAL
+            <h2 className="text-base md:text-lg font-bold tracking-wide text-cyan-200">
+              MINI-GAME: ALIEN LIFE-SUPPORT BANKER
             </h2>
-            <p className="text-xs text-purple-300/80 font-mono">
-              Deadlock Avoidance & Concurrency Simulator
+            <p className="text-xs text-gray-400">
+              Evaluasi alokasi tabung sumber daya agar sistem tetap aman
             </p>
           </div>
         </div>
 
-        {/* Tab Switcher: Permainan Misi vs Lab 3 Algoritma */}
-        <div className="flex items-center gap-2 mt-3 sm:mt-0 font-mono text-xs">
+        {onClose && (
           <button
             type="button"
-            onClick={() => setActiveMainTab("game")}
-            className={`px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${
-              activeMainTab === "game"
-                ? "bg-purple-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.5)] border border-purple-400"
-                : "border border-white/10 text-gray-400 hover:text-white hover:bg-white/5"
-            }`}
+            onClick={onClose}
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10"
           >
-            <span>🎮</span> Misi Banker (Story)
+            ✕ Tutup (ESC)
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveMainTab("lab")}
-            className={`px-4 py-2 rounded-xl font-bold transition flex items-center gap-1.5 ${
-              activeMainTab === "lab"
-                ? "bg-cyan-600 text-white shadow-[0_0_15px_rgba(34,211,238,0.5)] border border-cyan-400"
-                : "border border-white/10 text-gray-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <span>🔬</span> Lab 3 Algoritma
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Konten Utama */}
-      <div className="p-4 md:p-6 space-y-6">
-        {/* ======================================================== */}
-        {/* MODE 1: MISI STORY BANKER                                */}
-        {/* ======================================================== */}
-        {activeMainTab === "game" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Top HUD: Status Integritas, Skor, & Level Misi */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
-              <div className="rounded-xl border border-white/10 bg-black/40 p-3 flex items-center justify-between">
-                <div>
-                  <span className="text-gray-400 block">Level Misi:</span>
-                  <span className="font-bold text-sm text-purple-300">
-                    {currentMission.id} / {MISSIONS.length} - {currentMission.difficulty}
-                  </span>
-                </div>
-                <div className="flex gap-1">
-                  {MISSIONS.map((m, idx) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setCurrentMissionIdx(idx)}
-                      className={`w-7 h-7 rounded-lg font-bold border transition ${
-                        currentMissionIdx === idx
-                          ? "border-purple-400 bg-purple-600 text-white shadow-[0_0_10px_rgba(168,85,247,0.5)]"
-                          : "border-white/10 bg-white/5 text-gray-400 hover:bg-white/10"
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  ))}
-                </div>
-              </div>
+      {/* Ringkasan Data Tabung Oksigen & Alien dengan Custom Scrollbar */}
+      <div className="custom-scrollbar max-h-[82vh] overflow-y-auto p-4 md:p-6 space-y-5">
+        <div className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2 text-xs">
+            <span className="font-bold text-cyan-300 uppercase tracking-wider">
+              📊 Status Penopang Hidup OMNI
+            </span>
+            <div className="flex items-center gap-4 text-xs font-mono">
+              <span>
+                Total Tabung Oksigen: <strong className="text-cyan-400">7 Tabung</strong>
+              </span>
+              <span>
+                Tersedia Sekarang:{" "}
+                <strong className="text-emerald-400 text-sm">2 Tabung</strong>
+              </span>
+            </div>
+          </div>
 
-              <div className="rounded-xl border border-white/10 bg-black/40 p-3 flex items-center justify-between">
-                <div>
-                  <span className="text-gray-400 block">Life-Support Core Integrity:</span>
-                  <span
-                    className={`font-bold text-sm ${
-                      integrity > 60
-                        ? "text-emerald-400"
-                        : integrity > 30
-                        ? "text-amber-400"
-                        : "text-red-400 animate-pulse"
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead>
+                <tr className="border-b border-white/10 text-gray-400">
+                  <th className="py-2 px-3">Alien</th>
+                  <th className="py-2 px-3">Sudah Pegang (Allocation)</th>
+                  <th className="py-2 px-3">Masih Butuh (Need)</th>
+                  <th className="py-2 px-3">Kebutuhan Maks (Max)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                <tr className="hover:bg-white/5">
+                  <td className="py-2 px-3 font-bold text-cyan-300">Alien A</td>
+                  <td className="py-2 px-3">2 Tabung</td>
+                  <td className="py-2 px-3 text-amber-300 font-bold">2 Tabung</td>
+                  <td className="py-2 px-3 text-gray-400">4 Tabung</td>
+                </tr>
+                <tr className="hover:bg-white/5">
+                  <td className="py-2 px-3 font-bold text-purple-300">Alien B</td>
+                  <td className="py-2 px-3">2 Tabung</td>
+                  <td className="py-2 px-3 text-amber-300 font-bold">5 Tabung</td>
+                  <td className="py-2 px-3 text-gray-400">7 Tabung</td>
+                </tr>
+                <tr className="hover:bg-white/5">
+                  <td className="py-2 px-3 font-bold text-emerald-300">Alien C</td>
+                  <td className="py-2 px-3">1 Tabung</td>
+                  <td className="py-2 px-3 text-amber-300 font-bold">2 Tabung</td>
+                  <td className="py-2 px-3 text-gray-400">3 Tabung</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Tab 3 Gembok */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveLockTab("green")}
+            className={`p-3 rounded-xl border text-left transition flex items-center justify-between ${
+              activeLockTab === "green"
+                ? "border-emerald-400 bg-emerald-950/40 text-emerald-200"
+                : "border-white/10 bg-black/30 text-gray-300 hover:bg-white/5"
+            }`}
+          >
+            <div>
+              <span className="text-xs font-bold block">1. Gembok Hijau</span>
+              <span className="text-[11px] text-gray-400">Banker's Safety Check</span>
+            </div>
+            <span className="text-lg">{unlockedLocks.green ? "🔓" : "🔒"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveLockTab("blue")}
+            className={`p-3 rounded-xl border text-left transition flex items-center justify-between ${
+              activeLockTab === "blue"
+                ? "border-cyan-400 bg-cyan-950/40 text-cyan-200"
+                : "border-white/10 bg-black/30 text-gray-300 hover:bg-white/5"
+            }`}
+          >
+            <div>
+              <span className="text-xs font-bold block">2. Gembok Biru</span>
+              <span className="text-[11px] text-gray-400">Resource-Request</span>
+            </div>
+            <span className="text-lg">{unlockedLocks.blue ? "🔓" : "🔒"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveLockTab("purple")}
+            className={`p-3 rounded-xl border text-left transition flex items-center justify-between ${
+              activeLockTab === "purple"
+                ? "border-purple-400 bg-purple-950/40 text-purple-200"
+                : "border-white/10 bg-black/30 text-gray-300 hover:bg-white/5"
+            }`}
+          >
+            <div>
+              <span className="text-xs font-bold block">3. Gembok Ungu</span>
+              <span className="text-[11px] text-gray-400">Deadlock Detection</span>
+            </div>
+            <span className="text-lg">{unlockedLocks.purple ? "🔓" : "🔒"}</span>
+          </button>
+        </div>
+
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* KONTEN GEMBOK 1: HIJAU (SAFETY CHECK)                         */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {activeLockTab === "green" && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm md:text-base font-bold text-emerald-300">
+                  🟢 Gembok Hijau (Safety Check)
+                </h3>
+                <p className="text-xs text-gray-300 mt-1">
+                  Tugas: Urutkan alien supaya semuanya bisa selesai tanpa kekurangan oksigen (Safe
+                  Sequence).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGreenHint(!showGreenHint)}
+                className="text-xs text-emerald-300 hover:underline flex items-center gap-1 font-mono"
+              >
+                <span>💡</span> {showGreenHint ? "Tutup Hint" : "Hint Gratis"}
+              </button>
+            </div>
+
+            {showGreenHint && (
+              <div className="rounded-lg border border-amber-400/30 bg-amber-950/30 p-3 text-xs text-amber-200">
+                Hint: Cek siapa alien yang sisa kebutuhannya (Masih butuh) &le; 2 tabung yang
+                tersedia sekarang. Setelah alien tersebut selesai, tabung yang dipegangnya akan
+                kembali bebas ke sistem!
+              </div>
+            )}
+
+            {/* Display Urutan yang Dipilih */}
+            <div className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-2">
+              <span className="text-xs text-gray-400 block font-mono">Urutan Pilihan Pemain:</span>
+              <div className="flex items-center gap-2 min-h-[36px]">
+                {selectedSequence.length === 0 ? (
+                  <span className="text-xs text-gray-500 italic">
+                    Klik tombol alien di bawah untuk menyusun urutan, lalu klik "Periksa Jawaban"...
+                  </span>
+                ) : (
+                  selectedSequence.map((alien, idx) => (
+                    <React.Fragment key={alien}>
+                      <span className="px-3 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/50 font-bold text-emerald-300 text-sm">
+                        Alien {alien}
+                      </span>
+                      {idx < selectedSequence.length - 1 && (
+                        <span className="text-gray-400 font-bold">➔</span>
+                      )}
+                    </React.Fragment>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Tombol Pilihan Alien & Tombol Periksa Jawaban */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex gap-2">
+                {["A", "B", "C"].map((alien) => (
+                  <button
+                    key={alien}
+                    type="button"
+                    disabled={unlockedLocks.green}
+                    onClick={() => handlePickAlien(alien)}
+                    className={`px-4 py-2 rounded-xl border font-bold text-xs md:text-sm transition ${
+                      selectedSequence.includes(alien)
+                        ? "border-emerald-400 bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                        : "border-white/20 bg-white/5 text-gray-200 hover:bg-white/10"
                     }`}
                   >
-                    {integrity}% {integrity <= 30 ? "⚠️ DEADLOCK RISK" : "STABIL"}
-                  </span>
-                </div>
-                <div className="w-20 h-2.5 rounded-full bg-white/10 overflow-hidden border border-white/10">
-                  <div
-                    className={`h-full transition-all duration-300 ${
-                      integrity > 60 ? "bg-emerald-500" : integrity > 30 ? "bg-amber-500" : "bg-red-500"
-                    }`}
-                    style={{ width: `${integrity}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-black/40 p-3 flex items-center justify-between">
-                <div>
-                  <span className="text-gray-400 block">Skor Evaluasi Banker:</span>
-                  <span className="font-bold text-cyan-300">{score} PTS</span>
-                </div>
-                <span className="text-2xl">🏦</span>
-              </div>
-            </div>
-
-            {/* Narasi Cerita Misi */}
-            <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-4">
-              <div className="flex items-center gap-2 text-sm font-bold text-purple-300 mb-1">
-                <span>🛸</span>
-                <h3>{currentMission.title}</h3>
-              </div>
-              <p className="text-xs text-gray-300 leading-relaxed">{currentMission.story}</p>
-            </div>
-
-            {/* TABUNG SUMBER DAYA TERSEDIA (AVAILABLE LIFE-SUPPORT TANKS) */}
-            <div className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>🧪</span> Tabung Sumber Daya Bebas (Available Matrix)
-                </span>
-                <span className="text-[11px] font-mono text-gray-400">
-                  Total Tabung Siap Dialokasikan
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {currentMission.resourceNames.map((rName, idx) => {
-                  const val = availableTanks[idx];
-                  const colorMap: Record<string, { border: string; bg: string; text: string; glow: string }> = {
-                    O2: { border: "border-cyan-400", bg: "bg-cyan-500/20", text: "text-cyan-300", glow: "shadow-[0_0_15px_rgba(6,182,212,0.3)]" },
-                    H2O: { border: "border-emerald-400", bg: "bg-emerald-500/20", text: "text-emerald-300", glow: "shadow-[0_0_15px_rgba(16,185,129,0.3)]" },
-                    PLS: { border: "border-purple-400", bg: "bg-purple-500/20", text: "text-purple-300", glow: "shadow-[0_0_15px_rgba(168,85,247,0.3)]" },
-                  };
-                  const colors = colorMap[rName] || colorMap["PLS"];
-
-                  return (
-                    <div
-                      key={rName}
-                      className={`rounded-xl border ${colors.border} ${colors.bg} ${colors.glow} p-3 flex items-center justify-between`}
-                    >
-                      <div>
-                        <span className="text-[10px] font-mono text-gray-300 block">Tabung {rName}</span>
-                        <span className={`text-xl font-bold font-mono ${colors.text}`}>{val} Unit</span>
-                      </div>
-                      <div className="w-3.5 h-12 rounded-full border border-white/20 bg-black/40 relative overflow-hidden flex flex-col justify-end">
-                        <div
-                          className={`w-full ${rName === "O2" ? "bg-cyan-400" : rName === "H2O" ? "bg-emerald-400" : "bg-purple-400"} transition-all duration-300`}
-                          style={{ height: `${Math.min(100, val * 25)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* TABEL MATRIKS ALOKASI, MAX, DAN NEED */}
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3 overflow-x-auto">
-              <span className="text-xs font-mono font-bold text-amber-300 uppercase tracking-wider block">
-                📊 Matriks Alokasi & Kebutuhan Pod Kompartemen
-              </span>
-
-              <table className="w-full text-left text-xs font-mono">
-                <thead>
-                  <tr className="border-b border-white/10 text-gray-400">
-                    <th className="py-2 px-2">Kompartemen</th>
-                    <th className="py-2 px-2">Allocation (Sedang Dipakai)</th>
-                    <th className="py-2 px-2">Max (Klaim Maksimum)</th>
-                    <th className="py-2 px-2">Need = Max - Allocation</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {currentMission.processNames.map((pName, i) => {
-                    const isTarget = i === currentMission.incomingRequest.processIndex;
-                    return (
-                      <tr
-                        key={pName}
-                        className={`transition ${
-                          isTarget ? "bg-purple-950/40 text-purple-200 font-bold" : "text-gray-300 hover:bg-white/5"
-                        }`}
-                      >
-                        <td className="py-2.5 px-2 flex items-center gap-1.5">
-                          {isTarget && <span className="h-2 w-2 rounded-full bg-pink-400 animate-ping" />}
-                          <span>{pName}</span>
-                        </td>
-                        <td className="py-2.5 px-2">
-                          [{allocationMatrix[i].join(", ")}]
-                        </td>
-                        <td className="py-2.5 px-2">
-                          [{maxMatrix[i].join(", ")}]
-                        </td>
-                        <td className="py-2.5 px-2 text-cyan-300">
-                          [{needMatrix[i].join(", ")}]
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* ALERT GELOMBANG PERMINTAAN (INCOMING ALLOCATION REQUEST) */}
-            <div className="rounded-2xl border-2 border-pink-500/50 bg-gradient-to-r from-[#1c0828] to-[#12092c] p-5 shadow-[0_0_30px_rgba(236,72,153,0.25)] space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-pink-500/20 pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-3 w-3 rounded-full bg-pink-500 animate-bounce" />
-                  <span className="text-xs font-mono font-bold text-pink-400 uppercase tracking-wider">
-                    TRANSMISI PERMINTAAN ALOKASI MASUK // INCOMING REQUEST
-                  </span>
-                </div>
-                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-pink-950 border border-pink-400/30 text-pink-300">
-                  Action Required
-                </span>
-              </div>
-
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm md:text-base font-bold text-white">
-                    {currentMission.processNames[currentMission.incomingRequest.processIndex]} meminta tambahan tabung:
-                  </p>
-                  <div className="flex items-center gap-2 font-mono text-xs">
-                    <span className="text-gray-400">Vektor Permintaan:</span>
-                    <span className="px-3 py-1 rounded-lg bg-black/60 border border-pink-400/40 text-pink-300 font-bold text-sm">
-                      [{currentMission.incomingRequest.request.map((v, idx) => `${v} ${currentMission.resourceNames[idx]}`).join(", ")}]
-                    </span>
-                  </div>
-                </div>
-
-                {/* Tombol Diagnostic Banker Safety Check */}
+                    + Alien {alien}
+                  </button>
+                ))}
                 <button
                   type="button"
-                  onClick={() => setHasEvaluatedSafety(!hasEvaluatedSafety)}
-                  className="px-4 py-2.5 rounded-xl border border-cyan-400/40 bg-cyan-950/40 text-cyan-300 font-mono text-xs font-bold transition hover:bg-cyan-800/40 hover:scale-105 active:scale-95 flex items-center gap-2"
+                  disabled={unlockedLocks.green || selectedSequence.length === 0}
+                  onClick={() => {
+                    setSelectedSequence([]);
+                    setGreenFeedback(null);
+                  }}
+                  className="px-3 py-2 rounded-xl border border-white/10 text-xs text-gray-400 hover:text-white"
                 >
-                  <span>🔬</span> {hasEvaluatedSafety ? "Sembunyikan Diagnosis" : "Jalankan Diagnosis Banker"}
+                  Reset
                 </button>
               </div>
 
-              {/* Panel Diagnosis Real-Time jika diaktifkan */}
-              {hasEvaluatedSafety && (
-                <div className="p-4 rounded-xl border border-cyan-500/30 bg-black/60 text-xs font-mono space-y-2 animate-in fade-in duration-150">
-                  <span className="font-bold text-cyan-300 block mb-1">
-                    🔍 HASIL DIAGNOSIS SEMENTARA BANKER:
+              {!unlockedLocks.green && (
+                <button
+                  type="button"
+                  onClick={handleCheckGreen}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 font-bold text-black text-xs md:text-sm transition shadow-[0_0_15px_rgba(16,185,129,0.4)] flex items-center gap-2"
+                >
+                  🔍 Periksa Jawaban
+                </button>
+              )}
+            </div>
+
+            {/* Feedback Hasil */}
+            {greenFeedback && (
+              <div
+                className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
+                  greenFeedback.success
+                    ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-200"
+                    : "border-amber-500/50 bg-amber-950/40 text-amber-200"
+                }`}
+              >
+                {greenFeedback.msg}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* KONTEN GEMBOK 2: BIRU (RESOURCE-REQUEST)                      */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {activeLockTab === "blue" && (
+          <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm md:text-base font-bold text-cyan-300">
+                  🔵 Gembok Biru (Resource-Request)
+                </h3>
+                <p className="text-xs text-gray-300 mt-1">
+                  Kasus: Alien C meminta 2 tabung oksigen sekarang. Apakah permintaan ini harus
+                  diberikan (GRANT) atau ditolak/ditunda (WAIT)?
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBlueHint(!showBlueHint)}
+                className="text-xs text-cyan-300 hover:underline flex items-center gap-1 font-mono"
+              >
+                <span>💡</span> {showBlueHint ? "Tutup Hint" : "Hint Gratis"}
+              </button>
+            </div>
+
+            {showBlueHint && (
+              <div className="rounded-lg border border-amber-400/30 bg-amber-950/30 p-3 text-xs text-amber-200">
+                Hint: Alien C saat ini sudah memegang 1 tabung dan masih butuh 2 tabung (total
+                maksimal 3). Jika C diberi 2 tabung, apa yang langsung terjadi pada status Alien C?
+                Apakah Alien C bisa langsung menyelesaikan tugasnya dan melepaskan seluruh tabungnya?
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-black/40 p-4 space-y-2 text-xs">
+              <span className="font-bold text-cyan-200 block">Evaluasi Banker:</span>
+              <p className="text-gray-300">
+                • Permintaan Alien C: 2 Tabung Oksigen
+                <br />
+                • Tabung Tersedia Saat Ini: 2 Tabung
+                <br />
+                • Sisa Kebutuhan Alien C: 2 Tabung
+              </p>
+            </div>
+
+            {/* Pilihan Opsi Keputusan */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={unlockedLocks.blue}
+                  onClick={() => {
+                    setSelectedBlueDecision("GRANT");
+                    setBlueFeedback(null);
+                  }}
+                  className={`px-5 py-2.5 rounded-xl border text-xs md:text-sm font-bold transition flex items-center gap-2 ${
+                    selectedBlueDecision === "GRANT"
+                      ? "border-cyan-400 bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+                      : "border-white/20 bg-white/5 hover:bg-white/10 text-gray-300"
+                  }`}
+                >
+                  🟢 GRANT (Setujui Permintaan)
+                </button>
+                <button
+                  type="button"
+                  disabled={unlockedLocks.blue}
+                  onClick={() => {
+                    setSelectedBlueDecision("WAIT");
+                    setBlueFeedback(null);
+                  }}
+                  className={`px-5 py-2.5 rounded-xl border text-xs md:text-sm font-bold transition flex items-center gap-2 ${
+                    selectedBlueDecision === "WAIT"
+                      ? "border-amber-400 bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                      : "border-white/20 bg-white/5 hover:bg-white/10 text-gray-300"
+                  }`}
+                >
+                  🔴 WAIT / DENY (Tolak / Tunda)
+                </button>
+              </div>
+
+              {!unlockedLocks.blue && (
+                <button
+                  type="button"
+                  disabled={!selectedBlueDecision}
+                  onClick={handleCheckBlue}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-bold text-black text-xs md:text-sm transition shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  🔍 Periksa Jawaban
+                </button>
+              )}
+            </div>
+
+            {blueFeedback && (
+              <div
+                className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
+                  blueFeedback.success
+                    ? "border-cyan-500/50 bg-cyan-950/40 text-cyan-200"
+                    : "border-amber-500/50 bg-amber-950/40 text-amber-200"
+                }`}
+              >
+                {blueFeedback.msg}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* KONTEN GEMBOK 3: UNGU (DEADLOCK DETECTION)                    */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {activeLockTab === "purple" && (
+          <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm md:text-base font-bold text-purple-300">
+                  🟣 Gembok Ungu (Deadlock Detection)
+                </h3>
+                <p className="text-xs text-gray-300 mt-1">
+                  Tugas: Tap lingkaran filsuf yang saling menunggu, pilih garpu yang dilepas, lalu
+                  klik "Periksa Jawaban".
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPurpleHint(!showPurpleHint)}
+                className="text-xs text-purple-300 hover:underline flex items-center gap-1 font-mono"
+              >
+                <span>💡</span> {showPurpleHint ? "Tutup Hint" : "Hint Gratis"}
+              </button>
+            </div>
+
+            {showPurpleHint && (
+              <div className="rounded-lg border border-amber-400/30 bg-amber-950/30 p-3 text-xs text-amber-200">
+                Hint: Semua filsuf terkunci karena masing-masing menahan satu garpu dan menunggu
+                garpu tetangganya. Klik diagram lingkaran untuk mendeteksi siklus, lalu klik salah
+                satu tombol garpu untuk melepasnya!
+              </div>
+            )}
+
+            {/* Diagram Meja Makan Bundar 5 Filsuf */}
+            <div className="rounded-xl border border-white/10 bg-black/50 p-4 flex flex-col items-center space-y-4">
+              <div
+                onClick={handleTapCycle}
+                className={`relative w-64 h-64 rounded-full border-2 transition cursor-pointer flex items-center justify-center ${
+                  hasTappedCircle
+                    ? "border-red-400 bg-red-950/30 shadow-[0_0_20px_rgba(248,113,113,0.3)]"
+                    : "border-purple-400/60 bg-purple-950/20 hover:border-purple-300"
+                }`}
+              >
+                <div className="text-center p-3">
+                  <span className="text-2xl block mb-1">
+                    {unlockedLocks.purple ? "✅" : hasTappedCircle ? "🚨" : "🍝"}
                   </span>
-                  <div className="space-y-1 text-gray-300">
-                    <p>
-                      • Kondisi 1 (Request &le; Need):{" "}
-                      {missionEvaluation.detailedSteps[1] || "Terpenuhi."}
-                    </p>
-                    <p>
-                      • Kondisi 2 (Request &le; Available):{" "}
-                      {missionEvaluation.detailedSteps[2] || "Terpenuhi."}
-                    </p>
-                    <p>
-                      • Status Percobaan Banker:{" "}
-                      <span
-                        className={
-                          missionEvaluation.decision === "GRANTED"
-                            ? "text-emerald-400 font-bold"
-                            : "text-red-400 font-bold"
-                        }
+                  <span className="text-[11px] font-bold font-mono text-purple-200">
+                    {unlockedLocks.purple
+                      ? "DEADLOCK TERPECAHKAN!"
+                      : hasTappedCircle
+                      ? "CIRCULAR WAIT TERDETEKSI"
+                      : "TAP LINGKARAN DI SINI"}
+                  </span>
+                  <span className="text-[10px] text-gray-400 block mt-1">
+                    {hasTappedCircle
+                      ? "Pilih salah satu garpu di bawah"
+                      : "Klik untuk mendeteksi deadlock"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Pilihan Garpu yang Ingin Dilepas */}
+              {hasTappedCircle && !unlockedLocks.purple && (
+                <div className="space-y-3 text-center w-full">
+                  <span className="text-xs text-gray-400 font-mono block">
+                    Pilih garpu yang akan dilepas dari siklus:
+                  </span>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {[0, 1, 2, 3, 4].map((fIdx) => (
+                      <button
+                        key={fIdx}
+                        type="button"
+                        onClick={() => {
+                          setSelectedFork(fIdx);
+                          setPurpleFeedback(null);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition ${
+                          selectedFork === fIdx
+                            ? "border-purple-300 bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.5)]"
+                            : "border-purple-400/50 bg-purple-900/40 hover:bg-purple-800 text-purple-200"
+                        }`}
                       >
-                        {missionEvaluation.decision === "GRANTED"
-                          ? "SAFE STATE (Ada Safe Sequence)"
-                          : "UNSAFE STATE (Berpotensi Macet / Deadlock)"}
-                      </span>
-                    </p>
+                        Garpu F{fIdx}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      type="button"
+                      disabled={selectedFork === null}
+                      onClick={handleCheckPurple}
+                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 font-bold text-white text-xs md:text-sm transition shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      🔍 Periksa Jawaban
+                    </button>
                   </div>
                 </div>
               )}
-
-              {/* Tombol Keputusan Banker */}
-              <div className="pt-2 flex flex-wrap gap-4 justify-end">
-                <button
-                  type="button"
-                  onClick={handleGrantDecision}
-                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 font-bold text-white text-xs md:text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] transition hover:scale-105 active:scale-95 flex items-center gap-2"
-                >
-                  <span>🟢</span> SETUJUI ALOKASI (GRANT)
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDenyDecision}
-                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-pink-600 font-bold text-white text-xs md:text-sm shadow-[0_0_20px_rgba(239,68,68,0.4)] transition hover:scale-105 active:scale-95 flex items-center gap-2"
-                >
-                  <span>🔴</span> TOLAK & TUNDA (DENY & WAIT)
-                </button>
-              </div>
             </div>
 
-            {/* POPUP FEEDBACK HASIL KEPUTUSAN */}
-            {decisionFeedback && (
+            {purpleFeedback && (
               <div
-                className={`p-5 rounded-2xl border text-xs md:text-sm animate-in zoom-in-95 duration-200 ${
-                  decisionFeedback.correct
-                    ? "border-emerald-500/50 bg-emerald-950/40 text-emerald-200 shadow-[0_0_30px_rgba(16,185,129,0.3)]"
-                    : "border-red-500/50 bg-red-950/40 text-red-200 shadow-[0_0_30px_rgba(239,68,68,0.3)]"
+                className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
+                  purpleFeedback.success
+                    ? "border-purple-500/50 bg-purple-950/40 text-purple-200"
+                    : "border-red-500/50 bg-red-950/40 text-red-200"
                 }`}
               >
-                <div className="flex items-center justify-between font-bold text-base mb-2">
-                  <span className="flex items-center gap-2">
-                    {decisionFeedback.correct ? "✅" : "⚠️"} {decisionFeedback.title}
-                  </span>
-                  <span className="font-mono text-xs">
-                    {decisionFeedback.correct ? "+100 PTS" : "-Integrity"}
-                  </span>
-                </div>
-                <p className="leading-relaxed mb-4">{decisionFeedback.message}</p>
-
-                <div className="flex justify-end gap-3">
-                  {currentMissionIdx < MISSIONS.length - 1 ? (
-                    <button
-                      type="button"
-                      onClick={handleNextMission}
-                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 font-bold text-white text-xs transition hover:scale-105"
-                    >
-                      Misi Berikutnya ➔
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onOpenQuiz) onOpenQuiz();
-                      }}
-                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-white text-xs transition hover:scale-105"
-                    >
-                      Buka Kuis Portal Stage 5 ➔
-                    </button>
-                  )}
-                </div>
+                {purpleFeedback.msg}
               </div>
             )}
           </div>
         )}
 
-        {/* ======================================================== */}
-        {/* MODE 2: LABORATORIUM 3 ALGORITMA DEADLOCK                */}
-        {/* ======================================================== */}
-        {activeMainTab === "lab" && (
-          <div className="space-y-6 animate-in fade-in duration-200">
-            {/* Sub-tab Navigasi Lab */}
-            <div className="flex border-b border-cyan-500/20 bg-black/40 p-1.5 rounded-xl gap-2 font-mono text-xs overflow-x-auto">
-              <button
-                type="button"
-                onClick={() => setLabSubTab("safety")}
-                className={`px-4 py-2 rounded-lg font-bold transition whitespace-nowrap ${
-                  labSubTab === "safety"
-                    ? "bg-cyan-600/30 text-cyan-200 border border-cyan-400/50 shadow-[0_0_12px_rgba(34,211,238,0.4)]"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                1. Banker's Safety Check Lab
-              </button>
-              <button
-                type="button"
-                onClick={() => setLabSubTab("request")}
-                className={`px-4 py-2 rounded-lg font-bold transition whitespace-nowrap ${
-                  labSubTab === "request"
-                    ? "bg-purple-600/30 text-purple-200 border border-purple-400/50 shadow-[0_0_12px_rgba(168,85,247,0.4)]"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                2. Banker's Resource-Request Lab
-              </button>
-              <button
-                type="button"
-                onClick={() => setLabSubTab("philosophers")}
-                className={`px-4 py-2 rounded-lg font-bold transition whitespace-nowrap ${
-                  labSubTab === "philosophers"
-                    ? "bg-pink-600/30 text-pink-200 border border-pink-400/50 shadow-[0_0_12px_rgba(236,72,153,0.4)]"
-                    : "text-gray-400 hover:text-white"
-                }`}
-              >
-                3. Dining Philosophers Visualizer
-              </button>
-            </div>
+        {/* Ringkasan Skor & Status Kelulusan */}
+        <div className="rounded-xl border border-white/10 bg-black/40 p-4 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex items-center gap-3">
+            <span>Status 3 Gembok:</span>
+            <span className={unlockedLocks.green ? "text-emerald-400 font-bold" : "text-gray-500"}>
+              {unlockedLocks.green ? "✓ Hijau (100)" : "✕ Hijau"}
+            </span>
+            <span className={unlockedLocks.blue ? "text-cyan-400 font-bold" : "text-gray-500"}>
+              {unlockedLocks.blue ? "✓ Biru (100)" : "✕ Biru"}
+            </span>
+            <span className={unlockedLocks.purple ? "text-purple-400 font-bold" : "text-gray-500"}>
+              {unlockedLocks.purple ? "✓ Ungu (100)" : "✕ Ungu"}
+            </span>
+          </div>
 
-            {/* ─────────────────────────────────────────────────── */}
-            {/* SUB-TAB 1: BANKER'S SAFETY CHECK                    */}
-            {/* ─────────────────────────────────────────────────── */}
-            {labSubTab === "safety" && (
-              <div className="space-y-5">
-                <div className="p-4 rounded-xl border border-cyan-500/30 bg-cyan-950/20 text-xs text-gray-300 space-y-1">
-                  <h4 className="font-bold text-cyan-300 text-sm">
-                    Banker's Safety Check: Pengecekan Kondisi Bebas Deadlock
-                  </h4>
-                  <p>
-                    Algoritma mencari apakah terdapat setidaknya satu <strong>Urutan Aman (Safe Sequence)</strong> di mana seluruh proses dapat memperoleh sumber daya hingga batas maksimum klaim mereka, menyelesaikan tugas, dan mengembalikan sumber daya ke sistem.
-                  </p>
-                </div>
-
-                {/* Status Aman / Tidak Aman */}
-                <div
-                  className={`p-4 rounded-xl border text-sm font-mono flex items-center justify-between ${
-                    safetyResult.isSafe
-                      ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                      : "border-red-500/40 bg-red-950/30 text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
-                  }`}
-                >
-                  <div>
-                    <span className="font-bold text-base block">
-                      {safetyResult.isSafe ? "✅ STATUS: KONDISI AMAN (SAFE STATE)" : "❌ STATUS: KONDISI TIDAK AMAN (UNSAFE STATE)"}
-                    </span>
-                    <p className="text-xs opacity-90 mt-1">{safetyResult.summary}</p>
-                  </div>
-                  {safetyResult.isSafe && (
-                    <div className="text-right hidden sm:block">
-                      <span className="text-xs text-gray-400 block">Safe Sequence:</span>
-                      <span className="font-bold text-cyan-300">
-                        &lt; {safetyResult.safeSequence.map((i) => labProcessNames[i]).join(" ➔ ")} &gt;
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Jejak Langkah demi Langkah (Step Trace) */}
-                <div className="space-y-2">
-                  <span className="text-xs font-mono font-bold text-gray-400 block">
-                    JEJAK LANGKAH KALKULASI ALGORITMA (WORK & NEED TRACE):
-                  </span>
-                  <div className="space-y-2 font-mono text-xs max-h-72 overflow-y-auto">
-                    {safetyResult.steps.map((st) => (
-                      <div
-                        key={st.step}
-                        className="p-3 rounded-lg border border-white/10 bg-black/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                      >
-                        <div className="space-y-1">
-                          <span className="text-cyan-400 font-bold">
-                            Langkah #{st.step} [{st.processName}]:
-                          </span>
-                          <p className="text-gray-300">{st.explanation}</p>
-                        </div>
-                        <div className="text-right text-[11px] text-gray-400 whitespace-nowrap">
-                          Work Baru: [{st.workAfter.join(", ")}]
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ─────────────────────────────────────────────────── */}
-            {/* SUB-TAB 2: BANKER'S RESOURCE-REQUEST                */}
-            {/* ─────────────────────────────────────────────────── */}
-            {labSubTab === "request" && (
-              <div className="space-y-5">
-                <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-950/20 text-xs text-gray-300 space-y-1">
-                  <h4 className="font-bold text-purple-300 text-sm">
-                    Banker's Resource-Request: Evaluasi Alokasi Dinamis
-                  </h4>
-                  <p>
-                    Uji apakah suatu proses boleh langsung menerima alokasi sumber daya. Jika alokasi menghasilkan status tidak aman, proses wajib ditunda (WAIT) dan perubahan dibatalkan (Rollback).
-                  </p>
-                </div>
-
-                {/* Input Kontrol Permintaan */}
-                <div className="p-4 rounded-xl border border-white/10 bg-black/40 space-y-3 font-mono text-xs">
-                  <span className="text-purple-300 font-bold block">
-                    SIMULASIKAN PERMINTAAN SUMBER DAYA:
-                  </span>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <label className="text-gray-400">Pilih Proses:</label>
-                      <select
-                        value={reqProcessIdx}
-                        onChange={(e) => setReqProcessIdx(Number(e.target.value))}
-                        className="px-3 py-1.5 rounded-lg border border-purple-500/40 bg-purple-950/40 text-purple-200"
-                      >
-                        {labProcessNames.map((p, idx) => (
-                          <option key={p} value={idx} className="bg-gray-900">
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <label className="text-gray-400">Request [O2, H2O, PLS]:</label>
-                      {customRequestInput.map((val, idx) => (
-                        <div key={idx} className="flex items-center gap-1">
-                          <span className="text-gray-500 text-[10px]">{labResourceNames[idx]}:</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="9"
-                            value={val}
-                            onChange={(e) => {
-                              const newArr = [...customRequestInput];
-                              newArr[idx] = Math.max(0, Number(e.target.value));
-                              setCustomRequestInput(newArr);
-                            }}
-                            className="w-12 px-2 py-1 rounded bg-black/60 border border-white/20 text-center text-white"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hasil Evaluasi Permintaan */}
-                <div
-                  className={`p-4 rounded-xl border text-xs md:text-sm font-mono space-y-3 ${
-                    customReqResult.decision === "GRANTED"
-                      ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-200 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                      : "border-amber-500/40 bg-amber-950/30 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.25)]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between font-bold">
-                    <span>KEPUTUSAN BANKER: {customReqResult.decision}</span>
-                    <span className="text-xs">
-                      {customReqResult.canImmediatelyAllocate ? "Boleh Dialokasikan" : "Harus Menunggu (WAIT)"}
-                    </span>
-                  </div>
-                  <p>{customReqResult.message}</p>
-
-                  <div className="space-y-1 text-xs border-t border-white/10 pt-2 text-gray-300">
-                    <span className="font-bold text-gray-400 block mb-1">
-                      LOG 4-LANGKAH PENGECEKAN BANKER:
-                    </span>
-                    {customReqResult.detailedSteps.map((step, idx) => (
-                      <p key={idx} className="text-gray-300">
-                        {step}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ─────────────────────────────────────────────────── */}
-            {/* SUB-TAB 3: DINING PHILOSOPHERS VISUALIZER           */}
-            {/* ─────────────────────────────────────────────────── */}
-            {labSubTab === "philosophers" && (
-              <div className="space-y-6">
-                <div className="p-4 rounded-xl border border-pink-500/30 bg-pink-950/20 text-xs text-gray-300 space-y-1">
-                  <h4 className="font-bold text-pink-300 text-sm">
-                    Dining Philosophers: Visualisasi Deadlock & Solusi Konkurensi
-                  </h4>
-                  <p>
-                    5 Filsuf Alien mengelilingi meja makan sumber daya dengan 5 garpu/selang plasma. Jika semua lapar serentak dan mengambil garpu kiri, terjadi <strong>Circular Wait</strong> (Deadlock Total). Amati bagaimana strategi konkurensi memecahkan kebuntuan tersebut!
-                  </p>
-                </div>
-
-                {/* Kontrol Eksperimen Dining Philosophers */}
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border border-white/10 bg-black/40 font-mono text-xs">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDiningState((prev) => triggerDeadlockScenario(prev))
-                      }
-                      className="px-3.5 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-500 font-bold text-white border border-red-400/50 shadow-[0_0_12px_rgba(239,68,68,0.4)] transition"
-                    >
-                      ⚡ Picu Deadlock (All Grab Left)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStrategyChange("ASYMMETRIC")}
-                      className={`px-3 py-1.5 rounded-lg font-bold border transition ${
-                        diningStrategy === "ASYMMETRIC"
-                          ? "bg-emerald-600 text-white border-emerald-400"
-                          : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
-                      }`}
-                    >
-                      🛠️ Solusi Asimetris (Ganjil-Genap)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStrategyChange("RESOURCE_LIMITER")}
-                      className={`px-3 py-1.5 rounded-lg font-bold border transition ${
-                        diningStrategy === "RESOURCE_LIMITER"
-                          ? "bg-cyan-600 text-white border-cyan-400"
-                          : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
-                      }`}
-                    >
-                      🛡️ Solusi Limiter (Max 4)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleStrategyChange("TIMEOUT_PREEMPTION")}
-                      className={`px-3 py-1.5 rounded-lg font-bold border transition ${
-                        diningStrategy === "TIMEOUT_PREEMPTION"
-                          ? "bg-amber-600 text-white border-amber-400"
-                          : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/10"
-                      }`}
-                    >
-                      ⏱️ Solusi Timeout Preemption
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDiningState((prev) => stepDiningSimulation(prev, diningStrategy))
-                      }
-                      className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 font-bold text-white transition"
-                    >
-                      ⏩ 1 Step
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDiningAutoPlay(!diningAutoPlay)}
-                      className={`px-3 py-1.5 rounded-lg font-bold transition ${
-                        diningAutoPlay
-                          ? "bg-amber-600 text-white animate-pulse"
-                          : "bg-purple-600 text-white hover:bg-purple-500"
-                      }`}
-                    >
-                      {diningAutoPlay ? "⏸️ Pause" : "▶️ Auto Play"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDiningAutoPlay(false);
-                        setDiningState(createInitialDiningState(diningStrategy));
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 border border-white/10 transition"
-                    >
-                      🔄 Reset
-                    </button>
-                  </div>
-                </div>
-
-                {/* ARENA VISUAL MEJA DINING PHILOSOPHERS (SVG BUNDAR) */}
-                <div className="relative rounded-2xl border border-white/10 bg-[#070514] p-4 flex flex-col items-center justify-center min-h-[420px] overflow-hidden">
-                  {/* Efek Kunci Deadlock Flashing jika Deadlock */}
-                  {diningState.hasDeadlock && (
-                    <div className="absolute inset-0 bg-red-950/30 border-2 border-red-500/60 rounded-2xl animate-pulse flex items-center justify-center pointer-events-none z-20">
-                      <div className="bg-black/80 px-6 py-3 rounded-xl border border-red-500 text-center">
-                        <span className="text-xl md:text-2xl font-bold text-red-400 block font-mono">
-                          🚨 DEADLOCK TERDETEKSI (CIRCULAR WAIT)!
-                        </span>
-                        <span className="text-xs text-gray-300">
-                          Semua filsuf memegang 1 garpu dan menunggu garpu tetangganya.
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SVG Meja Bundar Filosofis Alien */}
-                  <div className="relative w-full max-w-[500px] aspect-square flex items-center justify-center">
-                    <svg viewBox="0 0 500 500" className="w-full h-full">
-                      {/* Meja Tengah */}
-                      <circle
-                        cx="250"
-                        cy="250"
-                        r="140"
-                        fill="#120c2a"
-                        stroke="#a855f7"
-                        strokeWidth="3"
-                        strokeDasharray="8 6"
-                        className="opacity-70"
-                      />
-                      {/* Mangkuk Energi Plasma di Tengah Meja */}
-                      <circle cx="250" cy="250" r="50" fill="#2d0b4e" stroke="#22d3ee" strokeWidth="2" />
-                      <circle cx="250" cy="250" r="30" fill="#a855f7" className="animate-pulse opacity-80" />
-                      <text
-                        x="250"
-                        y="255"
-                        textAnchor="middle"
-                        fill="#ffffff"
-                        fontSize="11"
-                        fontWeight="bold"
-                        fontFamily="monospace"
-                      >
-                        ENERGY CORE
-                      </text>
-
-                      {/* 5 Garpu Selang Plasma (Chopsticks / Forks) di antara filsuf */}
-                      {[0, 1, 2, 3, 4].map((fIdx) => {
-                        const angleDeg = fIdx * 72 + 36 - 90;
-                        const rad = (angleDeg * Math.PI) / 180;
-                        const fx = 250 + 105 * Math.cos(rad);
-                        const fy = 250 + 105 * Math.sin(rad);
-
-                        const holder = diningState.forkOwners[fIdx];
-                        const isHeld = holder !== null;
-
-                        return (
-                          <g key={`fork-${fIdx}`} className="transition-all duration-300">
-                            <circle
-                              cx={fx}
-                              cy={fy}
-                              r="15"
-                              fill={isHeld ? "#ef4444" : "#10b981"}
-                              stroke="#ffffff"
-                              strokeWidth="1.5"
-                              className={isHeld ? "animate-pulse" : ""}
-                            />
-                            <text
-                              x={fx}
-                              y={fy + 4}
-                              textAnchor="middle"
-                              fill="#ffffff"
-                              fontSize="9"
-                              fontWeight="bold"
-                              fontFamily="monospace"
-                            >
-                              F{fIdx}
-                            </text>
-                            {isHeld && (
-                              <text
-                                x={fx}
-                                y={fy + 25}
-                                textAnchor="middle"
-                                fill="#fca5a5"
-                                fontSize="8"
-                                fontFamily="monospace"
-                              >
-                                Dipegang P{holder}
-                              </text>
-                            )}
-                          </g>
-                        );
-                      })}
-
-                      {/* 5 Filsuf Alien di Sekeliling Meja */}
-                      {diningState.philosophers.map((phil, pIdx) => {
-                        const angleDeg = pIdx * 72 - 90;
-                        const rad = (angleDeg * Math.PI) / 180;
-                        const px = 250 + 190 * Math.cos(rad);
-                        const py = 250 + 190 * Math.sin(rad);
-
-                        const stateColors: Record<
-                          string,
-                          { bg: string; border: string; text: string; label: string }
-                        > = {
-                          THINKING: { bg: "#0d2847", border: "#38bdf8", text: "#38bdf8", label: "THINK" },
-                          HUNGRY: { bg: "#4a3505", border: "#facc15", text: "#facc15", label: "HUNGRY" },
-                          HOLDING_ONE: { bg: "#451a03", border: "#fb923c", text: "#fb923c", label: "HOLD 1" },
-                          EATING: { bg: "#064e3b", border: "#34d399", text: "#34d399", label: "EATING" },
-                          DEADLOCKED: { bg: "#450a0a", border: "#f87171", text: "#f87171", label: "LOCKED" },
-                        };
-
-                        const conf = stateColors[phil.state] || stateColors.THINKING;
-
-                        return (
-                          <g key={`phil-${pIdx}`} className="transition-all duration-300">
-                            <circle
-                              cx={px}
-                              cy={py}
-                              r="32"
-                              fill={conf.bg}
-                              stroke={conf.border}
-                              strokeWidth="2.5"
-                              className={phil.state === "DEADLOCKED" ? "animate-pulse" : ""}
-                            />
-                            <text
-                              x={px}
-                              y={py - 6}
-                              textAnchor="middle"
-                              fill="#ffffff"
-                              fontSize="10"
-                              fontWeight="bold"
-                              fontFamily="monospace"
-                            >
-                              P{pIdx}
-                            </text>
-                            <text
-                              x={px}
-                              y={py + 8}
-                              textAnchor="middle"
-                              fill={conf.text}
-                              fontSize="8"
-                              fontWeight="bold"
-                              fontFamily="monospace"
-                            >
-                              {conf.label}
-                            </text>
-                            <text
-                              x={px}
-                              y={py + 18}
-                              textAnchor="middle"
-                              fill="#9ca3af"
-                              fontSize="7"
-                              fontFamily="monospace"
-                            >
-                              Makan: {phil.eatCount}x
-                            </text>
-                          </g>
-                        );
-                      })}
-                    </svg>
-                  </div>
-
-                  {/* Penjelasan Status Saat Ini */}
-                  <div className="w-full mt-4 p-3 rounded-xl border border-white/10 bg-black/50 text-xs font-mono text-gray-300">
-                    <span className="text-cyan-400 font-bold block mb-1">
-                      KETERANGAN SIMULASI // COFFMAN CONDITIONS CHECK:
-                    </span>
-                    <p className="leading-relaxed">{diningState.explanation}</p>
-                  </div>
-                </div>
-              </div>
+          <div className="flex items-center gap-2">
+            {allUnlocked && (
+              <span className="text-emerald-300 font-bold">
+                🎉 Ketiga Gembok Terbuka! Gerbang Portal Aktif
+              </span>
             )}
           </div>
-        )}
-      </div>
-
-      {/* Footer Modal Info */}
-      <div className="flex flex-wrap items-center justify-between border-t border-purple-500/30 bg-black/40 px-6 py-4 text-xs font-mono">
-        <span className="text-gray-400 hidden sm:inline">
-          Stage 4: Deadlock Avoidance, Detection & Resource Allocation Graph
-        </span>
-        <div className="flex items-center gap-3 ml-auto">
-          {onOpenMaterial && (
-            <button
-              type="button"
-              onClick={onOpenMaterial}
-              className="px-4 py-2 rounded-xl border border-purple-400/40 bg-purple-950/40 text-purple-200 hover:bg-purple-900/50 transition font-bold"
-            >
-              📖 Baca Datalog Materi
-            </button>
-          )}
-          {onOpenQuiz && (
-            <button
-              type="button"
-              onClick={onOpenQuiz}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold transition hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(236,72,153,0.4)]"
-            >
-              🔓 Buka Evaluasi Portal
-            </button>
-          )}
         </div>
       </div>
     </div>
   );
 }
-

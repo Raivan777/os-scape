@@ -1,305 +1,344 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
 
 interface DeadlockQuizModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete?: () => void;
+  onPass: () => void;
+  isAlreadyPassed: boolean;
 }
 
 export default function DeadlockQuizModal({
   isOpen,
   onClose,
-  onComplete,
+  onPass,
+  isAlreadyPassed,
 }: DeadlockQuizModalProps) {
-  const router = useRouter();
-  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [isAnswerChecked, setIsAnswerChecked] = useState(false);
+  const [activeTab, setActiveTab] = useState<"briefing" | "quiz">("briefing");
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
+  const [checked, setChecked] = useState(false);
   const [score, setScore] = useState(0);
-  const [isFinished, setIsFinished] = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [showHint, setShowHint] = useState(false);
 
   if (!isOpen) return null;
 
   const questions = [
     {
-      title: "PROTOKOL DEADLOCK // EVALUASI 1: KONDISI COFFMAN",
+      id: 1,
+      topic: "Konsep Siklus (Resource Allocation Graph)",
       question:
-        "Manakah dari pernyataan berikut yang BENAR mengenai empat kondisi karakteristik Coffman agar Deadlock dapat terbentuk?",
+        "Pada sistem komputer dengan sumber daya berjenis single-instance (hanya ada 1 unit per tipe sumber daya), keberadaan sebuah siklus (cycle) pada Resource Allocation Graph menandakan bahwa...",
       options: [
         {
           id: 0,
-          text: "Deadlock dapat terjadi jika minimal satu saja dari 4 kondisi Coffman terpenuhi.",
+          text: "Sistem berada dalam kondisi aman (Safe State).",
           correct: false,
-          feedback:
-            "Salah! Deadlock mensyaratkan KEEMPAT kondisi Coffman harus terpenuhi secara simultan (serentak). Menggugurkan satu kondisi saja sudah cukup untuk mencegah deadlock.",
         },
         {
           id: 1,
-          text: "Keempat kondisi (Mutual Exclusion, Hold & Wait, No Preemption, Circular Wait) wajib terjadi secara serentak.",
+          text: "Pasti terjadi Deadlock pada proses-proses di dalam siklus.",
           correct: true,
-          feedback:
-            "Tepat sekali! Keempat kondisi Coffman merupakan syarat mutlak yang harus ada secara bersamaan agar kebuntuan (Deadlock) bisa terjadi.",
         },
         {
           id: 2,
-          text: "Circular Wait adalah satu-satunya kondisi yang menyebabkan deadlock tanpa perlu Mutual Exclusion.",
+          text: "Semua proses dapat menyelesaikan tugasnya bergantian.",
           correct: false,
-          feedback:
-            "Salah. Jika sumber daya dapat dibagi bersama (sharable), Circular Wait tidak akan menimbulkan kebuntuan.",
         },
         {
           id: 3,
-          text: "No Preemption berarti sistem operasi bebas merampas sumber daya dari proses yang sedang berjalan kapan saja.",
+          text: "Siklus tersebut otomatis hilang setelah CPU restart.",
           correct: false,
-          feedback:
-            "Terbalik! No Preemption berarti sumber daya TIDAK DAPAT dirampas paksa, hanya bisa dilepaskan secara sukarela oleh proses yang memegangnya.",
         },
       ],
+      hint: "Ingat teorema RAG: jika tiap tipe sumber daya hanya memiliki 1 unit, adanya siklus adalah syarat mutlak dan cukup terjadinya Deadlock.",
+      explanation:
+        "Tepat! Pada sistem single-instance, terbentuknya siklus langsung menandakan terjadinya rantai saling tunggu tertutup (Deadlock).",
     },
     {
-      title: "PROTOKOL DEADLOCK // EVALUASI 2: FORMULA BANKER'S ALGORITHM",
+      id: 2,
+      topic: "Dining Philosophers Problem",
       question:
-        "Pada Algoritma Banker, jika suatu proses P1 memiliki alokasi Allocation = [2, 1, 3] dan klaim batas maksimum Max = [5, 4, 4], berapakah matriks sisa kebutuhan (Need) untuk proses P1?",
+        "Dalam skenario klasik Dining Philosophers, apa yang menyebabkan kelima filsuf membeku (deadlock) secara serentak?",
       options: [
         {
           id: 0,
-          text: "Need = [7, 5, 7]",
+          text: "Makanan di meja habis sebelum ada yang sempat makan.",
           correct: false,
-          feedback: "Salah. Itu adalah hasil penjumlahan Max + Allocation.",
         },
         {
           id: 1,
-          text: "Need = [3, 3, 1]",
+          text: "Setiap filsuf serentak mengambil satu garpu dan menunggu garpu berikutnya yang dipegang tetangganya.",
           correct: true,
-          feedback:
-            "Benar sekali! Rumus dasar Need adalah Need = Max - Allocation. Maka [5-2, 4-1, 4-3] = [3, 3, 1].",
         },
         {
           id: 2,
-          text: "Need = [2, 1, 3]",
+          text: "Semua filsuf menolak untuk makan dan hanya bermeditasi.",
           correct: false,
-          feedback: "Salah. Itu adalah nilai Allocation saat ini.",
         },
         {
           id: 3,
-          text: "Need = [1, 1, 1]",
+          text: "Ada satu filsuf yang mengambil seluruh garpu sekaligus.",
           correct: false,
-          feedback: "Salah perhitungan.",
         },
       ],
+      hint: "Perhatikan saat semua filsuf lapar di saat yang sama dan mengambil garpu kiri masing-masing. Apa yang terjadi pada garpu kanan?",
+      explanation:
+        "Tepat! Saat kelima filsuf memegang 1 garpu dan menunggu garpu kedua dari tetangganya, terbentuk kondisi Hold and Wait serta Circular Wait.",
     },
     {
-      title: "PROTOKOL DEADLOCK // EVALUASI 3: SAFE STATE VS UNSAFE STATE",
+      id: 3,
+      topic: "Circular Wait & Pencegahannya",
       question:
-        "Bagaimanakah hubungan yang tepat antara Safe State, Unsafe State, dan Deadlock dalam konsep penghindaran deadlock (Deadlock Avoidance)?",
+        "Bagaimana cara sistem operasi mencegah atau mematahkan kondisi Circular Wait pada sekumpulan proses yang bersaing?",
       options: [
         {
           id: 0,
-          text: "Setiap kondisi Unsafe State adalah kondisi yang pasti sudah mengalami Deadlock seketika itu juga.",
-          correct: false,
-          feedback:
-            "Kurang tepat. Unsafe State BUKAN berarti pasti sudah deadlock, melainkan kondisi rawan di mana sistem tidak lagi bisa menjamin bebas dari kemungkinan deadlock.",
+          text: "Menetapkan aturan penomoran urutan global pada sumber daya atau menggunakan urutan alokasi asimetris.",
+          correct: true,
         },
         {
           id: 1,
-          text: "Safe State menjamin sistem bebas dari deadlock, sedangkan Unsafe State berpotensi memicu deadlock jika permintaan proses melebihi kapasitas.",
-          correct: true,
-          feedback:
-            "Tepat sekali! Safe State menjamin adanya minimal satu Safe Sequence urutan eksekusi aman. Unsafe State adalah zona bahaya di mana deadlock dapat terjadi.",
+          text: "Membiarkan semua proses menunggu tanpa batasan waktu.",
+          correct: false,
         },
         {
           id: 2,
-          text: "Sistem operasi modern sengaja membiarkan Safe State berubah menjadi Deadlock untuk menghemat RAM.",
+          text: "Menambah jumlah proses baru ke dalam sistem antrean.",
           correct: false,
-          feedback: "Salah total.",
         },
         {
           id: 3,
-          text: "Algoritma Banker bertujuan mengubah Deadlock menjadi Safe State setelah proses macet.",
+          text: "Menghapus proteksi memori agar semua proses bisa berebut.",
           correct: false,
-          feedback:
-            "Salah. Banker adalah algoritma Penghindaran (Avoidance), yaitu mencegah sistem memasuki kondisi Unsafe sejak awal, bukan pemulihan pasca-deadlock.",
         },
       ],
-    },
-    {
-      title: "PROTOKOL DEADLOCK // EVALUASI 4: RESOURCE-REQUEST EVALUATION",
-      question:
-        "Ketika proses P2 mengajukan Resource-Request, kapankah permintaan tersebut wajib DITANGGUHKAN / DITOLAK SEMENTARA (wajib WAIT) oleh Banker?",
-      options: [
-        {
-          id: 0,
-          text: "Hanya jika jumlah proses yang sedang berjalan berjumlah ganjil.",
-          correct: false,
-          feedback: "Salah. Banker tidak peduli apakah jumlah proses ganjil atau genap.",
-        },
-        {
-          id: 1,
-          text: "Ketika alokasi tentatif menyebabkan sistem berpindah dari Safe State menjadi Unsafe State (tidak ada Safe Sequence tersisa).",
-          correct: true,
-          feedback:
-            "Tepat sekali! Jika uji keselamatan (Safety Check) mendeteksi status tidak aman, alokasi dibatalkan (Rollback) dan proses harus menunggu (WAIT) agar sistem tidak terjebak deadlock.",
-        },
-        {
-          id: 2,
-          text: "Ketika proses memiliki prioritas CPU lebih tinggi dari kernel.",
-          correct: false,
-          feedback: "Salah, prioritas CPU tidak menentukan alokasi Banker.",
-        },
-        {
-          id: 3,
-          text: "Ketika semua proses lain sudah berstatus Finish = true.",
-          correct: false,
-          feedback: "Salah. Jika proses lain sudah selesai, sumber daya justru melimpah.",
-        },
-      ],
-    },
-    {
-      title: "PROTOKOL DEADLOCK // EVALUASI 5: DINING PHILOSOPHERS",
-      question:
-        "Bagaimana strategi Asymmetric Solution (Solusi Asimetris) berhasil memecahkan masalah deadlock pada skenario Dining Philosophers?",
-      options: [
-        {
-          id: 0,
-          text: "Dengan cara membunuh filsuf yang makannya paling lambat.",
-          correct: false,
-          feedback: "Salah. Itu adalah terminasi paksa yang tidak efisien.",
-        },
-        {
-          id: 1,
-          text: "Filsuf bernomor ganjil mengambil garpu kiri dulu lalu kanan, sedangkan filsuf genap mengambil kanan dulu lalu kiri, sehingga memecahkan kondisi Circular Wait.",
-          correct: true,
-          feedback:
-            "Luar biasa, benar sekali! Dengan membedakan urutan pengambilan garpu berdasarkan nomor ganjil-genap, mustahil terbentuk siklus melingkar tertutup (Circular Wait). Minimal satu filsuf selalu berhasil memegang dua garpu!",
-        },
-        {
-          id: 2,
-          text: "Dengan menambahkan 10 garpu baru di atas meja makan.",
-          correct: false,
-          feedback: "Bukan solusi algoritma konkurensi.",
-        },
-        {
-          id: 3,
-          text: "Dengan melarang semua filsuf berpikir (Thinking).",
-          correct: false,
-          feedback: "Salah.",
-        },
-      ],
+      hint: "Jika sumber daya diberi nomor berurutan (misal R1, R2, R3) dan proses hanya boleh meminta sumber daya bernomor lebih tinggi, mungkinkah terbentuk lingkaran saling tunggu?",
+      explanation:
+        "Tepat! Dengan penomoran global atau solusi asimetris (ganjil-genap), rantai siklik tertutup mustahil terbentuk.",
     },
   ];
 
-  const currentQ = questions[currentQuestionIdx];
+  const currentQ = questions[currentIdx];
 
-  const handleSelectOption = (idx: number) => {
-    if (isAnswerChecked) return;
-    setSelectedOption(idx);
+  const handleSelect = (idx: number) => {
+    if (checked) return;
+    setSelectedOpt(idx);
   };
 
-  const handleCheckAnswer = () => {
-    if (selectedOption === null) return;
-    setIsAnswerChecked(true);
-    if (currentQ.options[selectedOption].correct) {
-      setScore((prev) => prev + 1);
+  const handleCheck = () => {
+    if (selectedOpt === null) return;
+    setChecked(true);
+    if (currentQ.options[selectedOpt].correct) {
+      setScore((s) => s + 1);
     }
   };
 
-  const handleNextQuestion = () => {
-    if (currentQuestionIdx < questions.length - 1) {
-      setCurrentQuestionIdx((prev) => prev + 1);
-      setSelectedOption(null);
-      setIsAnswerChecked(false);
+  const handleNext = () => {
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx((prev) => prev + 1);
+      setSelectedOpt(null);
+      setChecked(false);
+      setShowHint(false);
     } else {
-      setIsFinished(true);
-      if (onComplete) onComplete();
+      setFinished(true);
+      const isPass =
+        score + (checked && currentQ.options[selectedOpt ?? 0].correct ? 0 : 0) >= 2;
+      if (isPass || isAlreadyPassed) {
+        onPass();
+      }
     }
   };
 
-  const handleResetQuiz = () => {
-    setCurrentQuestionIdx(0);
-    setSelectedOption(null);
-    setIsAnswerChecked(false);
+  const handleRetry = () => {
+    setCurrentIdx(0);
+    setSelectedOpt(null);
+    setChecked(false);
     setScore(0);
-    setIsFinished(false);
+    setFinished(false);
+    setShowHint(false);
   };
+
+  const passed = score >= 2 || isAlreadyPassed;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 md:p-6 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-purple-500/50 bg-[#0c0820]/95 text-[#e9e4ff] shadow-[0_0_70px_rgba(168,85,247,0.35)]">
-        {/* Header Kuis */}
-        <div className="flex items-center justify-between border-b border-purple-500/30 px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 md:p-6 backdrop-blur-md">
+      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-cyan-400/40 bg-[#071324]/95 text-gray-100 shadow-[0_0_50px_rgba(34,211,238,0.25)]">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-cyan-500/20 px-6 py-4 bg-cyan-950/30">
           <div className="flex items-center gap-3">
-            <span className="flex h-3.5 w-3.5 rounded-full bg-pink-400 animate-ping" />
+            <span className="flex h-3 w-3 rounded-full bg-cyan-400 animate-pulse" />
             <div>
-              <h2 className="text-base md:text-lg font-bold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-purple-300 to-cyan-300">
-                GATEWAY SECURITY PROTOCOL // EVALUASI STAGE 4
+              <h2 className="text-base md:text-lg font-bold tracking-wide text-cyan-200">
+                MODUL // STAGE 4: DEADLOCK &amp; PENANGANANNYA
               </h2>
-              <p className="text-xs text-purple-300/80 font-mono">
-                Sertifikasi Penanganan Deadlock & Kunci Akses Portal Stage 5
-              </p>
+              <p className="text-xs text-gray-400">Briefing Misi &amp; Kuis Evaluasi</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition hover:bg-white/10 hover:text-white"
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/10"
           >
             ✕ Tutup (ESC)
           </button>
         </div>
 
-        {/* Konten Kuis */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {!isFinished ? (
-            <>
-              {/* Progress Bar */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-mono text-purple-300">
-                  <span>
-                    Soal {currentQuestionIdx + 1} dari {questions.length}
-                  </span>
-                  <span>Skor Saat Ini: {score}</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-purple-950/60 overflow-hidden border border-purple-500/20">
-                  <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
-                    style={{
-                      width: `${((currentQuestionIdx + 1) / questions.length) * 100}%`,
-                    }}
-                  />
+        {/* Tab Navigasi Modal */}
+        <div className="flex border-b border-white/10 bg-black/40 px-6 py-2 gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setActiveTab("briefing")}
+            className={`px-4 py-1.5 rounded-lg font-semibold transition ${
+              activeTab === "briefing"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            📋 Briefing Misi
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("quiz")}
+            className={`px-4 py-1.5 rounded-lg font-semibold transition ${
+              activeTab === "quiz"
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            📝 Kuis Protokol {passed ? "(LULUS ✅)" : ""}
+          </button>
+        </div>
+
+        {/* Isi Konten dengan Custom Scrollbar */}
+        <div className="custom-scrollbar flex-1 overflow-y-auto p-6 space-y-4 text-sm leading-relaxed">
+          {activeTab === "briefing" ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4">
+                <h3 className="font-bold text-cyan-300 text-base mb-2">🎯 Misi Stage 4</h3>
+                <div className="space-y-2.5 text-xs md:text-sm text-gray-200">
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center font-bold text-cyan-300 text-xs">
+                      1
+                    </span>
+                    <p>
+                      <strong>Baca briefing:</strong> Berdiri di hologram{" "}
+                      <span className="text-cyan-300 font-mono">“MODUL: STAGE 4”</span> di konsol
+                      meja utama.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center font-bold text-cyan-300 text-xs">
+                      2
+                    </span>
+                    <p>
+                      <strong>Jawab kuis:</strong> Ada 3 soal (konsep siklus, Dining Philosophers,
+                      dan circular wait). Lulus kalau benar minimal 2 dari 3 soal (+100 poin).
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center font-bold text-cyan-300 text-xs">
+                      3
+                    </span>
+                    <p>
+                      <strong>Selesaikan mini-game:</strong> Alien Life-Support Banker dengan 3
+                      gembok (+100 poin per gembok).
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center font-bold text-cyan-300 text-xs">
+                      4
+                    </span>
+                    <p>
+                      <strong>Masuk portal ke Level 5:</strong> Gerbang portal aktif setelah kuis
+                      dan ketiga gembok terselesaikan (+100 poin).
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Soal */}
-              <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-4">
-                <span className="text-[11px] font-mono font-bold text-pink-300 block mb-1">
-                  {currentQ.title}
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2 text-xs text-gray-300">
+                <span className="font-bold text-amber-300 block text-sm">💡 Aturan Penilaian:</span>
+                <p>• Jawaban salah tidak mengurangi nyawa, pemain hanya mengulang.</p>
+                <p>• Hint gratis dan tidak terbatas dapat diakses kapan saja.</p>
+                <p>
+                  • Skor tetap: Kuis 100 poin, tiap gembok 100 poin, dan gerbang portal 100 poin
+                  (Total: 500 poin).
+                </p>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("quiz")}
+                  className="rounded-xl bg-cyan-500 hover:bg-cyan-400 px-5 py-2.5 font-bold text-black text-xs md:text-sm transition shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+                >
+                  Mulai Jawab Kuis ➔
+                </button>
+              </div>
+            </div>
+          ) : !finished ? (
+            <div className="space-y-4">
+              {/* Progress Bar Kuis */}
+              <div className="flex items-center justify-between text-xs text-gray-400 font-mono">
+                <span>
+                  Soal {currentIdx + 1} dari {questions.length} • {currentQ.topic}
                 </span>
+                <span>Skor Benar: {score}</span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-gray-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-400 to-purple-500 transition-all duration-300"
+                  style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}
+                />
+              </div>
+
+              {/* Teks Pertanyaan */}
+              <div className="rounded-xl border border-white/10 bg-black/40 p-4">
                 <p className="text-sm md:text-base font-semibold text-white leading-snug">
                   {currentQ.question}
                 </p>
               </div>
 
-              {/* Opsi Jawaban */}
-              <div className="space-y-2.5">
+              {/* Tombol Hint Gratis */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowHint(!showHint)}
+                  className="text-xs text-cyan-300 hover:underline flex items-center gap-1 font-mono"
+                >
+                  <span>💡</span> {showHint ? "Sembunyikan Hint" : "Buka Hint Gratis (Tanpa Penalti)"}
+                </button>
+                <span className="text-[11px] text-gray-500">
+                  {selectedOpt === null ? "Pilih satu opsi di bawah" : "Klik 'Periksa Jawaban'"}
+                </span>
+              </div>
+
+              {showHint && (
+                <div className="rounded-lg border border-amber-400/30 bg-amber-950/20 p-3 text-xs text-amber-200">
+                  {currentQ.hint}
+                </div>
+              )}
+
+              {/* Pilihan Opsi */}
+              <div className="space-y-2">
                 {currentQ.options.map((opt) => {
                   let optStyle =
-                    "border-white/10 bg-black/40 hover:bg-purple-950/40 hover:border-purple-500/40 text-gray-300";
+                    "border-white/10 bg-black/30 hover:bg-cyan-950/30 hover:border-cyan-500/40 text-gray-300";
 
-                  if (selectedOption === opt.id) {
+                  if (selectedOpt === opt.id) {
                     optStyle =
-                      "border-purple-400 bg-purple-900/40 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.3)]";
+                      "border-cyan-400 bg-cyan-950/60 text-cyan-200 shadow-[0_0_12px_rgba(6,182,212,0.3)]";
                   }
 
-                  if (isAnswerChecked) {
+                  if (checked) {
                     if (opt.correct) {
                       optStyle =
-                        "border-emerald-400 bg-emerald-950/50 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.3)]";
-                    } else if (selectedOption === opt.id && !opt.correct) {
-                      optStyle =
-                        "border-red-400 bg-red-950/50 text-red-200 shadow-[0_0_15px_rgba(239,68,68,0.3)]";
+                        "border-emerald-400 bg-emerald-950/50 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.3)]";
+                    } else if (selectedOpt === opt.id && !opt.correct) {
+                      optStyle = "border-red-400 bg-red-950/50 text-red-200";
                     } else {
                       optStyle = "border-white/5 bg-black/20 text-gray-500 opacity-60";
                     }
@@ -309,11 +348,11 @@ export default function DeadlockQuizModal({
                     <button
                       key={opt.id}
                       type="button"
-                      disabled={isAnswerChecked}
-                      onClick={() => handleSelectOption(opt.id)}
-                      className={`w-full text-left p-3.5 rounded-xl border transition-all text-xs md:text-sm font-medium flex items-start gap-3 ${optStyle}`}
+                      disabled={checked}
+                      onClick={() => handleSelect(opt.id)}
+                      className={`w-full text-left p-3.5 rounded-xl border transition text-xs md:text-sm flex items-start gap-3 ${optStyle}`}
                     >
-                      <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-lg bg-white/5 border border-white/10 font-mono text-xs">
+                      <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-mono text-xs">
                         {String.fromCharCode(65 + opt.id)}
                       </span>
                       <span className="flex-1 mt-0.5">{opt.text}</span>
@@ -322,130 +361,119 @@ export default function DeadlockQuizModal({
                 })}
               </div>
 
-              {/* Feedback Evaluasi */}
-              {isAnswerChecked && selectedOption !== null && (
+              {/* Feedback Jawaban */}
+              {checked && selectedOpt !== null && (
                 <div
-                  className={`p-4 rounded-xl border text-xs md:text-sm animate-in fade-in duration-200 ${
-                    currentQ.options[selectedOption].correct
+                  className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
+                    currentQ.options[selectedOpt].correct
                       ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-200"
                       : "border-red-500/40 bg-red-950/30 text-red-200"
                   }`}
                 >
-                  <div className="font-bold mb-1 flex items-center gap-1.5">
-                    {currentQ.options[selectedOption].correct ? "✅ TEPAT!" : "❌ KURANG TEPAT"}
-                  </div>
-                  <p>{currentQ.options[selectedOption].feedback}</p>
+                  <p className="font-bold mb-1">
+                    {currentQ.options[selectedOpt].correct ? "✅ Benar!" : "❌ Kurang Tepat"}
+                  </p>
+                  <p>
+                    {currentQ.options[selectedOpt].correct
+                      ? currentQ.explanation
+                      : "Jawaban salah tidak mengurangi nyawa. Kamu bisa melanjutkan ke soal berikutnya atau mengulang setelah kuis selesai."}
+                  </p>
                 </div>
               )}
-            </>
+            </div>
           ) : (
-            /* Tampilan Selesai Kuis */
-            <div className="py-8 text-center space-y-5 animate-in zoom-in-95 duration-200">
-              <div className="text-5xl">
-                {score >= 4 ? "🏆🛸" : score >= 3 ? "⚡🔓" : "⚠️🔒"}
-              </div>
-              <div>
-                <h3 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300">
-                  {score >= 4
-                    ? "Evaluasi Penanganan Deadlock Lulus Sempurna!"
-                    : score >= 3
-                    ? "Sistem Aman! Gerbang Terbuka"
-                    : "Kapasitas Banker Belum Optimal"}
-                </h3>
-                <p className="mt-2 text-sm text-gray-300">
-                  Kamu menjawab <span className="font-bold text-pink-300">{score}</span> dari{" "}
-                  <span className="font-bold">{questions.length}</span> soal dengan benar.
-                </p>
-              </div>
+            /* Hasil Kuis */
+            <div className="py-6 text-center space-y-4">
+              <div className="text-4xl">{passed ? "🎉" : "🔄"}</div>
+              <h3 className="text-xl font-bold text-white">
+                {passed ? "Kuis Stage 4 Selesai!" : "Belum Memenuhi Syarat Kelulusan"}
+              </h3>
+              <p className="text-xs md:text-sm text-gray-300">
+                Kamu menjawab <span className="font-bold text-cyan-300">{score}</span> dari{" "}
+                <span className="font-bold">{questions.length}</span> soal dengan benar. Syarat
+                lulus adalah minimal 2 benar.
+              </p>
 
-              <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-950/30 max-w-md mx-auto text-xs text-purple-200 text-left space-y-2 font-mono">
-                {score >= 3 ? (
-                  <>
-                    <p className="font-bold text-emerald-300">
-                      ✅ PROTOKOL KESELAMATAN TERVERIFIKASI:
-                    </p>
-                    <p>
-                      Sistem mengonfirmasi bahwa kamu telah memahami 4 Kondisi Coffman, rumus Banker
-                      (Need = Max - Allocation), mitigasi Safe State, dan pemecahan Circular Wait pada
-                      Dining Philosophers.
-                    </p>
-                    <p className="text-cyan-300">
-                      Gerbang Portal menuju STAGE 5 (The Void Trap / Penjadwalan Disk) kini TELAH DIBUKA!
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-bold text-amber-300">⚠️ AKSES PORTAL DITAHAN:</p>
-                    <p>
-                      Skor minimal untuk membuka portal adalah 3/5. Pelajari kembali materi Banker dan
-                      Dining Philosophers lalu coba ulangi evaluasi.
-                    </p>
-                  </>
-                )}
-              </div>
+              {passed ? (
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/30 p-4 text-xs text-emerald-200 max-w-md mx-auto">
+                  <p className="font-bold text-emerald-300">✅ SKOR KUIS DITERIMA (+100 POIN)</p>
+                  <p className="mt-1">
+                    Pemahamanmu mengenai siklus, Dining Philosophers, dan Circular Wait sudah
+                    terbukti. Silakan lanjut ke mini-game Alien Life-Support Banker!
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-xs text-amber-200 max-w-md mx-auto">
+                  <p className="font-bold text-amber-300">⚠️ SILAKAN ULANGI KUIS</p>
+                  <p className="mt-1">
+                    Tidak ada pengurangan nyawa. Manfaatkan hint gratis untuk menjawab dengan tepat.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Footer Tombol Aksi */}
-        <div className="flex items-center justify-between border-t border-purple-500/30 bg-black/40 px-6 py-4">
-          {!isFinished ? (
+        {/* Footer Tombol Aksi Kuis */}
+        <div className="flex items-center justify-between border-t border-cyan-500/20 bg-black/40 px-6 py-4">
+          {activeTab === "quiz" && !finished && (
             <div className="flex items-center justify-between w-full">
-              <span className="text-xs text-gray-500 font-mono hidden md:inline">
-                Pilih satu jawaban yang paling tepat
+              <span className="text-xs text-gray-400 font-mono hidden sm:inline">
+                {!checked
+                  ? "Pilih jawaban lalu tekan tombol 'Periksa Jawaban'"
+                  : "Jawaban telah diperiksa"}
               </span>
-              <div className="flex gap-3 ml-auto">
-                {!isAnswerChecked ? (
+              <div className="flex gap-2 ml-auto">
+                {!checked ? (
                   <button
                     type="button"
-                    disabled={selectedOption === null}
-                    onClick={handleCheckAnswer}
-                    className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-2 text-xs md:text-sm font-bold text-white shadow-[0_0_15px_rgba(168,85,247,0.4)] transition hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={selectedOpt === null}
+                    onClick={handleCheck}
+                    className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 px-6 py-2.5 text-xs md:text-sm font-bold text-black transition shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Periksa Jawaban ➔
+                    🔍 Periksa Jawaban
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={handleNextQuestion}
-                    className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-xs md:text-sm font-bold text-white shadow-[0_0_15px_rgba(16,185,129,0.4)] transition hover:scale-105 active:scale-95"
+                    onClick={handleNext}
+                    className="rounded-xl bg-emerald-500 hover:bg-emerald-400 px-6 py-2.5 text-xs md:text-sm font-bold text-black transition shadow-[0_0_15px_rgba(16,185,129,0.4)]"
                   >
-                    {currentQuestionIdx < questions.length - 1 ? "Soal Berikutnya ➔" : "Lihat Hasil ➔"}
+                    {currentIdx < questions.length - 1 ? "Soal Berikutnya ➔" : "Lihat Hasil ➔"}
                   </button>
                 )}
               </div>
             </div>
-          ) : (
+          )}
+
+          {activeTab === "quiz" && finished && (
             <div className="flex items-center justify-between w-full">
               <button
                 type="button"
-                onClick={handleResetQuiz}
-                className="rounded-lg border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-gray-300 transition hover:bg-white/10"
+                onClick={handleRetry}
+                className="rounded-xl border border-white/20 px-4 py-2 text-xs text-gray-300 hover:bg-white/10"
               >
-                🔄 Ulangi Evaluasi
+                🔄 Ulangi Kuis
               </button>
-              <div className="flex gap-3">
-                {score >= 3 ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      router.push("/stage/stage5");
-                    }}
-                    className="rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 px-6 py-2 text-xs md:text-sm font-bold text-white shadow-[0_0_20px_rgba(34,211,238,0.5)] transition hover:scale-105 active:scale-95 animate-pulse"
-                  >
-                    Masuk ke Stage 5 ➔
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-2 text-xs md:text-sm font-bold text-white transition hover:scale-105"
-                  >
-                    Tutup & Coba Lagi Nanti
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl bg-cyan-500 hover:bg-cyan-400 px-5 py-2 text-xs md:text-sm font-bold text-black transition shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+              >
+                Selesai &amp; Lanjutkan ➔
+              </button>
+            </div>
+          )}
+
+          {activeTab === "briefing" && (
+            <div className="flex justify-end w-full">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-white/20 px-4 py-2 text-xs text-gray-300 hover:bg-white/10"
+              >
+                Tutup
+              </button>
             </div>
           )}
         </div>
@@ -453,4 +481,3 @@ export default function DeadlockQuizModal({
     </div>
   );
 }
-
