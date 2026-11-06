@@ -34,8 +34,11 @@ export default function Stage1Platformer() {
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
 
-  // ─── STATE PEMICU ──────────────────────────────────────────
-  const [isLaserDoorOpen, setIsLaserDoorOpen] = useState(false);
+  // ─── STATE SISTEM LASER & TOMBOL (4 PASANG) ────────────────
+  const [isLaser1Active, setIsLaser1Active] = useState(true);
+  const [isLaser2Active, setIsLaser2Active] = useState(true);
+  const [isLaser3Active, setIsLaser3Active] = useState(true);
+  const [isLaser4Active, setIsLaser4Active] = useState(true);
 
   // ─── STATE KOTAK KARGO ─────────────────────────────────────
   const [boxX, setBoxX] = useState(460);
@@ -97,6 +100,8 @@ export default function Stage1Platformer() {
   const materialWallLeft = { x: 39, y: 135, w: 25, h: 151 };
   const materialWallRight = { x: 115, y: 135, w: 25, h: 151 };
 
+
+  
   // Platform kecil di depan area cahaya (rak/pijakan di kiri)
   const leftShelfPlatform = { x: 43, y: 257, w: 90, h: 17 };
 
@@ -107,7 +112,7 @@ export default function Stage1Platformer() {
   const leverPlatform = { x: 672, y: 132, w: 134, h: 19 };
 
   // Platform tambahan di atas area kiri (lantai level 2 kiri)
-  const upperLeftPlatform = { x: 215, y: 258, w: 386, h: 18 };
+  const upperLeftPlatform = { x: 215, y: 259, w: 379, h: 18 };
 
   // Platform tambahan di tengah area kiri (lantai level 2 kiri)
   const midLeftPlatform = { x: 651, y: 313, w: 56, h: 16 };
@@ -116,13 +121,24 @@ export default function Stage1Platformer() {
   const lowerLeftPlatform = { x: 693, y: 389, w: 102, h: 18 };
 
   // Dinding kanan atas (panel dinding)
-  const rightWall = { x: 990, y: 0, w: 34, h: 460 };
+  const rightWall = { x: 981, y: -3, w: 39, h: 545 };
 
-  // Pintu laser (penghalang vertikal tengah-bawah)
-  const laserDoor = { x: 500, y: GROUND_Y - 120, w: 16, h: 120 };
-
-  // Tombol lantai (kiri bawah, dekat area spawn)
+  // ─── 4 PASANG LASER & TOMBOL ──────────────────────────────
+  // Pasang 1: Pintu Laser & Tombol Lantai (Tekanan Kotak / Biru)
+  const laserDoor = { x: 652, y: 412, w: 18, h: 120 };
   const floorButton = { x: 150, y: GROUND_Y - 8, w: 50, h: 8 };
+
+  // Pasang 2: Laser & Tombol Kuning (Toggle Karakter)
+  const laser2 = { x: 674, y: 234, w: 16, h: 79 };
+  const button2 = { x: 913, y: 354, w: 42, h: 8 };
+
+  // Pasang 3: Laser & Tombol Hijau (Toggle Karakter)
+  const laser3 = { x: 527, y: 182, w: 16, h: 79 };
+  const button3 = { x: 926, y: 531, w: 42, h: 8 };
+
+  // Pasang 4: Laser & Tombol Ungu (Toggle Karakter)
+  const laser4 = { x: 100, y: 270, w: 16, h: 110 };
+  const button4 = { x: 740, y: 305, w: 42, h: 8 };
 
   // Terminal komputer (di atas upper left platform)
   const terminalObj = { x: 65, y: 200, w: 45, h: 46 };
@@ -135,6 +151,17 @@ export default function Stage1Platformer() {
   const newPlatform2 = { x: 615, y: 186, w: 60, h: 20 };
   const newPlatform3 = { x: 901, y: 133, w: 80, h: 20 };
 
+  // 5 Platform Baru Berwarna Putih (newPlat 1-5, bisa disesuaikan manual)
+  const newPlat1 = { x: 0, y: 0, w: 40, h: 542 };
+  const newPlat2 = { x: 290, y: 276, w: 19, h: 86 };
+  const newPlat3 = { x: 900, y: 361, w: 80, h: 18 };
+  const newPlat4 = { x: 20, y: 394, w: 658, h: 18 };
+  const newPlat5 = { x: 673, y: 173, w: 25, h: 64 };
+
+  // 2 Platform Baru Berwarna Kuning (newp 1-2, solid 4 arah, bisa disesuaikan manual)
+  const newp1 = { x: 515, y: 4, w: 42, h: 184 };
+  const newp2 = { x: 651, y: 312, w: 28, h: 86 };
+
   // Semua platform statis untuk collision
   const allPlatforms = [
     leftShelfPlatform,
@@ -145,6 +172,13 @@ export default function Stage1Platformer() {
     newPlatform1,
     newPlatform2,
     newPlatform3,
+    newPlat1,
+    newPlat2,
+    newPlat3,
+    newPlat4,
+    newPlat5,
+    newp1,
+    newp2,
     { x: policeBox.x, y: policeBox.y, w: policeBox.w, h: 18 }, // pijakan atas kotak polisi
   ];
 
@@ -161,11 +195,21 @@ export default function Stage1Platformer() {
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
   const boxRef = useRef({ x: boxX, y: boxY, vy: boxVelocityY });
-  const laserOpenRef = useRef(isLaserDoorOpen);
+  const laser1ActiveRef = useRef(isLaser1Active);
+  const laser2ActiveRef = useRef(isLaser2Active);
+  const laser3ActiveRef = useRef(isLaser3Active);
+  const laser4ActiveRef = useRef(isLaser4Active);
+
+  const lastBtn2StepRef = useRef(false);
+  const lastBtn3StepRef = useRef(false);
+  const lastBtn4StepRef = useRef(false);
 
   playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
   boxRef.current = { x: boxX, y: boxY, vy: boxVelocityY };
-  laserOpenRef.current = isLaserDoorOpen;
+  laser1ActiveRef.current = isLaser1Active;
+  laser2ActiveRef.current = isLaser2Active;
+  laser3ActiveRef.current = isLaser3Active;
+  laser4ActiveRef.current = isLaser4Active;
 
   // ─── KEYBOARD EVENTS ──────────────────────────────────────
   useEffect(() => {
@@ -179,6 +223,31 @@ export default function Stage1Platformer() {
         }
         if (isNearLever && !showMaterial && !isMiniGameOpen) {
           openSJFGame();
+          return;
+        }
+
+        // Interaksi 'E' untuk Toggle Tombol 2, 3, 4 jika pemain berada dekat tombol
+        const p = playerRef.current;
+        const isNearBtn = (btn: { x: number; y: number; w: number; h: number }) =>
+          Math.abs(p.x + PLAYER_W / 2 - (btn.x + btn.w / 2)) < 45 &&
+          Math.abs(p.y + PLAYER_H / 2 - (btn.y + btn.h / 2)) < 45;
+
+        if (isNearBtn(button2)) {
+          const nextVal = !laser2ActiveRef.current;
+          laser2ActiveRef.current = nextVal;
+          setIsLaser2Active(nextVal);
+          return;
+        }
+        if (isNearBtn(button3)) {
+          const nextVal = !laser3ActiveRef.current;
+          laser3ActiveRef.current = nextVal;
+          setIsLaser3Active(nextVal);
+          return;
+        }
+        if (isNearBtn(button4)) {
+          const nextVal = !laser4ActiveRef.current;
+          laser4ActiveRef.current = nextVal;
+          setIsLaser4Active(nextVal);
           return;
         }
       }
@@ -218,7 +287,6 @@ export default function Stage1Platformer() {
         const p = { ...playerRef.current };
         const b = { ...boxRef.current };
         const keys = keysPressed.current;
-        const laserOpen = laserOpenRef.current;
 
         // 1. GERAKAN HORIZONTAL
         let moveX = 0;
@@ -259,50 +327,74 @@ export default function Stage1Platformer() {
           b.vy = 0;
         }
 
-        // 5. TABRAKAN PLATFORM (pijakan dari atas)
+        // 5. TABRAKAN VERTIKAL PLATFORM (Atas & Bawah)
         let nextPlayerX = p.x + moveX;
 
         for (const plat of allPlatforms) {
-          // Lewati platform kontainer besi & tanjakan tuas karena ditangani secara terpadu oleh Ramp Zone
-          if (
+          // Lewati platform kontainer besi & tanjakan tuas untuk pendaratan atas karena ditangani secara terpadu oleh Ramp Zone
+          const isRampPlat =
             plat === upperLeftPlatform ||
             plat === midLeftPlatform ||
-            plat === lowerLeftPlatform ||
-            plat === newPlatform2
-          ) {
-            continue;
+            plat === newPlatform2 ||
+            plat === newPlat5;
+
+          const horizontallyOver =
+            p.x + PLAYER_W > plat.x + 3 &&
+            p.x < plat.x + plat.w - 3;
+
+          if (!horizontallyOver) continue;
+
+          // A. Pijakan / Mendarat dari ATAS
+          if (!isRampPlat && p.vy >= 0) {
+            const footY = p.y + PLAYER_H;
+            const prevFootY = footY - p.vy;
+            if (footY >= plat.y && prevFootY <= plat.y + 14) {
+              p.y = plat.y - PLAYER_H;
+              p.vy = 0;
+              p.jumping = false;
+            }
           }
 
-          const isOverPlatform =
-            p.x + PLAYER_W > plat.x &&
-            p.x < plat.x + plat.w &&
-            p.y + PLAYER_H >= plat.y &&
-            p.y + PLAYER_H - p.vy <= plat.y + 14;
-
-          if (isOverPlatform && p.vy >= 0) {
-            p.y = plat.y - PLAYER_H;
-            p.vy = 0;
-            p.jumping = false;
+          // B. Membentur dari BAWAH (Langit-langit Platform)
+          // Platform lereng/ramp atau pijakan tuas tidak membentur dari bawah
+          if (
+            p.vy < 0 &&
+            plat !== lowerLeftPlatform &&
+            plat !== upperLeftPlatform &&
+            plat !== newPlatform2 &&
+            plat !== leverPlatform &&
+            plat !== newPlat5
+          ) {
+            const headY = p.y;
+            const prevHeadY = headY - p.vy;
+            const platBottom = plat.y + plat.h;
+            if (headY <= platBottom && prevHeadY >= platBottom - 14) {
+              p.y = platBottom;
+              p.vy = 0;
+            }
           }
         }
 
         // ─── DOUBLE RAMP ZONE & PIJAKAN KONTAINER BESI ─────────────
         // Menggunakan titik tumpu kaki karakter (charFootX) agar lereng presisi dengan batas visual
-        // 1. Pijakan Atas (Datar):         charFootX <= 601          (top: 258)
-        // 2. Ramp Zone 2 (Tengah ke Atas): charFootX: 601 s.d 651    (lerp 258 ke 313)
+        // 1. Pijakan Atas (Datar):         charFootX <= 601          (top: upperLeftPlatform.y = 265)
+        // 2. Ramp Zone 2 (Tengah ke Atas): charFootX: 601 s.d 651    (lerp upperLeftPlatform.y ke 313)
         // 3. Pijakan Tengah (Datar):       charFootX: 651 s.d 707    (top: 313)
         // 4. Ramp Zone 1 (Bawah ke Tengah): charFootX: 707 s.d 785   (lerp 313 ke 389)
         // 5. Pijakan Bawah (Datar):        charFootX: 785 s.d 800    (top: 389)
         let containerGroundY: number | null = null;
         const charFootX = nextPlayerX + PLAYER_W * 0.5;
 
-        if (charFootX >= 215 && charFootX <= 601) {
-          // Pijakan Atas (Datar)
-          containerGroundY = 258;
-        } else if (charFootX > 601 && charFootX < 651) {
-          // Ramp Zone 2 (Dari Tengah ke Atas: lerp 258px ke 313px)
-          const t2 = (charFootX - 601) / (651 - 601);
-          containerGroundY = 258 + t2 * (313 - 258);
+        const upperPlatRightX = upperLeftPlatform.x + upperLeftPlatform.w; // 601
+        const upperPlatY = upperLeftPlatform.y; // 265
+
+        if (charFootX >= upperLeftPlatform.x && charFootX <= upperPlatRightX) {
+          // Pijakan Atas (Datar) pas dengan permukaan UPPER LEFT PLATFORM
+          containerGroundY = upperPlatY;
+        } else if (charFootX > upperPlatRightX && charFootX < 651) {
+          // Ramp Zone 2 (Dari Tengah ke Atas: lerp batas kanan UPPER LEFT PLATFORM ke 313px)
+          const t2 = (charFootX - upperPlatRightX) / (651 - upperPlatRightX);
+          containerGroundY = upperPlatY + t2 * (313 - upperPlatY);
         } else if (charFootX >= 651 && charFootX <= 707) {
           // Pijakan Tengah (Datar)
           containerGroundY = 313;
@@ -322,14 +414,14 @@ export default function Stage1Platformer() {
           const prevFootY = footY - p.vy;
 
           if (!p.jumping) {
-            // Berjalan menanjak/menurun mulus (hanya jika kaki memang menempel di permukaan kontainer)
-            if (Math.abs(footY - containerGroundY) <= 14) {
+            // Berjalan menanjak/menurun mulus (toleransi 24px agar menyerap kemiringan lereng tanpa terlepas)
+            if (Math.abs(footY - containerGroundY) <= 24) {
               p.y = containerGroundY - PLAYER_H;
               p.vy = 0;
             }
           } else if (p.vy >= 0) {
             // Mendarat saat jatuh dari lompatan ke kontainer
-            if (footY >= containerGroundY && prevFootY <= containerGroundY + 14) {
+            if (footY >= containerGroundY && prevFootY <= containerGroundY + Math.max(16, p.vy + 4)) {
               p.y = containerGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
@@ -358,14 +450,14 @@ export default function Stage1Platformer() {
           const prevFootY = footY - p.vy;
 
           if (!p.jumping) {
-            // Berjalan menanjak/menurun mulus tanpa melompat
-            if (Math.abs(footY - leverRampGroundY) <= 16) {
+            // Berjalan menanjak/menurun mulus tanpa melompat (toleransi 26px untuk menyerap sudut lereng curam)
+            if (Math.abs(footY - leverRampGroundY) <= 26) {
               p.y = leverRampGroundY - PLAYER_H;
               p.vy = 0;
             }
           } else if (p.vy >= 0) {
             // Mendarat saat jatuh dari lompatan ke tanjakan
-            if (footY >= leverRampGroundY && prevFootY <= leverRampGroundY + 16) {
+            if (footY >= leverRampGroundY && prevFootY <= leverRampGroundY + Math.max(16, p.vy + 4)) {
               p.y = leverRampGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
@@ -374,7 +466,7 @@ export default function Stage1Platformer() {
         }
 
         
-        // 6. TABRAKAN DINDING
+        // 6. TABRAKAN HORIZONTAL (Dinding Statis & Sisi Kiri/Kanan Platform)
         for (const wall of allWalls) {
           const inYRange = p.y + PLAYER_H > wall.y && p.y < wall.y + wall.h;
           if (inYRange) {
@@ -389,21 +481,87 @@ export default function Stage1Platformer() {
           }
         }
 
-        // 7. PINTU LASER (dinding penghalang)
-        if (!laserOpen) {
-          const inLaserYRange = p.y + PLAYER_H > laserDoor.y && p.y < laserDoor.y + laserDoor.h;
+        // Tabrakan sisi kiri & kanan platform (solid horizontal)
+        for (const plat of allPlatforms) {
+          // Lewati platform kontainer lereng/ramp, leverPlatform, serta newPlatform2 dan newPlat5
+          // agar pergerakan karakter saat menanjak/menurun berjalan mulus tanpa terbentur dinding samping
+          if (
+            plat === upperLeftPlatform ||
+            plat === midLeftPlatform ||
+            plat === lowerLeftPlatform ||
+            plat === newPlatform2 ||
+            plat === leverPlatform ||
+            plat === newPlat5
+          ) {
+            continue;
+          }
+
+          const inYRange = p.y + PLAYER_H > plat.y + 4 && p.y < plat.y + plat.h - 4;
+          if (inYRange) {
+            // Menabrak sisi KIRI platform (bergerak ke kanan)
+            if (p.x + PLAYER_W <= plat.x + 6 && nextPlayerX + PLAYER_W > plat.x) {
+              nextPlayerX = plat.x - PLAYER_W;
+            }
+            // Menabrak sisi KANAN platform (bergerak ke kiri)
+            else if (p.x >= plat.x + plat.w - 6 && nextPlayerX < plat.x + plat.w) {
+              nextPlayerX = plat.x + plat.w;
+            }
+            // Koreksi pencegahan overlap jika berada di dalam hitbox
+            else if (nextPlayerX + PLAYER_W > plat.x && nextPlayerX < plat.x + plat.w) {
+              const toLeft = (nextPlayerX + PLAYER_W) - plat.x;
+              const toRight = (plat.x + plat.w) - nextPlayerX;
+              if (toLeft < toRight) {
+                nextPlayerX = plat.x - PLAYER_W;
+              } else {
+                nextPlayerX = plat.x + plat.w;
+              }
+            }
+          }
+        }
+
+        // 7. TABRAKAN SISTEM LASER (4 PASANG)
+        const allLaserObstacles = [
+          { id: 1, ...laserDoor, active: laser1ActiveRef.current },
+          { id: 2, ...laser2, active: laser2ActiveRef.current },
+          { id: 3, ...laser3, active: laser3ActiveRef.current },
+          { id: 4, ...laser4, active: laser4ActiveRef.current },
+        ];
+
+        for (const laser of allLaserObstacles) {
+          if (!laser.active) continue;
+
+          // A. Barrier Collision (Karakter tidak bisa lewat menembus laser)
+          const inLaserYRange = p.y + PLAYER_H > laser.y && p.y < laser.y + laser.h;
           if (inLaserYRange) {
-            if (p.x + PLAYER_W <= laserDoor.x && nextPlayerX + PLAYER_W > laserDoor.x) {
-              nextPlayerX = laserDoor.x - PLAYER_W;
-            } else if (p.x >= laserDoor.x + laserDoor.w && nextPlayerX < laserDoor.x + laserDoor.w) {
-              nextPlayerX = laserDoor.x + laserDoor.w;
+            if (p.x + PLAYER_W <= laser.x && nextPlayerX + PLAYER_W > laser.x) {
+              nextPlayerX = laser.x - PLAYER_W;
+            } else if (p.x >= laser.x + laser.w && nextPlayerX < laser.x + laser.w) {
+              nextPlayerX = laser.x + laser.w;
             }
           }
 
-          // Kotak juga tidak bisa menembus laser
-          if (b.y + BOX_H > laserDoor.y && b.y < laserDoor.y + laserDoor.h) {
+          // B. Jika menyentuh langsung koordinat laser aktif (mati & kembali ke spawn)
+          const isTouchingActiveLaser =
+            nextPlayerX + PLAYER_W > laser.x + 2 &&
+            nextPlayerX < laser.x + laser.w - 2 &&
+            p.y + PLAYER_H > laser.y + 4 &&
+            p.y < laser.y + laser.h - 4;
+
+          if (isTouchingActiveLaser) {
+            nextPlayerX = 60;
+            p.y = GROUND_Y - PLAYER_H;
+            p.vy = 0;
+            p.jumping = false;
+          }
+
+          // Kotak kargo juga tidak bisa menembus Laser 1
+          if (laser.id === 1 && b.y + BOX_H > laserDoor.y && b.y < laserDoor.y + laserDoor.h) {
             if (b.x < laserDoor.x + laserDoor.w && b.x + BOX_W > laserDoor.x) {
-              b.x = laserDoor.x + laserDoor.w;
+              if (b.x + BOX_W / 2 < laserDoor.x + laserDoor.w / 2) {
+                b.x = laserDoor.x - BOX_W;
+              } else {
+                b.x = laserDoor.x + laserDoor.w;
+              }
             }
           }
         }
@@ -419,16 +577,26 @@ export default function Stage1Platformer() {
           if (moveX > 0) {
             const pushDist = nextPlayerX + PLAYER_W - b.x;
             const newBoxX = b.x + pushDist;
-            if (newBoxX + BOX_W <= GAME_WIDTH - 10) {
+            let maxAllowedBoxX = GAME_WIDTH - BOX_W - 10;
+            // Jika Laser 1 aktif dan kotak berada di sisi kiri laser, batas kanan adalah Laser 1
+            if (laser1ActiveRef.current && b.x + BOX_W <= laserDoor.x + 4) {
+              maxAllowedBoxX = Math.min(maxAllowedBoxX, laserDoor.x - BOX_W);
+            }
+            if (newBoxX <= maxAllowedBoxX) {
               b.x = newBoxX;
               p.x = b.x - PLAYER_W;
             } else {
+              b.x = maxAllowedBoxX;
               p.x = b.x - PLAYER_W;
             }
           } else if (moveX < 0) {
             const pushDist = b.x + BOX_W - nextPlayerX;
             const newBoxX = b.x - pushDist;
-            const minAllowedBoxX = !laserOpen ? laserDoor.x + laserDoor.w : 10;
+            let minAllowedBoxX = 10;
+            // Jika Laser 1 aktif dan kotak berada di sisi kanan laser, batas kiri adalah Laser 1
+            if (laser1ActiveRef.current && b.x >= laserDoor.x + laserDoor.w - 4) {
+              minAllowedBoxX = laserDoor.x + laserDoor.w;
+            }
             if (newBoxX >= minAllowedBoxX) {
               b.x = newBoxX;
               p.x = b.x + BOX_W;
@@ -454,20 +622,50 @@ export default function Stage1Platformer() {
           p.jumping = false;
         }
 
-        // 9. TOMBOL LANTAI (injak = buka laser)
-        const playerSteppedOnButton =
-          p.x + PLAYER_W > floorButton.x &&
-          p.x < floorButton.x + floorButton.w &&
-          p.y + PLAYER_H >= floorButton.y;
-
-        const boxOnButton =
+        // 9. DETEKSI TOMBOL 1 S/D 4
+        // Tombol 1: Tekanan Kotak Kargo (AABB Collision antara Box & Button 1)
+        const isBoxOnBtn1 =
           b.x + BOX_W > floorButton.x &&
           b.x < floorButton.x + floorButton.w &&
-          b.y + BOX_H >= floorButton.y;
+          b.y + BOX_H >= floorButton.y &&
+          b.y <= floorButton.y + floorButton.h + 16;
 
-        if ((playerSteppedOnButton || boxOnButton) && !laserOpen) {
-          setIsLaserDoorOpen(true);
+        const shouldLaser1Active = !isBoxOnBtn1;
+        if (laser1ActiveRef.current !== shouldLaser1Active) {
+          laser1ActiveRef.current = shouldLaser1Active;
+          setIsLaser1Active(shouldLaser1Active);
         }
+
+        // Tombol 2, 3, 4: Toggle Normal oleh Karakter saat menginjak
+        const checkPlayerStepBtn = (btn: { x: number; y: number; w: number; h: number }) =>
+          p.x + PLAYER_W > btn.x &&
+          p.x < btn.x + btn.w &&
+          p.y + PLAYER_H >= btn.y &&
+          p.y + PLAYER_H <= btn.y + btn.h + 12;
+
+        const onBtn2 = checkPlayerStepBtn(button2);
+        if (onBtn2 && !lastBtn2StepRef.current) {
+          const nextVal = !laser2ActiveRef.current;
+          laser2ActiveRef.current = nextVal;
+          setIsLaser2Active(nextVal);
+        }
+        lastBtn2StepRef.current = onBtn2;
+
+        const onBtn3 = checkPlayerStepBtn(button3);
+        if (onBtn3 && !lastBtn3StepRef.current) {
+          const nextVal = !laser3ActiveRef.current;
+          laser3ActiveRef.current = nextVal;
+          setIsLaser3Active(nextVal);
+        }
+        lastBtn3StepRef.current = onBtn3;
+
+        const onBtn4 = checkPlayerStepBtn(button4);
+        if (onBtn4 && !lastBtn4StepRef.current) {
+          const nextVal = !laser4ActiveRef.current;
+          laser4ActiveRef.current = nextVal;
+          setIsLaser4Active(nextVal);
+        }
+        lastBtn4StepRef.current = onBtn4;
 
         // 10. CEK KEDEKATAN TERMINAL
         const distTermX = Math.abs(p.x + PLAYER_W / 2 - (terminalObj.x + terminalObj.w / 2));
@@ -586,15 +784,24 @@ export default function Stage1Platformer() {
             Stage 1 // Kanvas 1024×576 [Debug Hitbox Aktif]
           </span>
         </div>
-        <div className="flex items-center gap-3 text-[11px]">
+        <div className="flex items-center gap-2 text-[10px]">
           <span>
-            <strong className="text-white">A / D</strong>: Jalan • <strong className="text-white">W / Spasi</strong>: Lompat • <strong className="text-white">E</strong>: Interaksi
+            <strong className="text-white">A/D</strong>: Jalan • <strong className="text-white">W/Spasi</strong>: Lompat • <strong className="text-white">E</strong>: Tombol
           </span>
-          <span className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${isLaserDoorOpen ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"}`}>
-            {isLaserDoorOpen ? "LASER: TERBUKA" : "LASER: AKTIF"}
+          <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${!isLaser1Active ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" : "bg-cyan-950/60 text-cyan-400 border border-cyan-400/30 animate-pulse"}`}>
+            L1 (KOTAK): {isLaser1Active ? "ON" : "OFF"}
           </span>
-          <span className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${isPortalActive ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.5)]" : "bg-purple-500/20 text-purple-300 border border-purple-500/40"}`}>
-            {isPortalActive ? "PORTAL: AKTIF 🌀" : "PORTAL: TERKUNCI 🔒"}
+          <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${!isLaser2Active ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/40" : "bg-yellow-950/60 text-yellow-400 border border-yellow-400/30 animate-pulse"}`}>
+            L2 (KNG): {isLaser2Active ? "ON" : "OFF"}
+          </span>
+          <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${!isLaser3Active ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40" : "bg-emerald-950/60 text-emerald-400 border border-emerald-400/30 animate-pulse"}`}>
+            L3 (HJU): {isLaser3Active ? "ON" : "OFF"}
+          </span>
+          <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${!isLaser4Active ? "bg-purple-500/20 text-purple-300 border border-purple-500/40" : "bg-purple-950/60 text-purple-400 border border-purple-400/30 animate-pulse"}`}>
+            L4 (UNG): {isLaser4Active ? "ON" : "OFF"}
+          </span>
+          <span className={`font-mono font-bold px-1.5 py-0.5 rounded ${isPortalActive ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" : "bg-purple-500/20 text-purple-300 border border-purple-500/40"}`}>
+            {isPortalActive ? "PORTAL: ON" : "PORTAL: LOCK"}
           </span>
         </div>
       </div>
@@ -693,6 +900,51 @@ export default function Stage1Platformer() {
             NEW_PLAT_3
           </span>
         </div>
+
+        {/* ─── 5 PLATFORM PUTIH BARU (newPlat 1-5) ───────────── */}
+        {[
+          { plat: newPlat1, name: "newPlat 1" },
+          { plat: newPlat2, name: "newPlat 2" },
+          { plat: newPlat3, name: "newPlat 3" },
+          { plat: newPlat4, name: "newPlat 4" },
+          { plat: newPlat5, name: "newPlat 5" },
+        ].map((item, idx) => (
+          <div
+            key={idx}
+            className="absolute bg-white/40 border-2 border-white pointer-events-none z-10 flex items-center justify-center rounded shadow-[0_0_12px_rgba(255,255,255,0.6)]"
+            style={{
+              left: `${item.plat.x}px`,
+              top: `${item.plat.y}px`,
+              width: `${item.plat.w}px`,
+              height: `${item.plat.h}px`,
+            }}
+          >
+            <span className="text-[8px] font-mono font-bold text-white bg-black/80 px-1 py-0.5 rounded shadow">
+              {item.name}
+            </span>
+          </div>
+        ))}
+
+        {/* ─── 2 PLATFORM KUNING BARU (newp 1-2, SOLID 4 ARAH) ─── */}
+        {[
+          { plat: newp1, name: "newp 1" },
+          { plat: newp2, name: "newp 2" },
+        ].map((item, idx) => (
+          <div
+            key={idx}
+            className="absolute bg-yellow-500/40 border-2 border-yellow-400 pointer-events-none z-10 flex items-center justify-center rounded shadow-[0_0_12px_rgba(234,179,8,0.6)]"
+            style={{
+              left: `${item.plat.x}px`,
+              top: `${item.plat.y}px`,
+              width: `${item.plat.w}px`,
+              height: `${item.plat.h}px`,
+            }}
+          >
+            <span className="text-[8px] font-mono font-bold text-yellow-100 bg-black/80 px-1 py-0.5 rounded shadow">
+              {item.name}
+            </span>
+          </div>
+        ))}
 
         {/* Dinding kiri area materi */}
         <div
@@ -837,12 +1089,12 @@ export default function Stage1Platformer() {
           </span>
         </div>
 
-        {/* ─── TOMBOL LANTAI ──────────────────────────────────── */}
+        {/* ─── TOMBOL 1: TEKANAN KOTAK KARGO (BIRU/CYAN) ────── */}
         <div
           className={`absolute flex items-center justify-center rounded-t border transition-all z-10 ${
-            isLaserDoorOpen
-              ? "bg-yellow-500/80 border-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.9)]"
-              : "bg-yellow-500/50 border-yellow-400 animate-pulse"
+            !isLaser1Active
+              ? "bg-cyan-500/80 border-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.9)]"
+              : "bg-cyan-900/60 border-cyan-400/50 animate-pulse"
           }`}
           style={{
             left: `${floorButton.x}px`,
@@ -852,16 +1104,74 @@ export default function Stage1Platformer() {
           }}
         >
           <span className="text-[7px] font-black text-black uppercase tracking-tighter">
-            {isLaserDoorOpen ? "ON" : "BTN"}
+            {!isLaser1Active ? "OPEN" : "BOX PLT"}
           </span>
         </div>
 
-        {/* ─── PINTU LASER ENERGI BERANIMASI (HIDUP & SCI-FI) ── */}
+        {/* ─── TOMBOL 2: TOGGLE KUNING (YELLOW) ─────────────── */}
+        <div
+          onClick={() => setIsLaser2Active((prev) => !prev)}
+          className={`absolute flex items-center justify-center rounded-t border transition-all z-10 cursor-pointer ${
+            !isLaser2Active
+              ? "bg-yellow-400/80 border-yellow-200 shadow-[0_0_15px_rgba(250,204,21,0.9)]"
+              : "bg-yellow-600/60 border-yellow-400 animate-pulse"
+          }`}
+          style={{
+            left: `${button2.x}px`,
+            top: `${button2.y}px`,
+            width: `${button2.w}px`,
+            height: `${button2.h}px`,
+          }}
+        >
+          <span className="text-[6.5px] font-black text-black uppercase tracking-tighter">
+            {!isLaser2Active ? "OFF 2" : "BTN 2"}
+          </span>
+        </div>
+
+        {/* ─── TOMBOL 3: TOGGLE HIJAU (EMERALD) ─────────────── */}
+        <div
+          onClick={() => setIsLaser3Active((prev) => !prev)}
+          className={`absolute flex items-center justify-center rounded-t border transition-all z-10 cursor-pointer ${
+            !isLaser3Active
+              ? "bg-emerald-400/80 border-emerald-200 shadow-[0_0_15px_rgba(52,211,153,0.9)]"
+              : "bg-emerald-600/60 border-emerald-400 animate-pulse"
+          }`}
+          style={{
+            left: `${button3.x}px`,
+            top: `${button3.y}px`,
+            width: `${button3.w}px`,
+            height: `${button3.h}px`,
+          }}
+        >
+          <span className="text-[6.5px] font-black text-black uppercase tracking-tighter">
+            {!isLaser3Active ? "OFF 3" : "BTN 3"}
+          </span>
+        </div>
+
+        {/* ─── TOMBOL 4: TOGGLE UNGU (PURPLE) ───────────────── */}
+        <div
+          onClick={() => setIsLaser4Active((prev) => !prev)}
+          className={`absolute flex items-center justify-center rounded-t border transition-all z-10 cursor-pointer ${
+            !isLaser4Active
+              ? "bg-purple-400/80 border-purple-200 shadow-[0_0_15px_rgba(192,132,252,0.9)]"
+              : "bg-purple-600/60 border-purple-400 animate-pulse"
+          }`}
+          style={{
+            left: `${button4.x}px`,
+            top: `${button4.y}px`,
+            width: `${button4.w}px`,
+            height: `${button4.h}px`,
+          }}
+        >
+          <span className="text-[6.5px] font-black text-white uppercase tracking-tighter">
+            {!isLaser4Active ? "OFF 4" : "BTN 4"}
+          </span>
+        </div>
+
+        {/* ─── LASER 1: ENERGI BIRU/CYAN (TEKANAN KOTAK) ─────── */}
         <div
           className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
-            isLaserDoorOpen
-              ? "opacity-0 scale-95"
-              : "opacity-100 z-20"
+            !isLaser1Active ? "opacity-0 scale-95" : "opacity-100 z-20"
           }`}
           style={{
             left: `${laserDoor.x}px`,
@@ -870,45 +1180,122 @@ export default function Stage1Platformer() {
             height: `${laserDoor.h}px`,
           }}
         >
-          {/* Emitter Pod Atas */}
           <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-cyan-500 to-slate-900 border border-cyan-300 shadow-[0_0_12px_#22d3ee] flex items-center justify-center z-30">
             <span className="w-2 h-1 rounded-full bg-white animate-ping" />
           </div>
-
-          {/* Kolom Berkas Laser Utama */}
           <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
-            {/* Outer Glow Aura (Bloom besar berdenyut) */}
             <div className="absolute inset-y-0 -inset-x-3 bg-gradient-to-b from-cyan-400 via-blue-500 to-indigo-600 blur-md opacity-80 laser-alive" />
-            
-            {/* Secondary Energetic Aura */}
             <div className="absolute inset-y-0 -inset-x-1.5 bg-gradient-to-b from-blue-400 via-cyan-300 to-indigo-500 blur-sm opacity-90 laser-alive" />
-
-            {/* Laser Beam Outer Body (Gradient menyala biru-cyan-indigo) */}
             <div className="relative w-3 h-full bg-gradient-to-b from-cyan-300 via-blue-500 to-cyan-300 rounded-full shadow-[0_0_20px_#06b6d4,0_0_35px_#3b82f6] laser-alive flex items-center justify-center overflow-hidden">
-              {/* Ultra-hot Core (Garis tipis putih sangat panas di tengah) */}
               <div className="w-1 h-full bg-white shadow-[0_0_8px_#ffffff] rounded-full opacity-95 laser-core-flicker" />
-
-              {/* Berkas Energi Bergerak Vertikal Naik-Turun (Flow/Pulse) */}
               <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
             </div>
-
-            {/* Kilatan Cahaya & Partikel Listrik Sci-Fi */}
             <div className="absolute top-1/5 -left-1.5 w-2 h-2 rounded-full bg-white shadow-[0_0_8px_#ffffff] laser-sparkle-1" />
             <div className="absolute top-2/4 -right-1.5 w-2 h-2 rounded-full bg-cyan-200 shadow-[0_0_8px_#22d3ee] laser-sparkle-2" />
-            <div className="absolute top-3/4 -left-1 w-1.5 h-1.5 rounded-full bg-indigo-200 shadow-[0_0_6px_#818cf8] laser-sparkle-1" />
-
-            {/* Cincin Energi Horizontal (Electric Arc Discharges) */}
-            <div className="absolute top-1/4 w-5 h-0.5 bg-cyan-100 shadow-[0_0_8px_#22d3ee] rounded-full animate-ping" />
-            <div className="absolute top-2/3 w-5 h-0.5 bg-cyan-100 shadow-[0_0_8px_#22d3ee] rounded-full animate-ping" style={{ animationDelay: "0.45s" }} />
-
-            {/* Label Mini Status Pintu */}
             <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-cyan-200 tracking-widest bg-cyan-950/80 border border-cyan-400/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(34,211,238,0.5)]">
-              HIGH VOLTAGE
+              LASER 1 (BOX)
             </span>
           </div>
-
-          {/* Emitter Pod Bawah */}
           <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-cyan-500 to-slate-900 border border-cyan-300 shadow-[0_0_12px_#22d3ee] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+
+        {/* ─── LASER 2: ENERGI KUNING (YELLOW) ────────────────── */}
+        <div
+          className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
+            !isLaser2Active ? "opacity-0 scale-95" : "opacity-100 z-20"
+          }`}
+          style={{
+            left: `${laser2.x}px`,
+            top: `${laser2.y}px`,
+            width: `${laser2.w}px`,
+            height: `${laser2.h}px`,
+          }}
+        >
+          <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-yellow-500 to-slate-900 border border-yellow-300 shadow-[0_0_12px_#facc15] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" />
+          </div>
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
+            <div className="absolute inset-y-0 -inset-x-3 bg-gradient-to-b from-yellow-400 via-amber-500 to-orange-600 blur-md opacity-80 laser-alive-yellow" />
+            <div className="absolute inset-y-0 -inset-x-1.5 bg-gradient-to-b from-yellow-300 via-amber-400 to-yellow-500 blur-sm opacity-90 laser-alive-yellow" />
+            <div className="relative w-3 h-full bg-gradient-to-b from-yellow-500 to-yellow-300 rounded-full shadow-[0_0_20px_#eab308,0_0_35px_#facc15] laser-alive-yellow flex items-center justify-center overflow-hidden">
+              <div className="w-1 h-full bg-white shadow-[0_0_8px_#ffffff] rounded-full opacity-95 laser-core-flicker" />
+              <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
+            </div>
+            <div className="absolute top-1/4 -right-1.5 w-2 h-2 rounded-full bg-yellow-200 shadow-[0_0_8px_#fef08a] laser-sparkle-1" />
+            <div className="absolute top-3/4 -left-1.5 w-2 h-2 rounded-full bg-amber-200 shadow-[0_0_8px_#fde047] laser-sparkle-2" />
+            <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-yellow-200 tracking-widest bg-yellow-950/80 border border-yellow-400/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(234,179,8,0.5)]">
+              LASER 2 (YEL)
+            </span>
+          </div>
+          <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-yellow-500 to-slate-900 border border-yellow-300 shadow-[0_0_12px_#facc15] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+
+        {/* ─── LASER 3: ENERGI HIJAU (EMERALD) ────────────────── */}
+        <div
+          className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
+            !isLaser3Active ? "opacity-0 scale-95" : "opacity-100 z-20"
+          }`}
+          style={{
+            left: `${laser3.x}px`,
+            top: `${laser3.y}px`,
+            width: `${laser3.w}px`,
+            height: `${laser3.h}px`,
+          }}
+        >
+          <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-emerald-500 to-slate-900 border border-emerald-300 shadow-[0_0_12px_#34d399] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" />
+          </div>
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
+            <div className="absolute inset-y-0 -inset-x-3 bg-gradient-to-b from-emerald-400 via-green-500 to-teal-600 blur-md opacity-80 laser-alive-green" />
+            <div className="absolute inset-y-0 -inset-x-1.5 bg-gradient-to-b from-emerald-300 via-green-400 to-emerald-500 blur-sm opacity-90 laser-alive-green" />
+            <div className="relative w-3 h-full bg-gradient-to-b from-emerald-500 to-emerald-300 rounded-full shadow-[0_0_20px_#10b981,0_0_35px_#34d399] laser-alive-green flex items-center justify-center overflow-hidden">
+              <div className="w-1 h-full bg-white shadow-[0_0_8px_#ffffff] rounded-full opacity-95 laser-core-flicker" />
+              <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
+            </div>
+            <div className="absolute top-1/4 -left-1.5 w-2 h-2 rounded-full bg-emerald-200 shadow-[0_0_8px_#a7f3d0] laser-sparkle-1" />
+            <div className="absolute top-3/4 -right-1.5 w-2 h-2 rounded-full bg-teal-200 shadow-[0_0_8px_#99f6e4] laser-sparkle-2" />
+            <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-emerald-200 tracking-widest bg-emerald-950/80 border border-emerald-400/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(16,185,129,0.5)]">
+              LASER 3 (GRN)
+            </span>
+          </div>
+          <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-emerald-500 to-slate-900 border border-emerald-300 shadow-[0_0_12px_#34d399] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+
+        {/* ─── LASER 4: ENERGI UNGU (PURPLE) ──────────────────── */}
+        <div
+          className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
+            !isLaser4Active ? "opacity-0 scale-95" : "opacity-100 z-20"
+          }`}
+          style={{
+            left: `${laser4.x}px`,
+            top: `${laser4.y}px`,
+            width: `${laser4.w}px`,
+            height: `${laser4.h}px`,
+          }}
+        >
+          <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-purple-500 to-slate-900 border border-purple-300 shadow-[0_0_12px_#c084fc] flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" />
+          </div>
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
+            <div className="absolute inset-y-0 -inset-x-3 bg-gradient-to-b from-purple-400 via-fuchsia-500 to-indigo-600 blur-md opacity-80 laser-alive-purple" />
+            <div className="absolute inset-y-0 -inset-x-1.5 bg-gradient-to-b from-purple-300 via-fuchsia-400 to-purple-500 blur-sm opacity-90 laser-alive-purple" />
+            <div className="relative w-3 h-full bg-gradient-to-b from-purple-500 to-purple-300 rounded-full shadow-[0_0_20px_#a855f7,0_0_35px_#c084fc] laser-alive-purple flex items-center justify-center overflow-hidden">
+              <div className="w-1 h-full bg-white shadow-[0_0_8px_#ffffff] rounded-full opacity-95 laser-core-flicker" />
+              <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
+            </div>
+            <div className="absolute top-1/4 -right-1.5 w-2 h-2 rounded-full bg-purple-200 shadow-[0_0_8px_#e9d5ff] laser-sparkle-1" />
+            <div className="absolute top-3/4 -left-1.5 w-2 h-2 rounded-full bg-fuchsia-200 shadow-[0_0_8px_#f5d0fe] laser-sparkle-2" />
+            <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-purple-200 tracking-widest bg-purple-950/80 border border-purple-400/50 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(168,85,247,0.5)]">
+              LASER 4 (PUR)
+            </span>
+          </div>
+          <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-purple-500 to-slate-900 border border-purple-300 shadow-[0_0_12px_#c084fc] flex items-center justify-center z-30">
             <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
           </div>
         </div>
@@ -1335,3 +1722,4 @@ export default function Stage1Platformer() {
     </main>
   );
 }
+
