@@ -1217,9 +1217,6 @@ export default function Stage1Platformer() {
               </span>
             </div>
           )}
-          <span className="text-[8px] font-mono font-bold text-emerald-200 bg-black/60 px-1 rounded pointer-events-none">
-            LEVER
-          </span>
         </div>
 
         {/* Platform di bawah lever */}
@@ -1232,9 +1229,6 @@ export default function Stage1Platformer() {
             height: `${leverPlatform.h}px`,
           }}
         >
-          <span className="text-[7px] font-mono text-emerald-200 bg-black/60 px-1 rounded">
-            LEVER PLAT
-          </span>
         </div>
 
         {/* Platform atas kiri */}
@@ -1376,9 +1370,6 @@ export default function Stage1Platformer() {
             </div>
           )}
           <span className="text-base select-none">📝</span>
-          <span className="text-[7px] font-mono font-bold text-red-200 bg-black/70 px-1 rounded pointer-events-none">
-            {isTes1Done ? "TES 1 ✓" : "TES 1"}
-          </span>
         </div>
 
         {/* ─── TRIGGER TES 2 (Area Tengah) ───────────────────── */}
@@ -1400,9 +1391,6 @@ export default function Stage1Platformer() {
             </div>
           )}
           <span className="text-base select-none">📋</span>
-          <span className="text-[7px] font-mono font-bold text-blue-200 bg-black/70 px-1 rounded pointer-events-none">
-            {isTes2Done ? "TES 2 ✓" : "TES 2"}
-          </span>
         </div>
 
         {/* ─── LASER 1: ENERGI BIRU/CYAN (TEKANAN KOTAK) ─────── */}
@@ -1425,9 +1413,6 @@ export default function Stage1Platformer() {
               <div className="w-1 h-full bg-white rounded-full opacity-95 laser-core-flicker" />
               <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
             </div>
-            <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-cyan-200 tracking-widest bg-cyan-950/80 border border-cyan-400/50 px-1.5 py-0.5 rounded">
-              LASER 1 (BOX)
-            </span>
           </div>
           <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-cyan-500 to-slate-900 border border-cyan-300 flex items-center justify-center z-30">
             <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
@@ -1454,9 +1439,6 @@ export default function Stage1Platformer() {
               <div className="w-1 h-full bg-white rounded-full opacity-95 laser-core-flicker" />
               <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
             </div>
-            <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-yellow-200 tracking-widest bg-yellow-950/80 border border-yellow-400/50 px-1.5 py-0.5 rounded">
-              LASER 2 (YEL)
-            </span>
           </div>
           <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-yellow-500 to-slate-900 border border-yellow-300 flex items-center justify-center z-30">
             <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
@@ -1483,9 +1465,6 @@ export default function Stage1Platformer() {
               <div className="w-1 h-full bg-white rounded-full opacity-95 laser-core-flicker" />
               <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
             </div>
-            <span className="absolute -left-10 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-emerald-200 tracking-widest bg-emerald-950/80 border border-emerald-400/50 px-1.5 py-0.5 rounded">
-              LASER 3 (GRN)
-            </span>
           </div>
           <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-emerald-500 to-slate-900 border border-emerald-300 flex items-center justify-center z-30">
             <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
@@ -1514,9 +1493,6 @@ export default function Stage1Platformer() {
               <div className="h-1 w-full bg-white rounded-full opacity-95 laser-core-flicker" />
               <div className="absolute inset-y-0 w-12 bg-gradient-to-r from-transparent via-white to-transparent opacity-90 laser-energy-pulse-h" />
             </div>
-            <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[7px] font-mono font-black text-purple-200 tracking-widest bg-purple-950/80 border border-purple-400/50 px-1.5 py-0.5 rounded whitespace-nowrap">
-              LASER 4 (PUR-H)
-            </span>
           </div>
           {/* Emitter Kanan */}
           <div className="relative w-2.5 h-6 -mr-1 rounded-sm bg-gradient-to-b from-slate-900 via-purple-500 to-slate-900 border border-purple-300 flex items-center justify-center z-30">
@@ -1546,9 +1522,6 @@ export default function Stage1Platformer() {
               <div className="h-1 w-full bg-white rounded-full opacity-95 laser-core-flicker" />
               <div className="absolute inset-y-0 w-12 bg-gradient-to-r from-transparent via-white to-transparent opacity-90 laser-energy-pulse-h" />
             </div>
-            <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[7px] font-mono font-black text-red-200 tracking-widest bg-red-950/80 border border-red-400/50 px-1.5 py-0.5 rounded whitespace-nowrap">
-              LASER 5 (RED-H)
-            </span>
           </div>
           {/* Emitter Kanan */}
           <div className="relative w-2.5 h-6 -mr-1 rounded-sm bg-gradient-to-b from-slate-900 via-red-600 to-slate-900 border border-red-300 flex items-center justify-center z-30">
@@ -1578,9 +1551,6 @@ export default function Stage1Platformer() {
               <div className="w-1 h-full bg-white rounded-full opacity-95 laser-core-flicker" />
               <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-90 laser-energy-pulse" />
             </div>
-            <span className="absolute -left-12 top-1/2 -translate-y-1/2 -rotate-90 text-[7px] font-mono font-black text-blue-200 tracking-widest bg-blue-950/80 border border-blue-500/50 px-1.5 py-0.5 rounded whitespace-nowrap">
-              LASER 6 (BLU-V)
-            </span>
           </div>
           {/* Emitter Bawah */}
           <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-blue-700 to-slate-900 border border-blue-400 flex items-center justify-center z-30">
