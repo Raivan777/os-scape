@@ -91,10 +91,10 @@ export default function Stage3Page() {
   const GROUND_Y = 540; // Lantai dasar solid mengikuti garis lantai gambar baru
 
   // ─── KONSTANTA PEMAIN ────────────────────────────────────────
-  const PLAYER_W = 44;
-  const PLAYER_H = 64;
-  const MOVE_SPEED = 4.5;
-  const JUMP_POWER = -13.8; // Lompatan responsif menjangkau catwalk atas
+  const PLAYER_W = 40;
+  const PLAYER_H = 70;
+  const MOVE_SPEED = 3.6;
+  const JUMP_POWER = -10;
   const GRAVITY = 0.6;
 
   // ─── TITIK AWAL PEMAIN (SPAWN POINT) ─────────────────────────
@@ -106,6 +106,7 @@ export default function Stage3Page() {
   const [playerY, setPlayerY] = useState(SPAWN_Y);
   const [velocityY, setVelocityY] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
+  const [facingLeft, setFacingLeft] = useState(false);
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
   const [isHurt, setIsHurt] = useState(false);
@@ -480,13 +481,13 @@ export default function Stage3Page() {
 
   // ─── REFS GAME LOOP ──────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
-  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
+  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
   const laserOpenRef = useRef(isAllModesCompleted);
   // Tembok Biru terbuka bersamaan dengan portal menuju Stage 4 setelah menyelesaikan mini-game
   const isWallBlueOpen = isAllModesCompleted;
   const wallBlueOpenRef = useRef(isWallBlueOpen);
 
-  playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+  playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
   laserOpenRef.current = isAllModesCompleted;
   wallBlueOpenRef.current = isWallBlueOpen;
 
@@ -500,7 +501,9 @@ export default function Stage3Page() {
     setVelocityY(0);
     setIsJumping(false);
     setIsWalking(false);
-    playerRef.current = { x: SPAWN_X, y: SPAWN_Y, vy: 0, jumping: false };
+    setFacingLeft(false);
+    setFacingRight(true);
+    playerRef.current = { x: SPAWN_X, y: SPAWN_Y, vy: 0, jumping: false, canDoubleJump: false };
 
     if (reason) triggerAlert(reason);
   };
@@ -577,11 +580,54 @@ export default function Stage3Page() {
         e.preventDefault();
       }
 
+      // Handler Lompatan (Lompatan Pertama & Double Jump)
+      if (key === "w" || key === "arrowup" || key === " ") {
+        if (!showManualModal && !showMapperModal && !showMetricsModal) {
+          const p = playerRef.current;
+          if (!p.jumping) {
+            // Kondisi 1: Lompatan Pertama dari tanah/platform
+            p.vy = JUMP_POWER;
+            p.jumping = true;
+            p.canDoubleJump = true;
+          } else if (p.canDoubleJump) {
+            // Kondisi 2: Double Jump saat di udara
+            p.vy = JUMP_POWER;
+            p.canDoubleJump = false;
+          }
+        }
+      }
+
+      if (key === "a" || key === "arrowleft") {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+      } else if (key === "d" || key === "arrowright") {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+      }
+
       keysPressed.current.add(key);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysPressed.current.delete(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keysPressed.current.delete(key);
+
+      const stillHasA = keysPressed.current.has("a") || keysPressed.current.has("arrowleft");
+      const stillHasD = keysPressed.current.has("d") || keysPressed.current.has("arrowright");
+
+      if (stillHasA) {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+      } else if (stillHasD) {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+      } else if (key === "a" || key === "arrowleft" || key === "d" || key === "arrowright") {
+        setIsWalking(false);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -623,20 +669,24 @@ export default function Stage3Page() {
         let moveX = 0;
         if (keys.has("a") || keys.has("arrowleft")) {
           moveX -= MOVE_SPEED;
+          setFacingLeft(true);
           setFacingRight(false);
         }
         if (keys.has("d") || keys.has("arrowright")) {
           moveX += MOVE_SPEED;
+          setFacingLeft(false);
           setFacingRight(true);
         }
 
-        setIsWalking(moveX !== 0 && !p.jumping);
+        setIsWalking(moveX !== 0);
 
         // 2. LOMPAT PEMAIN
+        // Inisiasi lompatan & double jump ditangani di event listener onKeyDown agar single-press per lompatan
         const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
         if (wantsJump && !p.jumping) {
           p.vy = JUMP_POWER;
           p.jumping = true;
+          p.canDoubleJump = true;
         }
 
         // 3. GRAVITASI
@@ -681,6 +731,7 @@ export default function Stage3Page() {
             p.y = plat.y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
           }
         }
 
@@ -710,6 +761,7 @@ export default function Stage3Page() {
               p.y = stairsGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
+              p.canDoubleJump = false;
             }
           }
         }
@@ -719,6 +771,7 @@ export default function Stage3Page() {
           p.y = GROUND_Y - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
+          p.canDoubleJump = false;
         }
 
         // 9. PENGHALANG PINTU LASER FIREWALL (DI PIJAKAN KIRI ATAS SEBELUM SELESAI)
@@ -1083,7 +1136,7 @@ export default function Stage3Page() {
               >
                 {isAllModesCompleted ? (
                   <>
-                    Tekan <kbd className="rounded bg-emerald-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> vsuk ke Stage 4 ➔
+                    Tekan <kbd className="rounded bg-emerald-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Masuk ke Stage 4 ➔
                   </>
                 ) : (
                   "🔒 Portal Terkunci (Selesaikan Tantangan di Komputer Tengah)"
@@ -1298,7 +1351,7 @@ export default function Stage3Page() {
           </div>
         </div>
 
-        {/* ─── KARAKTER ASTRONOT (SPRITE & ANIMASI LENGKAP) ──────────── */}
+        {/* ─── KARAKTER PLAYER (SPRITE SHEET 2D) ────────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1308,31 +1361,21 @@ export default function Stage3Page() {
             height: `${PLAYER_H}px`,
           }}
         >
-          {/* Bayangan di bawah kaki astronot */}
-          <div className="absolute -bottom-1 left-1/2 h-2.5 w-8 -translate-x-1/2 rounded-full bg-black/70 blur-[1px]" />
-
           <div
-            className="h-full w-full transition-transform duration-150 ease-out"
+            className={`h-full w-full ${isWalking ? "animate-player-walk" : ""} ${
+              isHurt ? "brightness-150 contrast-125 sepia animate-pulse" : ""
+            }`}
             style={{
-              transformOrigin: "bottom center",
-              transform: isJumping
-                ? `${facingRight ? "scaleX(0.88)" : "scaleX(-0.88)"} scaleY(1.12)`
-                : `${facingRight ? "scaleX(1)" : "scaleX(-1)"} scaleY(1)`,
+              backgroundImage: "url('/player-sprite.png')",
+              backgroundSize: "400% 400%",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: !isWalking ? "0% 0%" : undefined,
+              backgroundPositionY: isWalking ? "33.8%" : "0%",
+              imageRendering: "pixelated",
+              transform: facingLeft ? "scaleX(-1)" : "scaleX(1)",
+              transformOrigin: "center bottom",
             }}
-          >
-            <img
-              src="/astronaut-front.png"
-              alt="Astronaut"
-              className={`h-full w-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)] transition-all ${
-                isWalking && !isJumping ? "animate-waddle" : ""
-              } ${
-                isHurt ? "brightness-150 contrast-125 sepia hue-rotate-[300deg] animate-pulse" : ""
-              }`}
-              style={{
-                transformOrigin: "bottom center",
-              }}
-            />
-          </div>
+          />
         </div>
 
       </div>
@@ -2248,22 +2291,19 @@ export default function Stage3Page() {
         </div>
       )}
 
-      {/* ─── KEYFRAME ANIMASI WADDLE (PERSIS SEPERTI STAGE 1 & 2) ─── */}
+      {/* ─── KEYFRAME ANIMASI PLAYER & WALK ─────────────── */}
       <style jsx>{`
-        @keyframes waddle {
-          0%,
-          100% {
-            transform: rotate(0deg);
+        @keyframes playerWalk {
+          from {
+            background-position-x: 0%;
           }
-          25% {
-            transform: rotate(-4.5deg) translateY(-2px);
-          }
-          75% {
-            transform: rotate(4.5deg) translateY(-2px);
+          to {
+            /* Untuk 4 frame (0%, 33.33%, 66.66%, 100%), pergeseran total steps(4) adalah 4 * 33.3333% = 133.3333% */
+            background-position-x: 133.3333%;
           }
         }
-        .animate-waddle {
-          animation: waddle 0.25s ease-in-out infinite;
+        .animate-player-walk {
+          animation: playerWalk 0.7s steps(4) infinite;
         }
       `}</style>
 
