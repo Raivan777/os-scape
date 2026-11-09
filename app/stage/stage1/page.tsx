@@ -12,9 +12,26 @@ export default function Stage1Platformer() {
   const GAME_HEIGHT = 576;
   const GROUND_Y = 540; // Lantai dasar di paling bawah
 
-  // ─── KONSTANTA PEMAIN ──────────────────────────────────────
-  const PLAYER_W = 48;
-  const PLAYER_H = 72;
+  // ─── KONSTANTA PEMAIN & SPRITE (player.png) ───────────────
+  // Skala render visual karakter (600x620 cell downscale)
+  const PLAYER_SCALE = 0.13; // Skala tampilan karakter (ubah untuk memperbesar/memperkecil)
+  const SPRITE_CELL_W = 600;
+  const SPRITE_CELL_H = 620;
+  const SPRITE_SHEET_W = 5340;
+  const SPRITE_SHEET_H = 5500;
+  const SPRITE_MARGIN_X = 60;
+  const SPRITE_MARGIN_Y = 60;
+  const SPRITE_STEP_X = 660; // 600 + gap 60
+  const SPRITE_STEP_Y = 680; // 620 + gap 60
+  const SPRITE_FOOT_Y = 592; // Garis kaki karakter dari atas sel
+
+  // Dimensi visual sel di layar
+  const DISPLAY_CELL_W = Math.round(SPRITE_CELL_W * PLAYER_SCALE); // ~78px
+  const DISPLAY_CELL_H = Math.round(SPRITE_CELL_H * PLAYER_SCALE); // ~81px
+
+  // Dimensi Hitbox Fisika (fokus pada tubuh karakter, bukan seluruh sel 600x620)
+  const PLAYER_W = 40;
+  const PLAYER_H = 70;
   const MOVE_SPEED = 3.6;
   const JUMP_POWER = -10;
   const GRAVITY = 0.6;
@@ -31,6 +48,11 @@ export default function Stage1Platformer() {
   const [facingLeft, setFacingLeft] = useState(false);
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
+
+  // ─── STATE ANIMASI SPRITE (player.png) ─────────────────────
+  // State machine animasi: "idle_right" | "idle_left" | "run_right" | "run_left" | "jump_right" | "jump_left"
+  const [animState, setAnimState] = useState<string>("idle_right");
+  const [animFrame, setAnimFrame] = useState<number>(0);
 
   // ─── STATE SISTEM LASER & RINTANGAN ───────────────────────
   const [isLaser1Active, setIsLaser1Active] = useState(true);
@@ -215,7 +237,7 @@ export default function Stage1Platformer() {
     { x: policeBox.x + policeBox.w - 10, y: policeBox.y, w: 10, h: policeBox.h }, // sisi kanan kotak polisi
   ];
 
-  // ─── REFS GAME LOOP ────────────────────────────────────────
+  // ─── REFS GAME LOOP & ANIMASI ─────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
   const boxRef = useRef({ x: boxX, y: boxY, vy: boxVelocityY });
@@ -225,6 +247,16 @@ export default function Stage1Platformer() {
   const laser4ActiveRef = useRef(isLaser4Active);
   const laser5ActiveRef = useRef(isLaser5Active);
   const laser6ActiveRef = useRef(isLaser6Active);
+
+  // Ref pelacak animasi pemain (state machine)
+  const animRef = useRef({
+    state: "idle_right",
+    frame: 0,
+    timer: 0,
+    facing: "right" as "right" | "left",
+    justLandedTimer: 0,
+    jumpTakeoffTimer: 0,
+  });
 
   const lastBtn2StepRef = useRef(false);
   const lastBtn3StepRef = useRef(false);
@@ -308,10 +340,12 @@ export default function Stage1Platformer() {
             p.vy = JUMP_POWER;
             p.jumping = true;
             p.canDoubleJump = true;
+            animRef.current.jumpTakeoffTimer = 8; // Memainkan frame squat & takeoff
           } else if (p.canDoubleJump) {
             // Kondisi 2: Double Jump saat di udara
             p.vy = JUMP_POWER;
             p.canDoubleJump = false;
+            animRef.current.jumpTakeoffTimer = 6;
           }
         }
       }
@@ -320,10 +354,12 @@ export default function Stage1Platformer() {
         setFacingLeft(true);
         setFacingRight(false);
         setIsWalking(true);
+        animRef.current.facing = "left";
       } else if (key === "d" || key === "arrowright") {
         setFacingLeft(false);
         setFacingRight(true);
         setIsWalking(true);
+        animRef.current.facing = "right";
       }
 
       keysPressed.current.add(key);
@@ -401,6 +437,9 @@ export default function Stage1Platformer() {
 
         // 4. LANTAI DASAR
         if (p.y + PLAYER_H >= GROUND_Y) {
+          if (p.jumping && p.vy >= 0) {
+            animRef.current.justLandedTimer = 6;
+          }
           p.y = GROUND_Y - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
@@ -434,6 +473,9 @@ export default function Stage1Platformer() {
             const footY = p.y + PLAYER_H;
             const prevFootY = footY - p.vy;
             if (footY >= plat.y && prevFootY <= plat.y + 14) {
+              if (p.jumping) {
+                animRef.current.justLandedTimer = 6;
+              }
               p.y = plat.y - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
@@ -509,6 +551,9 @@ export default function Stage1Platformer() {
           } else if (p.vy >= 0) {
             // Mendarat saat jatuh dari lompatan ke kontainer
             if (footY >= containerGroundY && prevFootY <= containerGroundY + Math.max(16, p.vy + 4)) {
+              if (p.jumping) {
+                animRef.current.justLandedTimer = 6;
+              }
               p.y = containerGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
@@ -547,6 +592,9 @@ export default function Stage1Platformer() {
           } else if (p.vy >= 0) {
             // Mendarat saat jatuh dari lompatan ke tanjakan
             if (footY >= leverRampGroundY && prevFootY <= leverRampGroundY + Math.max(16, p.vy + 4)) {
+              if (p.jumping) {
+                animRef.current.justLandedTimer = 6;
+              }
               p.y = leverRampGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
@@ -710,6 +758,9 @@ export default function Stage1Platformer() {
           p.y + PLAYER_H - p.vy <= b.y + 12;
 
         if (isStandingOnBox && p.vy >= 0) {
+          if (p.jumping) {
+            animRef.current.justLandedTimer = 6;
+          }
           p.y = b.y - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
@@ -795,6 +846,72 @@ export default function Stage1Platformer() {
         setBoxX(b.x);
         setBoxY(b.y);
         setBoxVelocityY(b.vy);
+
+        // ─── STATE MACHINE ANIMASI SPRITE (player.png) ───────────
+        // Menentukan state animasi: idle, run, atau jump sesuai arah hadap
+        const ar = animRef.current;
+        const currentFacing = ar.facing; // "right" | "left"
+        let nextAnimState = "";
+        let nextFrame = ar.frame;
+
+        if (p.jumping) {
+          // KARAKTER DI UDARA (LOMPAT)
+          nextAnimState = currentFacing === "right" ? "jump_right" : "jump_left";
+
+          if (ar.jumpTakeoffTimer > 4) {
+            // Frame 0: tekuk lutut sebelum lompat
+            nextFrame = 0;
+            ar.jumpTakeoffTimer--;
+          } else if (ar.jumpTakeoffTimer > 0) {
+            // Frame 1: lepas landas
+            nextFrame = 1;
+            ar.jumpTakeoffTimer--;
+          } else if (p.vy < -2) {
+            // Frame 2: naik dengan jetpack
+            nextFrame = 2;
+          } else if (p.vy >= -2 && p.vy <= 2) {
+            // Frame 3: puncak lompatan (apex)
+            nextFrame = 3;
+          } else {
+            // Frame 4: mulai turun / jatuh
+            nextFrame = 4;
+          }
+        } else if (ar.justLandedTimer > 0) {
+          // KETIKA BARU SAJA MENDARAT
+          nextAnimState = currentFacing === "right" ? "jump_right" : "jump_left";
+          // Frame 5: mendarat (touchdown) sebentar
+          nextFrame = 5;
+          ar.justLandedTimer--;
+        } else if (moveX !== 0) {
+          // BERJALAN / LARI
+          nextAnimState = currentFacing === "right" ? "run_right" : "run_left";
+          // Run loop: 4 frames pada ~10 FPS (tiap 6 ticks 60fps)
+          ar.timer++;
+          if (ar.state !== nextAnimState) {
+            nextFrame = 0;
+            ar.timer = 0;
+          } else if (ar.timer >= 6) {
+            nextFrame = (ar.frame + 1) % 4;
+            ar.timer = 0;
+          }
+        } else {
+          // IDLE (DIAM)
+          nextAnimState = currentFacing === "right" ? "idle_right" : "idle_left";
+          // Idle loop: 8 frames pada ~7 FPS (tiap 8 ticks 60fps)
+          ar.timer++;
+          if (ar.state !== nextAnimState) {
+            nextFrame = 0;
+            ar.timer = 0;
+          } else if (ar.timer >= 8) {
+            nextFrame = (ar.frame + 1) % 8;
+            ar.timer = 0;
+          }
+        }
+
+        ar.state = nextAnimState;
+        ar.frame = nextFrame;
+        setAnimState(nextAnimState);
+        setAnimFrame(nextFrame);
       }
 
       animId = requestAnimationFrame(gameLoop);
