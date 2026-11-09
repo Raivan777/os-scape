@@ -1083,7 +1083,7 @@ export default function Stage3Page() {
               >
                 {isAllModesCompleted ? (
                   <>
-                    Tekan <kbd className="rounded bg-emerald-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> untuk Masuk ke Stage 4 ➔
+                    Tekan <kbd className="rounded bg-emerald-400 px-1 py-0.2 text-[9px] font-black text-black mx-0.5">E</kbd> vsuk ke Stage 4 ➔
                   </>
                 ) : (
                   "🔒 Portal Terkunci (Selesaikan Tantangan di Komputer Tengah)"
