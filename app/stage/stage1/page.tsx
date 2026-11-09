@@ -13,11 +13,11 @@ export default function Stage1Platformer() {
   const GROUND_Y = 540; // Lantai dasar di paling bawah
 
   // ─── KONSTANTA PEMAIN ──────────────────────────────────────
-  const PLAYER_W = 44;
-  const PLAYER_H = 54;
-  const MOVE_SPEED = 4.5;
-  const JUMP_POWER = -12;
-  const GRAVITY = 0.55;
+  const PLAYER_W = 48;
+  const PLAYER_H = 72;
+  const MOVE_SPEED = 3.6;
+  const JUMP_POWER = -10;
+  const GRAVITY = 0.6;
 
   // ─── KONSTANTA KOTAK KARGO ─────────────────────────────────
   const BOX_W = 45;
@@ -28,6 +28,7 @@ export default function Stage1Platformer() {
   const [playerY, setPlayerY] = useState(GROUND_Y - PLAYER_H);
   const [velocityY, setVelocityY] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
+  const [facingLeft, setFacingLeft] = useState(false);
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
 
@@ -216,7 +217,7 @@ export default function Stage1Platformer() {
 
   // ─── REFS GAME LOOP ────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
-  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
+  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
   const boxRef = useRef({ x: boxX, y: boxY, vy: boxVelocityY });
   const laser1ActiveRef = useRef(isLaser1Active);
   const laser2ActiveRef = useRef(isLaser2Active);
@@ -228,7 +229,7 @@ export default function Stage1Platformer() {
   const lastBtn2StepRef = useRef(false);
   const lastBtn3StepRef = useRef(false);
 
-  playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+  playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
   boxRef.current = { x: boxX, y: boxY, vy: boxVelocityY };
   laser1ActiveRef.current = isLaser1Active;
   laser2ActiveRef.current = isLaser2Active;
@@ -298,11 +299,54 @@ export default function Stage1Platformer() {
         e.preventDefault();
       }
 
+      // Handler Lompatan (Lompatan Pertama & Double Jump)
+      if (key === "w" || key === "arrowup" || key === " ") {
+        if (!showMaterial && !isMiniGameOpen && !showTes1Modal && !showTes2Modal) {
+          const p = playerRef.current;
+          if (!p.jumping) {
+            // Kondisi 1: Lompatan Pertama dari tanah/platform
+            p.vy = JUMP_POWER;
+            p.jumping = true;
+            p.canDoubleJump = true;
+          } else if (p.canDoubleJump) {
+            // Kondisi 2: Double Jump saat di udara
+            p.vy = JUMP_POWER;
+            p.canDoubleJump = false;
+          }
+        }
+      }
+
+      if (key === "a" || key === "arrowleft") {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+      } else if (key === "d" || key === "arrowright") {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+      }
+
       keysPressed.current.add(key);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysPressed.current.delete(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keysPressed.current.delete(key);
+
+      const stillHasA = keysPressed.current.has("a") || keysPressed.current.has("arrowleft");
+      const stillHasD = keysPressed.current.has("d") || keysPressed.current.has("arrowright");
+
+      if (stillHasA) {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+      } else if (stillHasD) {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+      } else if (key === "a" || key === "arrowleft" || key === "d" || key === "arrowright") {
+        setIsWalking(false);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -328,20 +372,24 @@ export default function Stage1Platformer() {
         let moveX = 0;
         if (keys.has("a") || keys.has("arrowleft")) {
           moveX -= MOVE_SPEED;
+          setFacingLeft(true);
           setFacingRight(false);
         }
         if (keys.has("d") || keys.has("arrowright")) {
           moveX += MOVE_SPEED;
+          setFacingLeft(false);
           setFacingRight(true);
         }
 
-        setIsWalking(moveX !== 0 && !p.jumping);
+        setIsWalking(moveX !== 0);
 
         // 2. LOMPAT
+        // Catatan: Inisiasi lompatan & double jump ditangani di event listener onKeyDown agar single-press per lompatan
         const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
         if (wantsJump && !p.jumping) {
           p.vy = JUMP_POWER;
           p.jumping = true;
+          p.canDoubleJump = true;
         }
 
         // 3. GRAVITASI
@@ -356,6 +404,7 @@ export default function Stage1Platformer() {
           p.y = GROUND_Y - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
+          p.canDoubleJump = false;
         }
 
         if (b.y + BOX_H >= GROUND_Y) {
@@ -388,6 +437,7 @@ export default function Stage1Platformer() {
               p.y = plat.y - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
+              p.canDoubleJump = false;
             }
           }
 
@@ -454,6 +504,7 @@ export default function Stage1Platformer() {
             if (Math.abs(footY - containerGroundY) <= 24) {
               p.y = containerGroundY - PLAYER_H;
               p.vy = 0;
+              p.canDoubleJump = false;
             }
           } else if (p.vy >= 0) {
             // Mendarat saat jatuh dari lompatan ke kontainer
@@ -461,6 +512,7 @@ export default function Stage1Platformer() {
               p.y = containerGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
+              p.canDoubleJump = false;
             }
           }
         }
@@ -490,6 +542,7 @@ export default function Stage1Platformer() {
             if (Math.abs(footY - leverRampGroundY) <= 26) {
               p.y = leverRampGroundY - PLAYER_H;
               p.vy = 0;
+              p.canDoubleJump = false;
             }
           } else if (p.vy >= 0) {
             // Mendarat saat jatuh dari lompatan ke tanjakan
@@ -497,6 +550,7 @@ export default function Stage1Platformer() {
               p.y = leverRampGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
+              p.canDoubleJump = false;
             }
           }
         }
@@ -590,6 +644,7 @@ export default function Stage1Platformer() {
             p.y = GROUND_Y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
           }
 
           // Kotak kargo juga tidak bisa menembus Laser 1
@@ -658,6 +713,7 @@ export default function Stage1Platformer() {
           p.y = b.y - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
+          p.canDoubleJump = false;
         }
 
         // 9. DETEKSI TOMBOL 1 S/D 4
@@ -1631,7 +1687,7 @@ export default function Stage1Platformer() {
           </div>
         </div>
 
-        {/* ─── KARAKTER ASTRONOT ──────────────────────────────── */}
+        {/* ─── KARAKTER PLAYER (SPRITE SHEET 2D) ────────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1642,25 +1698,18 @@ export default function Stage1Platformer() {
           }}
         >
           <div
-            className="h-full w-full transition-transform duration-150 ease-out"
+            className={`h-full w-full ${isWalking ? "animate-player-walk" : ""}`}
             style={{
-              transformOrigin: "bottom center",
-              transform: isJumping
-                ? `${facingRight ? "scaleX(0.88)" : "scaleX(-0.88)"} scaleY(1.12)`
-                : `${facingRight ? "scaleX(1)" : "scaleX(-1)"} scaleY(1)`,
+              backgroundImage: "url('/player-sprite.png')",
+              backgroundSize: "400% 400%",
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: !isWalking ? "0% 0%" : undefined,
+              backgroundPositionY: isWalking ? "33.8%" : "0%",
+              imageRendering: "pixelated",
+              transform: facingLeft ? "scaleX(-1)" : "scaleX(1)",
+              transformOrigin: "center bottom",
             }}
-          >
-            <img
-              src="/astronaut-front.png"
-              alt="Astronaut"
-              className={`h-full w-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)] ${
-                isWalking && !isJumping ? "animate-waddle" : ""
-              }`}
-              style={{
-                transformOrigin: "bottom center",
-              }}
-            />
-          </div>
+          />
         </div>
       </div>
 
@@ -2072,8 +2121,21 @@ export default function Stage1Platformer() {
         </div>
       )}
 
-      {/* Keyframe Animasi Waddle & Efek Laser Sci-Fi */}
+      {/* Keyframe Animasi Player & Efek Laser Sci-Fi */}
       <style jsx>{`
+        @keyframes playerWalk {
+          from {
+            background-position-x: 0%;
+          }
+          to {
+            /* Untuk 4 frame (0%, 33.33%, 66.66%, 100%), pergeseran total steps(4) adalah 4 * 33.3333% = 133.3333% */
+            background-position-x: 133.3333%;
+          }
+        }
+        .animate-player-walk {
+          animation: playerWalk 0.7s steps(4) infinite;
+        }
+
         @keyframes waddle {
           0%,
           100% {
