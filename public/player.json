@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "image": "player.png",
+    "size": {
+      "w": 5340,
+      "h": 5500
+    },
+    "cell": {
+      "w": 600,
+      "h": 620
+    },
+    "gap": 60,
+    "margin": 60
+  },
+  "animations": {
+    "idle_right": {
+      "row": 0,
+      "frames": 8,
+      "fps": 7
+    },
+    "idle_left": {
+      "row": 1,
+      "frames": 8,
+      "fps": 7
+    },
+    "run_right": {
+      "row": 2,
+      "frames": 4,
+      "fps": 10
+    },
+    "run_left": {
+      "row": 3,
+      "frames": 4,
+      "fps": 10
+    },
+    "jump_right": {
+      "row": 4,
+      "frames": 6
+    },
+    "jump_left": {
+      "row": 5,
+      "frames": 6
+    },
+    "aim_right": {
+      "row": 6,
+      "frames": 1
+    },
+    "aim_left": {
+      "row": 7,
+      "frames": 1
+    }
+  }
+}
