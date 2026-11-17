@@ -172,7 +172,7 @@ export default function Stage2Platformer() {
   // Objek Misi Khusus
   const pressurePlateObj = { x: 862, y: 564, w: 58, h: 8 };
   const yellowGateObj = { x: 638, y: 372, w: 14, h: 200 };
-  const leverObj = { x: 190, y: 392, w: 22, h: 34 };
+  const leverObj = { x: 200, y: 509, w: 22, h: 34 };
   const purpleGateObj = { x: 232, y: 90, w: 14, h: 158 };
   const keycardObj = { x: 912, y: 162, w: 26, h: 26 };
   const plasmaPools = [
@@ -1205,7 +1205,7 @@ export default function Stage2Platformer() {
           </span>
         </div>
 
-        {/* Tuas di Platform 1 */}
+        {/* Tuas di Lantai Kiri (Setelah Plasma) */}
         <div
           className="absolute z-20 flex flex-col items-center cursor-pointer select-none"
           style={{
