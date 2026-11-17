@@ -33,25 +33,35 @@ export default function Stage2Platformer() {
   const GAME_WIDTH = 1000;
   const GAME_HEIGHT = 600;
 
-  // Dimensi Karakter Pemain (Astronaut)
-  const PLAYER_W = 48;
-  const PLAYER_H = 68;
-  const MOVE_SPEED = 4.5;
-  const JUMP_POWER = -12.5;
+  // ─── KONSTANTA PEMAIN & SPRITE (Sama dengan Stage 1) ────────
+  // Dimensi visual karakter (sedikit diperbesar proporsional 2:3)
+  const VISUAL_W = 54;
+  const VISUAL_H = 82;
+
+  // Dimensi Hitbox Fisika
+  const PLAYER_W = 44;
+  const PLAYER_H = 76;
+  const MOVE_SPEED = 3.6;
+  const JUMP_POWER = -8.9; // Lompatan pertama lebih terukur / tidak melayang tinggi
+  const DOUBLE_JUMP_POWER = -9.5; // Double jump terukur
   const GRAVITY = 0.6;
 
   // Titik Awal Pemain (Spawn Point) - Di Platform 3 Paling Kanan
   // Platform 3: x = 737, y = 307, w = 262 (ujung kanan = 999 px)
   const SPAWN_X = 945;
-  const SPAWN_Y = 307 - PLAYER_H; // 239 px (tepat menapak di atas Platform 3)
+  const SPAWN_Y = 307 - PLAYER_H; // tepat menapak di atas Platform 3
 
   // 1. State Pemain & Fisika Dasar
   const [playerX, setPlayerX] = useState(SPAWN_X);
   const [playerY, setPlayerY] = useState(SPAWN_Y);
   const [velocityY, setVelocityY] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
+  const [facingLeft, setFacingLeft] = useState(true);
   const [facingRight, setFacingRight] = useState(false);
   const [isWalking, setIsWalking] = useState(false);
+
+  // State Animasi Sprite (File PNG Tunggal per Frame, sama dengan Stage 1)
+  const [playerSprite, setPlayerSprite] = useState<string>("/idle.png");
 
   // 2. State Sistem Misi
   const [tasks, setTasks] = useState<TaskState>({
@@ -184,8 +194,18 @@ export default function Stage2Platformer() {
   const teleportCooldownRef = useRef(0);
   const hasExitedPortalRef = useRef(true);
   const keysPressed = useRef<Set<string>>(new Set());
-  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
-  playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
+
+  // Ref pelacak animasi pemain (File PNG Tunggal per Frame, sama dengan Stage 1)
+  const animRef = useRef({
+    action: "idle",
+    frame: 1,
+    lastFrameTime: 0,
+    isDoubleJumping: false,
+    facing: "left" as "right" | "left",
+  });
+
+  playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
 
   // Timer Toast
   useEffect(() => {
@@ -413,11 +433,60 @@ export default function Stage2Platformer() {
         handleInteractE();
       }
 
+      // Handler Lompatan (Lompatan Pertama & Double Jump)
+      if (key === "w" || key === "arrowup" || key === " ") {
+        if (!showMateriModalRef.current && !showGameModalRef.current && !isSuctioningRef.current) {
+          const p = playerRef.current;
+          if (!p.jumping) {
+            // Kondisi 1: Lompatan Pertama dari tanah/platform
+            p.vy = JUMP_POWER;
+            p.jumping = true;
+            p.canDoubleJump = true;
+            animRef.current.isDoubleJumping = false;
+          } else if (p.canDoubleJump) {
+            // Kondisi 2: Double Jump saat di udara
+            p.vy = DOUBLE_JUMP_POWER;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = true;
+          }
+        }
+      }
+
+      if (key === "a" || key === "arrowleft") {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+        animRef.current.facing = "left";
+      } else if (key === "d" || key === "arrowright") {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+        animRef.current.facing = "right";
+      }
+
       keysPressed.current.add(key);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysPressed.current.delete(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keysPressed.current.delete(key);
+
+      const stillHasA = keysPressed.current.has("a") || keysPressed.current.has("arrowleft");
+      const stillHasD = keysPressed.current.has("d") || keysPressed.current.has("arrowright");
+
+      if (stillHasA) {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+        animRef.current.facing = "left";
+      } else if (stillHasD) {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+        animRef.current.facing = "right";
+      } else if (key === "a" || key === "arrowleft" || key === "d" || key === "arrowright") {
+        setIsWalking(false);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -449,20 +518,26 @@ export default function Stage2Platformer() {
       let moveX = 0;
       if (keys.has("a") || keys.has("arrowleft")) {
         moveX -= MOVE_SPEED;
+        setFacingLeft(true);
         setFacingRight(false);
+        animRef.current.facing = "left";
       }
       if (keys.has("d") || keys.has("arrowright")) {
         moveX += MOVE_SPEED;
+        setFacingLeft(false);
         setFacingRight(true);
+        animRef.current.facing = "right";
       }
 
-      setIsWalking(moveX !== 0 && !p.jumping);
+      setIsWalking(moveX !== 0);
 
-      // 2. Lompat (W / Spasi)
+      // 2. Lompat
       const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
       if (wantsJump && !p.jumping) {
         p.vy = JUMP_POWER;
         p.jumping = true;
+        p.canDoubleJump = true;
+        animRef.current.isDoubleJumping = false;
       }
 
       // 3. Batasan Penghalang Aktif
@@ -533,6 +608,8 @@ export default function Stage2Platformer() {
         p.y = bY - PLAYER_H;
         p.vy = 0;
         p.jumping = false;
+        p.canDoubleJump = false;
+        animRef.current.isDoubleJumping = false;
       }
 
       // Cek Tekanan Tombol Kuning oleh Kotak (Titik Tengah Kotak bX + 22)
@@ -556,6 +633,8 @@ export default function Stage2Platformer() {
             nextY = barrier.y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
           } else if (p.vy < 0 && p.y >= barrier.y + barrier.h - 12 && nextY <= barrier.y + barrier.h) {
             nextY = barrier.y + barrier.h;
             p.vy = 0;
@@ -583,6 +662,8 @@ export default function Stage2Platformer() {
           p.y = rampSurfaceY - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
+          p.canDoubleJump = false;
+          animRef.current.isDoubleJumping = false;
           onRamp = true;
         }
       }
@@ -598,6 +679,8 @@ export default function Stage2Platformer() {
             p.y = plat.y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
           }
         }
       }
@@ -626,6 +709,8 @@ export default function Stage2Platformer() {
         p.y = safeGroundRef.current.y;
         p.vy = 0;
         p.jumping = false;
+        p.canDoubleJump = false;
+        animRef.current.isDoubleJumping = false;
         const now = Date.now();
         if (now > plasmaToastCooldownRef.current) {
           plasmaToastCooldownRef.current = now + 1500;
@@ -676,6 +761,9 @@ export default function Stage2Platformer() {
               p.x = target.x + (target.w - PLAYER_W) / 2;
               p.y = target.y + target.h - PLAYER_H;
               p.vy = 0;
+              p.jumping = false;
+              p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
               teleportCooldownRef.current = now + 400;
               hasExitedPortalRef.current = false;
               setTeleportToast(`⚡ Teleport: ${portal.name} ➔ ${target.name}`);
@@ -702,8 +790,73 @@ export default function Stage2Platformer() {
         p.y = SPAWN_Y;
         p.vy = 0;
         p.jumping = false;
+        p.canDoubleJump = false;
+        animRef.current.isDoubleJumping = false;
         setTeleportToast("⚠️ Terjatuh ke ruang hampa! Kembali ke titik awal.");
       }
+
+      // Update State Animasi Sprite Pemain (Sama persis dengan Stage 1)
+      const ar = animRef.current;
+      const nowAnim = performance.now();
+      const isAirborne = p.jumping || Math.abs(p.vy) > 0.05;
+      const isFacingLeft = ar.facing === "left";
+      const walking = moveX !== 0;
+
+      let nextSprite = "/idle.png";
+
+      // PRIORITAS 1 - MELOMPAT / DI UDARA (!isGrounded)
+      if (isAirborne) {
+        const isDoubleJump = ar.isDoubleJumping || (!p.canDoubleJump && p.jumping);
+        if (isDoubleJump) {
+          // Animasi bergantian antara /jetpack-1.png dan /jetpack-2.png saat double jump
+          if (ar.action !== "jetpack") {
+            ar.action = "jetpack";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 100) {
+            ar.frame = ar.frame === 1 ? 2 : 1;
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/jetpack-${ar.frame}.png`;
+        } else {
+          // Lompat pertama biasa: /jump-1.png
+          ar.action = "jump";
+          ar.frame = 1;
+          nextSprite = "/jump-1.png";
+        }
+      }
+      // PRIORITAS 2 - BERJALAN KE KANAN (isWalking && !facingLeft)
+      else if (walking && !isFacingLeft) {
+        if (ar.action !== "walk_r") {
+          ar.action = "walk_r";
+          ar.frame = 1;
+          ar.lastFrameTime = nowAnim;
+        } else if (nowAnim - ar.lastFrameTime >= 120) {
+          ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+          ar.lastFrameTime = nowAnim;
+        }
+        nextSprite = `/walk-r-${ar.frame}.png`;
+      }
+      // PRIORITAS 3 - BERJALAN KE KIRI (isWalking && facingLeft)
+      else if (walking && isFacingLeft) {
+        if (ar.action !== "walk_l") {
+          ar.action = "walk_l";
+          ar.frame = 1;
+          ar.lastFrameTime = nowAnim;
+        } else if (nowAnim - ar.lastFrameTime >= 120) {
+          ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+          ar.lastFrameTime = nowAnim;
+        }
+        nextSprite = `/walk-l-${ar.frame}.png`;
+      }
+      // PRIORITAS 4 - DIAM / IDLE (!isWalking && isGrounded)
+      else {
+        ar.action = "idle";
+        ar.frame = 0;
+        nextSprite = "/idle.png";
+      }
+
+      setPlayerSprite(nextSprite);
 
       // Update State
       setPlayerX(p.x);
@@ -1291,7 +1444,7 @@ export default function Stage2Platformer() {
           </div>
         )}
 
-        {/* 8. Karakter Pemain (Astronaut) */}
+        {/* 8. Karakter Pemain */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1307,20 +1460,39 @@ export default function Stage2Platformer() {
             }`}
             style={{
               transformOrigin: "bottom center",
-              transform: !isSuctioning
-                ? isJumping
-                  ? `${facingRight ? "scaleX(0.88)" : "scaleX(-0.88)"} scaleY(1.12)`
-                  : `${facingRight ? "scaleX(1)" : "scaleX(-1)"} scaleY(1)`
-                : undefined,
             }}
           >
-            <img
-              src="/astronaut-front.png"
-              alt="Astronaut"
-              className={`h-full w-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] ${
-                isWalking && !isJumping && !isSuctioning ? "animate-waddle" : ""
-              }`}
-            />
+            {/* Kontainer visual VISUAL_W x VISUAL_H terpusat pada hitbox */}
+            <div
+              className="absolute"
+              style={{
+                left: `${(PLAYER_W - VISUAL_W) / 2}px`,
+                bottom: "0px",
+                width: `${VISUAL_W}px`,
+                height: `${VISUAL_H}px`,
+              }}
+            >
+              {/* Elemen sprite utama persegi (VISUAL_H x VISUAL_H) */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={playerSprite}
+                alt="Player"
+                draggable={false}
+                className="absolute select-none pointer-events-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
+                style={{
+                  width: `${VISUAL_H}px`,
+                  height: `${VISUAL_H}px`,
+                  bottom: 0,
+                  left: "50%",
+                  objectFit: "contain",
+                  objectPosition: "center bottom",
+                  transform: ((isJumping || !isWalking) && facingLeft)
+                    ? "translateX(-50%) scaleX(-1)"
+                    : "translateX(-50%)",
+                  transformOrigin: "center bottom",
+                }}
+              />
+            </div>
           </div>
         </div>
 

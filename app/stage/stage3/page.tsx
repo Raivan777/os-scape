@@ -90,11 +90,17 @@ export default function Stage3Page() {
   const GAME_HEIGHT = 576;
   const GROUND_Y = 540; // Lantai dasar solid mengikuti garis lantai gambar baru
 
-  // ─── KONSTANTA PEMAIN ────────────────────────────────────────
-  const PLAYER_W = 40;
-  const PLAYER_H = 70;
+  // ─── KONSTANTA PEMAIN & SPRITE (Sama dengan Stage 1) ────────
+  // Dimensi visual karakter (sedikit diperbesar proporsional 2:3)
+  const VISUAL_W = 54;
+  const VISUAL_H = 82;
+
+  // Dimensi Hitbox Fisika
+  const PLAYER_W = 44;
+  const PLAYER_H = 76;
   const MOVE_SPEED = 3.6;
-  const JUMP_POWER = -10;
+  const JUMP_POWER = -8.9; // Lompatan pertama lebih terukur / tidak melayang tinggi
+  const DOUBLE_JUMP_POWER = -9.5; // Double jump terukur
   const GRAVITY = 0.6;
 
   // ─── TITIK AWAL PEMAIN (SPAWN POINT) ─────────────────────────
@@ -110,6 +116,9 @@ export default function Stage3Page() {
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
   const [isHurt, setIsHurt] = useState(false);
+
+  // ─── STATE ANIMASI SPRITE (File PNG Tunggal per Frame, sama dengan Stage 1) ────
+  const [playerSprite, setPlayerSprite] = useState<string>("/idle.png");
 
   // ─── STATE TOAST NOTIFIKASI ──────────────────────────────────
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -482,6 +491,14 @@ export default function Stage3Page() {
   // ─── REFS GAME LOOP ──────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
+  // Ref pelacak animasi pemain (File PNG Tunggal per Frame, sama dengan Stage 1)
+  const animRef = useRef({
+    action: "idle",
+    frame: 1,
+    lastFrameTime: 0,
+    isDoubleJumping: false,
+    facing: "right" as "right" | "left",
+  });
   const laserOpenRef = useRef(isAllModesCompleted);
   // Tembok Biru terbuka bersamaan dengan portal menuju Stage 4 setelah menyelesaikan mini-game
   const isWallBlueOpen = isAllModesCompleted;
@@ -504,6 +521,7 @@ export default function Stage3Page() {
     setFacingLeft(false);
     setFacingRight(true);
     playerRef.current = { x: SPAWN_X, y: SPAWN_Y, vy: 0, jumping: false, canDoubleJump: false };
+    animRef.current.isDoubleJumping = false;
 
     if (reason) triggerAlert(reason);
   };
@@ -589,10 +607,12 @@ export default function Stage3Page() {
             p.vy = JUMP_POWER;
             p.jumping = true;
             p.canDoubleJump = true;
+            animRef.current.isDoubleJumping = false;
           } else if (p.canDoubleJump) {
             // Kondisi 2: Double Jump saat di udara
-            p.vy = JUMP_POWER;
+            p.vy = DOUBLE_JUMP_POWER;
             p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = true;
           }
         }
       }
@@ -601,10 +621,12 @@ export default function Stage3Page() {
         setFacingLeft(true);
         setFacingRight(false);
         setIsWalking(true);
+        animRef.current.facing = "left";
       } else if (key === "d" || key === "arrowright") {
         setFacingLeft(false);
         setFacingRight(true);
         setIsWalking(true);
+        animRef.current.facing = "right";
       }
 
       keysPressed.current.add(key);
@@ -621,10 +643,12 @@ export default function Stage3Page() {
         setFacingLeft(true);
         setFacingRight(false);
         setIsWalking(true);
+        animRef.current.facing = "left";
       } else if (stillHasD) {
         setFacingLeft(false);
         setFacingRight(true);
         setIsWalking(true);
+        animRef.current.facing = "right";
       } else if (key === "a" || key === "arrowleft" || key === "d" || key === "arrowright") {
         setIsWalking(false);
       }
@@ -671,11 +695,13 @@ export default function Stage3Page() {
           moveX -= MOVE_SPEED;
           setFacingLeft(true);
           setFacingRight(false);
+          animRef.current.facing = "left";
         }
         if (keys.has("d") || keys.has("arrowright")) {
           moveX += MOVE_SPEED;
           setFacingLeft(false);
           setFacingRight(true);
+          animRef.current.facing = "right";
         }
 
         setIsWalking(moveX !== 0);
@@ -687,6 +713,7 @@ export default function Stage3Page() {
           p.vy = JUMP_POWER;
           p.jumping = true;
           p.canDoubleJump = true;
+          animRef.current.isDoubleJumping = false;
         }
 
         // 3. GRAVITASI
@@ -732,6 +759,7 @@ export default function Stage3Page() {
             p.vy = 0;
             p.jumping = false;
             p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
           }
         }
 
@@ -762,6 +790,7 @@ export default function Stage3Page() {
               p.vy = 0;
               p.jumping = false;
               p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
             }
           }
         }
@@ -772,6 +801,7 @@ export default function Stage3Page() {
           p.vy = 0;
           p.jumping = false;
           p.canDoubleJump = false;
+          animRef.current.isDoubleJumping = false;
         }
 
         // 9. PENGHALANG PINTU LASER FIREWALL (DI PIJAKAN KIRI ATAS SEBELUM SELESAI)
@@ -919,6 +949,69 @@ export default function Stage3Page() {
         const distMidLeftX = Math.abs(p.x + PLAYER_W / 2 - (consoleMidLeftObj.x + consoleMidLeftObj.w / 2));
         const distMidLeftY = Math.abs(p.y + PLAYER_H / 2 - (consoleMidLeftObj.y + consoleMidLeftObj.h / 2));
         setIsNearMidLeftSwitch(distMidLeftX < 65 && distMidLeftY < 65);
+
+        // Update State Animasi Sprite Pemain (Sama persis dengan Stage 1)
+        const ar = animRef.current;
+        const nowAnim = performance.now();
+        const isAirborne = p.jumping || Math.abs(p.vy) > 0.05;
+        const isFacingLeft = ar.facing === "left";
+        const walking = moveX !== 0;
+
+        let nextSprite = "/idle.png";
+
+        // PRIORITAS 1 - MELOMPAT / DI UDARA (!isGrounded)
+        if (isAirborne) {
+          const isDoubleJump = ar.isDoubleJumping || (!p.canDoubleJump && p.jumping);
+          if (isDoubleJump) {
+            // Animasi bergantian antara /jetpack-1.png dan /jetpack-2.png saat double jump
+            if (ar.action !== "jetpack") {
+              ar.action = "jetpack";
+              ar.frame = 1;
+              ar.lastFrameTime = nowAnim;
+            } else if (nowAnim - ar.lastFrameTime >= 100) {
+              ar.frame = ar.frame === 1 ? 2 : 1;
+              ar.lastFrameTime = nowAnim;
+            }
+            nextSprite = `/jetpack-${ar.frame}.png`;
+          } else {
+            // Lompat pertama biasa: /jump-1.png
+            ar.action = "jump";
+            ar.frame = 1;
+            nextSprite = "/jump-1.png";
+          }
+        }
+        // PRIORITAS 2 - BERJALAN KE KANAN (isWalking && !facingLeft)
+        else if (walking && !isFacingLeft) {
+          if (ar.action !== "walk_r") {
+            ar.action = "walk_r";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 120) {
+            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/walk-r-${ar.frame}.png`;
+        }
+        // PRIORITAS 3 - BERJALAN KE KIRI (isWalking && facingLeft)
+        else if (walking && isFacingLeft) {
+          if (ar.action !== "walk_l") {
+            ar.action = "walk_l";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 120) {
+            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/walk-l-${ar.frame}.png`;
+        }
+        // PRIORITAS 4 - DIAM / IDLE (!isWalking && isGrounded)
+        else {
+          ar.action = "idle";
+          ar.frame = 0;
+          nextSprite = "/idle.png";
+        }
+
+        setPlayerSprite(nextSprite);
 
         // Sinkronisasi state React
         setPlayerX(p.x);
@@ -1351,7 +1444,7 @@ export default function Stage3Page() {
           </div>
         </div>
 
-        {/* ─── KARAKTER PLAYER (SPRITE SHEET 2D) ────────────── */}
+        {/* ─── KARAKTER PLAYER ──────────────────────────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1361,21 +1454,39 @@ export default function Stage3Page() {
             height: `${PLAYER_H}px`,
           }}
         >
+          {/* Kontainer visual VISUAL_W x VISUAL_H terpusat pada hitbox */}
           <div
-            className={`h-full w-full ${isWalking ? "animate-player-walk" : ""} ${
+            className={`absolute ${
               isHurt ? "brightness-150 contrast-125 sepia animate-pulse" : ""
             }`}
             style={{
-              backgroundImage: "url('/player-sprite.png')",
-              backgroundSize: "400% 400%",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: !isWalking ? "0% 0%" : undefined,
-              backgroundPositionY: isWalking ? "33.8%" : "0%",
-              imageRendering: "pixelated",
-              transform: facingLeft ? "scaleX(-1)" : "scaleX(1)",
-              transformOrigin: "center bottom",
+              left: `${(PLAYER_W - VISUAL_W) / 2}px`,
+              bottom: "0px",
+              width: `${VISUAL_W}px`,
+              height: `${VISUAL_H}px`,
             }}
-          />
+          >
+            {/* Elemen sprite utama persegi (VISUAL_H x VISUAL_H) */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={playerSprite}
+              alt="Player"
+              draggable={false}
+              className="absolute select-none pointer-events-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
+              style={{
+                width: `${VISUAL_H}px`,
+                height: `${VISUAL_H}px`,
+                bottom: 0,
+                left: "50%",
+                objectFit: "contain",
+                objectPosition: "center bottom",
+                transform: ((isJumping || !isWalking) && facingLeft)
+                  ? "translateX(-50%) scaleX(-1)"
+                  : "translateX(-50%)",
+                transformOrigin: "center bottom",
+              }}
+            />
+          </div>
         </div>
 
       </div>
@@ -2290,22 +2401,6 @@ export default function Stage3Page() {
           </div>
         </div>
       )}
-
-      {/* ─── KEYFRAME ANIMASI PLAYER & WALK ─────────────── */}
-      <style jsx>{`
-        @keyframes playerWalk {
-          from {
-            background-position-x: 0%;
-          }
-          to {
-            /* Untuk 4 frame (0%, 33.33%, 66.66%, 100%), pergeseran total steps(4) adalah 4 * 33.3333% = 133.3333% */
-            background-position-x: 133.3333%;
-          }
-        }
-        .animate-player-walk {
-          animation: playerWalk 0.7s steps(4) infinite;
-        }
-      `}</style>
 
     </main>
   );
