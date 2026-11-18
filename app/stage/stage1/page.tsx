@@ -78,34 +78,146 @@ export default function Stage1Platformer() {
   const [isNearTerminal, setIsNearTerminal] = useState(false);
   const [isNearLever, setIsNearLever] = useState(false);
 
-  // ─── STATE MINI-GAME SJF SCHEDULING ────────────────────────
+  // ─── STATE MINI-GAME: ALIEN REACTOR POWER DISTRIBUTOR ───────
   const [isMiniGameOpen, setIsMiniGameOpen] = useState(false);
-  const [availableModules, setAvailableModules] = useState<{ id: string; name: string; time: number }[]>([]);
-  const [reactorQueue, setReactorQueue] = useState<({ id: string; name: string; time: number } | null)[]>([null, null, null]);
   const [isPortalActive, setIsPortalActive] = useState(false);
 
-  // Fungsi mengacak 3 modul dengan nilai time unik antara 2 hingga 15 ms
-  const generateRandomModules = () => {
-    const times: number[] = [];
-    while (times.length < 3) {
-      const randTime = Math.floor(Math.random() * 14) + 2; // Acak unik 2 s.d 15 ms
-      if (!times.includes(randTime)) {
-        times.push(randTime);
-      }
-    }
-    const modules = [
-      { id: "A", name: "Modul A", time: times[0] },
-      { id: "B", name: "Modul B", time: times[1] },
-      { id: "C", name: "Modul C", time: times[2] },
+  interface ReactorProcess {
+    id: string;
+    name: string;
+    arrivalTime: number;
+    burstTime: number;
+    remainingTime: number;
+    badgeColor: string;
+    borderColor: string;
+    textColor: string;
+    ganttBg: string;
+  }
+
+  interface GanttHistoryItem {
+    id: string;
+    name: string;
+    start: number;
+    duration: number;
+    ganttBg: string;
+  }
+
+  const [reactorLevel, setReactorLevel] = useState<1 | 2 | 3>(1);
+  const [levelTimer, setLevelTimer] = useState<number>(30);
+  const [readyQueue, setReadyQueue] = useState<ReactorProcess[]>([]);
+  const [activeCoreProcess, setActiveCoreProcess] = useState<(ReactorProcess & { allocTime: number }) | null>(null);
+  const [executionProgress, setExecutionProgress] = useState<number>(0);
+  const [ganttHistory, setGanttHistory] = useState<GanttHistoryItem[]>([]);
+  const [reactorStatus, setReactorStatus] = useState<"playing" | "failed" | "won_level" | "victory">("playing");
+  const [reactorFeedback, setReactorFeedback] = useState<{ text: string; type: "error" | "success" | "info" } | null>(null);
+  const [isCpuBusy, setIsCpuBusy] = useState<boolean>(false);
+  const cpuExecutionTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper Generator Data Proses Acak per Level
+  const generateLevelProcesses = (level: 1 | 2 | 3): { processes: ReactorProcess[]; timer: number } => {
+    const processStyles = [
+      { id: "P1", name: "Proses P1", badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-400/40", borderColor: "border-cyan-400/60", textColor: "text-cyan-300", ganttBg: "bg-cyan-500 text-black" },
+      { id: "P2", name: "Proses P2", badgeColor: "bg-amber-500/20 text-amber-300 border-amber-400/40", borderColor: "border-amber-400/60", textColor: "text-amber-300", ganttBg: "bg-amber-500 text-black" },
+      { id: "P3", name: "Proses P3", badgeColor: "bg-purple-500/20 text-purple-300 border-purple-400/40", borderColor: "border-purple-400/60", textColor: "text-purple-300", ganttBg: "bg-purple-500 text-black" },
+      { id: "P4", name: "Proses P4", badgeColor: "bg-rose-500/20 text-rose-300 border-rose-400/40", borderColor: "border-rose-400/60", textColor: "text-rose-300", ganttBg: "bg-rose-500 text-black" },
     ];
-    setAvailableModules(modules);
-    setReactorQueue([null, null, null]);
+
+    if (level === 1) {
+      // LEVEL 1: FCFS (3 Proses: P1, P2, P3)
+      // 3 angka Arrival Time unik antara 0s s.d 6s
+      const arrivalPool = [0, 1, 2, 3, 4, 5, 6].sort(() => Math.random() - 0.5);
+      const arrivals = arrivalPool.slice(0, 3);
+
+      const procs: ReactorProcess[] = [0, 1, 2].map((idx) => {
+        const b = Math.floor(Math.random() * 4) + 2; // Burst 2s s.d 5s
+        return {
+          ...processStyles[idx],
+          arrivalTime: arrivals[idx],
+          burstTime: b,
+          remainingTime: b,
+        };
+      });
+
+      // Tampilkan dalam urutan teracak di layar
+      const shuffled = [...procs].sort(() => Math.random() - 0.5);
+      return { processes: shuffled, timer: 30 };
+    } else if (level === 2) {
+      // LEVEL 2: SJF (4 Proses: P1, P2, P3, P4)
+      // Semua Arrival Time = 0s. 4 angka Burst Time unik antara 1s s.d 6s
+      const burstPool = [1, 2, 3, 4, 5, 6].sort(() => Math.random() - 0.5);
+      const bursts = burstPool.slice(0, 4);
+
+      const procs: ReactorProcess[] = [0, 1, 2, 3].map((idx) => ({
+        ...processStyles[idx],
+        arrivalTime: 0,
+        burstTime: bursts[idx],
+        remainingTime: bursts[idx],
+      }));
+
+      // Tampilkan dalam urutan teracak di layar
+      const shuffled = [...procs].sort(() => Math.random() - 0.5);
+      return { processes: shuffled, timer: 30 };
+    } else {
+      // LEVEL 3: Round Robin (q = 2s, 3 Proses: P1, P2, P3)
+      // Arrival = 0s, tersusun berurutan di Ready Queue
+      // Burst antara 3s s.d 6s (semua > 2s untuk memastikan rotasi)
+      const procs: ReactorProcess[] = [0, 1, 2].map((idx) => {
+        const b = Math.floor(Math.random() * 4) + 3; // 3s s.d 6s
+        return {
+          ...processStyles[idx],
+          arrivalTime: 0,
+          burstTime: b,
+          remainingTime: b,
+        };
+      });
+
+      return { processes: procs, timer: 35 };
+    }
   };
 
-  const openSJFGame = () => {
-    generateRandomModules();
+  const startReactorLevel = (level: 1 | 2 | 3) => {
+    if (cpuExecutionTimerRef.current) {
+      clearInterval(cpuExecutionTimerRef.current);
+      cpuExecutionTimerRef.current = null;
+    }
+    const { processes, timer } = generateLevelProcesses(level);
+    setReactorLevel(level);
+    setReadyQueue(processes);
+    setLevelTimer(timer);
+    setActiveCoreProcess(null);
+    setExecutionProgress(0);
+    setGanttHistory([]);
+    setReactorStatus("playing");
+    setReactorFeedback(null);
+    setIsCpuBusy(false);
+  };
+
+  const openReactorGame = () => {
+    startReactorLevel(1);
     setIsMiniGameOpen(true);
   };
+  const openSJFGame = openReactorGame;
+
+  // Countdown Timer Mini-Game
+  useEffect(() => {
+    if (!isMiniGameOpen || reactorStatus !== "playing") return;
+
+    const timer = setInterval(() => {
+      setLevelTimer((prev) => {
+        if (prev <= 1) {
+          setReactorStatus("failed");
+          setReactorFeedback({
+            text: "⚠️ Reactor Overload! Batas waktu habis.",
+            type: "error",
+          });
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isMiniGameOpen, reactorStatus]);
 
   // ──────────────────────────────────────────────────────────
   // HITBOX DEFINITIONS (Relatif terhadap kanvas 1024×576)
@@ -309,6 +421,12 @@ export default function Stage1Platformer() {
         if (showMaterial) {
           setShowMaterial(false);
         }
+        if (cpuExecutionTimerRef.current) {
+          clearInterval(cpuExecutionTimerRef.current);
+          cpuExecutionTimerRef.current = null;
+        }
+        setIsCpuBusy(false);
+        setActiveCoreProcess(null);
         setIsMiniGameOpen(false);
         setShowTes1Modal(false);
         setShowTes2Modal(false);
@@ -1082,67 +1200,145 @@ export default function Stage1Platformer() {
     setShowTes2Modal(false);
   };
 
-  // ─── LOGIKA SJF (SHORTEST JOB FIRST) DRAG & DROP ──────────
-  const handleDragStart = (e: React.DragEvent, moduleId: string) => {
-    e.dataTransfer.setData("text/plain", moduleId);
+  // ─── LOGIKA ALIEN REACTOR POWER DISTRIBUTOR ───────────────
+  const handleCloseReactorModal = () => {
+    if (cpuExecutionTimerRef.current) {
+      clearInterval(cpuExecutionTimerRef.current);
+      cpuExecutionTimerRef.current = null;
+    }
+    setIsCpuBusy(false);
+    setActiveCoreProcess(null);
+    setIsMiniGameOpen(false);
   };
 
-  const handleDrop = (e: React.DragEvent, slotIndex: number) => {
-    e.preventDefault();
-    const moduleId = e.dataTransfer.getData("text/plain");
-    if (!moduleId) return;
+  const handleSelectProcess = (proc: ReactorProcess) => {
+    if (isCpuBusy || reactorStatus !== "playing") return;
 
-    const moduleToPlace = availableModules.find((m) => m.id === moduleId);
-    if (!moduleToPlace) return;
-
-    setReactorQueue((prev) => {
-      const next = [...prev];
-      // Jika modul ini sudah ada di slot antrean lain, kosongkan slot lamanya
-      for (let i = 0; i < next.length; i++) {
-        if (next[i]?.id === moduleId) {
-          next[i] = null;
-        }
+    if (reactorLevel === 1) {
+      // FCFS: Wajib pilih Arrival Time paling kecil
+      const minArrival = Math.min(...readyQueue.map((p) => p.arrivalTime));
+      if (proc.arrivalTime !== minArrival) {
+        setReactorFeedback({
+          text: "⚠️ Error: FCFS wajib mendahulukan proses dengan Arrival Time paling awal!",
+          type: "error",
+        });
+        setLevelTimer((t) => Math.max(0, t - 3));
+        return;
       }
-      next[slotIndex] = moduleToPlace;
-      return next;
-    });
-  };
-
-  const handleRemoveFromQueue = (slotIndex: number) => {
-    setReactorQueue((prev) => {
-      const next = [...prev];
-      next[slotIndex] = null;
-      return next;
-    });
-  };
-
-  const handleResetQueue = () => {
-    setReactorQueue([null, null, null]);
-  };
-
-  const handleActivateReactor = () => {
-    // a. Cek apakah ada slot di reactorQueue yang masih null (belum penuh)
-    if (reactorQueue.some((slot) => slot === null)) {
-      alert("Isi semua slot!");
-      return;
+    } else if (reactorLevel === 2) {
+      // SJF: Wajib pilih Burst Time terkecil
+      const minBurst = Math.min(...readyQueue.map((p) => p.remainingTime));
+      if (proc.remainingTime !== minBurst) {
+        setReactorFeedback({
+          text: "⚠️ Error: SJF wajib mendahulukan Burst Time terkecil!",
+          type: "error",
+        });
+        setLevelTimer((t) => Math.max(0, t - 3));
+        return;
+      }
+    } else if (reactorLevel === 3) {
+      // Round Robin: Wajib pilih proses paling depan di Ready Queue
+      if (proc.id !== readyQueue[0]?.id) {
+        setReactorFeedback({
+          text: "⚠️ Error: Ikuti urutan antrean Round Robin dari depan!",
+          type: "error",
+        });
+        setLevelTimer((t) => Math.max(0, t - 3));
+        return;
+      }
     }
 
-    // b. Validasi apakah urutan time dari indeks 0 ke 2 sudah dari TERKECIL ke TERBESAR (Ascending)
-    const q = reactorQueue as { id: string; name: string; time: number }[];
-    const isCorrectOrder = q[0].time <= q[1].time && q[1].time <= q[2].time;
+    // Pilihan valid! Mulai simulasi eksekusi CPU Core
+    const allocTime = reactorLevel === 3 ? Math.min(proc.remainingTime, 2) : proc.remainingTime;
+    setIsCpuBusy(true);
+    setActiveCoreProcess({ ...proc, allocTime });
+    setExecutionProgress(0);
+    setReactorFeedback({
+      text: `⚡ Mengalokasikan ${proc.id} (${allocTime}s) ke CPU Core...`,
+      type: "success",
+    });
 
-    if (isCorrectOrder) {
-      // c. Jika BENAR: set isPortalActive = true, tutup modal, beri notifikasi sukses
-      setIsPortalActive(true);
-      setIsMiniGameOpen(false);
-      alert(
-        `✅ REAKTOR BERHASIL DIAKTIFKAN!\n\nPrinsip Shortest Job First (SJF) valid: [${q[0].name}: ${q[0].time}ms] ➔ [${q[1].name}: ${q[1].time}ms] ➔ [${q[2].name}: ${q[2].time}ms].\nAverage Waiting Time diminimalkan.\n\nGerbang Portal Stage 2 kini terbuka!`
-      );
-    } else {
-      // d. Jika SALAH: beri alert overload lalu reset antrean
-      alert("❌ Sistem Overload! Gunakan prinsip Shortest Job First (beban terkecil duluan).");
-      setReactorQueue([null, null, null]);
+    const stepMs = 30;
+    const totalMs = allocTime * 450; // 450ms per detik burst time
+    let elapsed = 0;
+
+    if (cpuExecutionTimerRef.current) {
+      clearInterval(cpuExecutionTimerRef.current);
     }
+
+    cpuExecutionTimerRef.current = setInterval(() => {
+      elapsed += stepMs;
+      const pct = Math.min(100, Math.round((elapsed / totalMs) * 100));
+      setExecutionProgress(pct);
+
+      if (elapsed >= totalMs) {
+        if (cpuExecutionTimerRef.current) {
+          clearInterval(cpuExecutionTimerRef.current);
+          cpuExecutionTimerRef.current = null;
+        }
+
+        // Simpan log ke Gantt History
+        setGanttHistory((prev) => {
+          const currentTotal = prev.reduce((sum, item) => sum + item.duration, 0);
+          return [
+            ...prev,
+            {
+              id: proc.id,
+              name: proc.name,
+              start: currentTotal,
+              duration: allocTime,
+              ganttBg: proc.ganttBg,
+            },
+          ];
+        });
+
+        const newRemaining = proc.remainingTime - allocTime;
+
+        if (newRemaining <= 0) {
+          // Proses tuntas
+          setReadyQueue((prev) => {
+            const nextQ = prev.filter((p) => p.id !== proc.id);
+            if (nextQ.length === 0) {
+              if (reactorLevel < 3) {
+                setReactorStatus("won_level");
+                setReactorFeedback({
+                  text: `🎉 Level ${reactorLevel} Selesai! Klik tombol untuk lanjut ke Level berikutnya.`,
+                  type: "success",
+                });
+              } else {
+                setReactorStatus("victory");
+                setIsPortalActive(true);
+                setReactorFeedback({
+                  text: "🌟 Reaktor Stabil! Semua level berhasil diselesaikan. Portal Stage 2 kini terbuka!",
+                  type: "success",
+                });
+              }
+            } else {
+              setReactorFeedback({
+                text: `✓ ${proc.id} selesai dieksekusi!`,
+                type: "info",
+              });
+            }
+            return nextQ;
+          });
+        } else {
+          // Round Robin: sisa > 0, putar ke belakang antrean
+          setReadyQueue((prev) => {
+            const rest = prev.filter((p) => p.id !== proc.id);
+            const updated = { ...proc, remainingTime: newRemaining };
+            return [...rest, updated];
+          });
+          setReactorFeedback({
+            text: `🔄 ${proc.id} quantum 2s habis (sisa ${newRemaining}s) ➔ kembali ke antrean belakang.`,
+            type: "info",
+          });
+        }
+
+        setActiveCoreProcess(null);
+        setIsCpuBusy(false);
+        setExecutionProgress(0);
+      }
+    }, stepMs);
   };
 
   // ═══════════════════════════════════════════════════════════
@@ -1384,8 +1580,8 @@ export default function Stage1Platformer() {
         >
           {isNearLever && (
             <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
-              <span className="rounded bg-emerald-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
-                [E] Konsol SJF
+              <span className="rounded bg-cyan-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
+                [E] Reaktor Alien
               </span>
             </div>
           )}
@@ -2180,169 +2376,325 @@ export default function Stage1Platformer() {
       )}
 
       {/* ═══════════════════════════════════════════════════════
-          MODAL 2: MINI-GAME SHORTEST JOB FIRST (SJF) SCHEDULING
+          MODAL 2: ALIEN REACTOR POWER DISTRIBUTOR (3 LEVEL)
           ═══════════════════════════════════════════════════════ */}
       {isMiniGameOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md select-none">
-          <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border-2 border-cyan-500 bg-gray-900/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_60px_rgba(6,182,212,0.4)]">
-            {/* Header Modal */}
-            <div className="flex items-center justify-between border-b border-cyan-500/30 pb-4">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl border-2 border-cyan-500/70 bg-[#090d1f]/95 p-6 md:p-7 text-[#e9e4ff] shadow-[0_0_60px_rgba(6,182,212,0.35)]">
+            {/* 1. Header Status */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-cyan-500/30 pb-3.5 gap-3">
               <div className="flex items-center gap-3">
-                <span className="flex h-3 w-3 relative">
+                <span className="flex h-3.5 w-3.5 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500" />
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-cyan-500" />
                 </span>
                 <div>
-                  <h2 className="text-base md:text-lg font-black tracking-wider text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)] uppercase">
-                    ⚡ KONSOL REAKTOR // SHORTEST JOB FIRST (SJF)
+                  <h2 className="text-base md:text-lg font-black tracking-wider text-cyan-300 drop-shadow-[0_0_10px_rgba(34,211,238,0.7)] uppercase flex items-center gap-2">
+                    <span>⚛️</span> ALIEN REACTOR // POWER DISTRIBUTOR
                   </h2>
                   <p className="text-[11px] text-gray-400 mt-0.5">
-                    Susun urutan eksekusi modul ke dalam antrean inti berdasarkan beban waktu (burst time) terkecil ke terbesar.
+                    Mini-Game Penjadwalan CPU • 3 Level Berurutan (FCFS ➔ SJF ➔ Round Robin)
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsMiniGameOpen(false)}
-                className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:border-cyan-400 transition"
-              >
-                ✕ Tutup
-              </button>
-            </div>
 
-            {/* Konten Utama Mini-Game */}
-            <div className="mt-5 space-y-6">
-              {/* Bagian Atas: Modul Tersedia */}
-              <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-300">
-                    📦 Modul Proses Tersedia (Tarik ke Slot Bawah):
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    Drag & Drop Native HTML5
+              <div className="flex items-center gap-2.5 self-end sm:self-center">
+                {/* Level Indicator Badge */}
+                <div className="rounded-lg border px-2.5 py-1 text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm border-cyan-400/50 bg-cyan-950/40 text-cyan-300">
+                  <span>LEVEL {reactorLevel}/3:</span>
+                  <span className="text-white">
+                    {reactorLevel === 1 ? "FCFS" : reactorLevel === 2 ? "SJF" : "ROUND ROBIN (q=2s)"}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  {availableModules.map((mod) => {
-                    const isPlaced = reactorQueue.some((q) => q?.id === mod.id);
+                {/* Countdown Timer */}
+                <div
+                  className={`rounded-lg border px-3 py-1 text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm transition-all ${
+                    levelTimer <= 10
+                      ? "border-rose-500 bg-rose-950/60 text-rose-300 animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.4)]"
+                      : "border-cyan-400/40 bg-cyan-950/30 text-cyan-300"
+                  }`}
+                >
+                  <span>⏳</span>
+                  <span className="text-sm">{levelTimer}s</span>
+                </div>
 
-                    return (
-                      <div
-                        key={mod.id}
-                        draggable={!isPlaced}
-                        onDragStart={(e) => handleDragStart(e, mod.id)}
-                        className={`rounded-xl border p-3 flex flex-col justify-between transition-all select-none ${
-                          isPlaced
-                            ? "border-gray-700 bg-gray-800/40 opacity-40 cursor-not-allowed"
-                            : "border-cyan-400/60 bg-cyan-950/40 hover:border-cyan-300 hover:scale-102 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] cursor-grab active:cursor-grabbing"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                            MODUL {mod.id}
-                          </span>
-                          <span className="text-base">⚡</span>
-                        </div>
-                        <div className="mt-2 text-center">
-                          <span className="text-xs text-gray-300 block">{mod.name}</span>
-                          <span className="text-lg font-black font-mono text-amber-400 tracking-wider">
-                            {mod.time} <span className="text-[11px] font-normal text-amber-200">ms</span>
-                          </span>
-                        </div>
-                        {isPlaced && (
-                          <span className="mt-1 text-[9px] font-mono text-center text-emerald-400">
-                            ✓ Di Antrean
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
+                <button
+                  type="button"
+                  onClick={handleCloseReactorModal}
+                  className="rounded-lg border border-white/10 px-2.5 py-1 text-xs text-gray-400 hover:text-white hover:border-cyan-400 transition"
+                  title="Tutup Modal"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Instruction Banner & Feedback Bar */}
+            <div className="mt-3.5 space-y-2">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 flex items-center justify-between text-xs">
+                <span className="text-gray-300 flex items-center gap-2">
+                  <span className="text-amber-400">⚡ Aturan Level:</span>
+                  <span>
+                    {reactorLevel === 1 && "FCFS: Pilih proses dengan Arrival Time paling awal (terkecil)!"}
+                    {reactorLevel === 2 && "SJF: Pilih proses dengan Burst Time paling singkat (terkecil)!"}
+                    {reactorLevel === 3 && "Round Robin: Pilih proses paling depan di Ready Queue (maks 2s per giliran)!"}
+                  </span>
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono hidden md:inline">
+                  Salah klik = Penalti -3 detik
+                </span>
+              </div>
+
+              {reactorFeedback && (
+                <div
+                  className={`rounded-xl border px-3.5 py-2 text-xs flex items-center justify-between transition-all ${
+                    reactorFeedback.type === "error"
+                      ? "border-rose-500/60 bg-rose-950/50 text-rose-200"
+                      : reactorFeedback.type === "success"
+                      ? "border-cyan-500/60 bg-cyan-950/50 text-cyan-200"
+                      : "border-blue-500/60 bg-blue-950/50 text-blue-200"
+                  }`}
+                >
+                  <span className="font-medium">{reactorFeedback.text}</span>
+                  {reactorFeedback.type === "error" && (
+                    <span className="text-[10px] font-bold text-rose-300 bg-rose-900/60 px-1.5 py-0.5 rounded">
+                      -3s
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Main Work Area: Ready Queue (Left) & Reactor CPU Core (Right) */}
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Ready Queue (Antrean Kapsul Energi) */}
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3.5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+                      <span>📦</span> Ready Queue ({readyQueue.length} Kapsul):
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {isCpuBusy ? "🔒 CPU Sibuk" : "🖱️ Klik Kapsul"}
+                    </span>
+                  </div>
+
+                  {readyQueue.length === 0 ? (
+                    <div className="h-44 rounded-xl border border-dashed border-white/10 flex flex-col items-center justify-center text-center p-4 text-gray-400">
+                      <span className="text-2xl mb-1">✓</span>
+                      <span className="text-xs font-semibold text-emerald-400">Semua Kapsul Telah Tuntas!</span>
+                      <span className="text-[10px] text-gray-500 mt-0.5">Seluruh daya reaktor berhasil dialokasikan.</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                      {readyQueue.map((p, idx) => {
+                        const isFront = idx === 0;
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => handleSelectProcess(p)}
+                            className={`rounded-xl border p-2.5 transition-all select-none flex items-center justify-between ${
+                              isCpuBusy
+                                ? "opacity-50 cursor-not-allowed border-white/10 bg-white/[0.02]"
+                                : "cursor-pointer hover:scale-[1.02] active:scale-[0.98] border-cyan-500/40 bg-cyan-950/20 hover:border-cyan-300 hover:bg-cyan-950/40 hover:shadow-[0_0_15px_rgba(34,211,238,0.25)]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <span className={`px-2 py-0.5 rounded font-mono font-bold text-xs border ${p.badgeColor}`}>
+                                {p.id}
+                              </span>
+                              <div>
+                                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <span>{p.name}</span>
+                                  {reactorLevel === 3 && isFront && (
+                                    <span className="rounded bg-blue-500/30 text-blue-300 border border-blue-400/40 px-1 text-[9px] font-mono">
+                                      DEPAN
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] font-mono text-gray-400 flex items-center gap-2 mt-0.5">
+                                  <span>Arrival: <strong className="text-gray-200">{p.arrivalTime}s</strong></span>
+                                  <span>•</span>
+                                  <span>Burst: <strong className="text-gray-200">{p.burstTime}s</strong></span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right font-mono">
+                              <span className="text-[10px] text-gray-400 block">Sisa Waktu</span>
+                              <span className="text-sm font-bold text-amber-300">
+                                {p.remainingTime}s
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-2 text-[10px] text-gray-500 font-mono text-center">
+                  {reactorLevel === 1 && "Prioritas: Arrival Time paling kecil."}
+                  {reactorLevel === 2 && "Prioritas: Burst Time paling singkat."}
+                  {reactorLevel === 3 && "Prioritas: Urutan antrean paling depan (FIFO)."}
                 </div>
               </div>
 
-              {/* Bagian Bawah: Antrean Inti Reaktor (3 Slot) */}
-              <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300">
-                    ⚛️ Antrean Inti Reaktor (CPU Execution Queue):
-                  </span>
-                  <span className="text-[10px] text-gray-400">
-                    Slot 1 (Awal) ➔ Slot 2 ➔ Slot 3 (Akhir)
-                  </span>
+              {/* Reactor CPU Core (Slot Eksekusi Tengah) */}
+              <div className="rounded-xl border border-cyan-500/30 bg-black/40 p-3.5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+                      <span>⚡</span> Reactor CPU Core:
+                    </span>
+                    <span className="text-[10px] font-mono text-gray-400">
+                      {activeCoreProcess ? "STATUS: AKTIF" : "STATUS: IDLE"}
+                    </span>
+                  </div>
+
+                  <div className="h-44 rounded-xl border-2 border-cyan-500/40 bg-gradient-to-b from-cyan-950/20 to-black/60 p-3 flex flex-col justify-between items-center text-center relative overflow-hidden">
+                    {activeCoreProcess ? (
+                      <>
+                        <div className="w-full flex items-center justify-between text-xs font-mono">
+                          <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold">
+                            INTI AKTIF
+                          </span>
+                          <span className="text-amber-300 font-bold animate-pulse">
+                            {executionProgress}%
+                          </span>
+                        </div>
+
+                        <div className="my-auto flex flex-col items-center">
+                          <div className="h-12 w-12 rounded-xl bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-xl shadow-[0_0_20px_rgba(34,211,238,0.5)] animate-bounce">
+                            ⚛️
+                          </div>
+                          <h4 className="mt-2 text-sm font-black text-white font-mono">
+                            {activeCoreProcess.name}
+                          </h4>
+                          <p className="text-[10px] font-mono text-cyan-300">
+                            Dialokasikan: <strong>{activeCoreProcess.allocTime} detik</strong>
+                            {reactorLevel === 3 && activeCoreProcess.allocTime < activeCoreProcess.remainingTime && " (Quantum 2s)"}
+                          </p>
+                        </div>
+
+                        {/* Progress Bar Eksekusi */}
+                        <div className="w-full">
+                          <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden border border-white/10">
+                            <div
+                              className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-75 shadow-[0_0_10px_rgba(34,211,238,0.8)]"
+                              style={{ width: `${executionProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="my-auto flex flex-col items-center text-center text-gray-400">
+                        <span className="text-3xl opacity-30 mb-1">⚙️</span>
+                        <span className="text-xs font-mono font-bold text-gray-300">
+                          INTI REAKTOR SIAP
+                        </span>
+                        <span className="text-[10px] text-gray-500 mt-1 max-w-[200px]">
+                          Klik kapsul yang sesuai aturan algoritma di samping untuk dialokasikan.
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  {reactorQueue.map((slot, index) => (
-                    <div
-                      key={`slot-${index}`}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => handleDrop(e, index)}
-                      className={`min-h-[110px] rounded-xl border-2 transition-all p-3 flex flex-col justify-between ${
-                        slot === null
-                          ? "border-dashed border-cyan-500/40 bg-gray-950/60 hover:border-cyan-400 hover:bg-cyan-950/20"
-                          : "border-solid border-emerald-400 bg-emerald-950/40 shadow-[0_0_20px_rgba(52,211,153,0.3)]"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-mono font-bold">
-                        <span className="text-gray-400">
-                          SLOT {index + 1}{" "}
-                          <span className="text-[9px] text-gray-500">
-                            ({index === 0 ? "Prioritas 1" : index === 1 ? "Prioritas 2" : "Prioritas 3"})
-                          </span>
-                        </span>
-                        {slot !== null && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveFromQueue(index)}
-                            className="text-gray-400 hover:text-rose-400 transition"
-                            title="Hapus dari slot"
-                          >
-                            ✕
-                          </button>
-                        )}
-                      </div>
+                <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-gray-400 px-1">
+                  <span>Kecepatan Eksekusi: 0.45s / unit</span>
+                  <span>CPU: 1 Core</span>
+                </div>
+              </div>
+            </div>
 
-                      {slot === null ? (
-                        <div className="my-auto text-center">
-                          <span className="text-2xl opacity-40 block mb-1">📥</span>
-                          <span className="text-[10px] text-gray-400 font-mono">
-                            Tarik modul ke sini
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="my-auto text-center">
-                          <span className="text-sm font-black font-mono text-emerald-300">
-                            MODUL {slot.id}
-                          </span>
-                          <span className="block text-base font-black font-mono text-amber-300 mt-0.5">
-                            {slot.time} ms
-                          </span>
-                        </div>
-                      )}
+            {/* 3. Gantt Chart / Log Eksekusi Bawah */}
+            <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-mono font-bold text-gray-300 flex items-center gap-1.5">
+                  <span>📊</span> Gantt Chart Riwayat Eksekusi (Level {reactorLevel}):
+                </span>
+                <span className="text-[10px] font-mono text-gray-400">
+                  Total Terproses: {ganttHistory.reduce((sum, i) => sum + i.duration, 0)} detik
+                </span>
+              </div>
+
+              {ganttHistory.length === 0 ? (
+                <div className="h-8 rounded-lg border border-dashed border-white/10 flex items-center justify-center text-[10px] font-mono text-gray-500">
+                  Belum ada proses yang dieksekusi pada level ini.
+                </div>
+              ) : (
+                <div className="flex h-8 w-full overflow-hidden rounded-lg border border-white/20 text-[10px] font-bold font-mono">
+                  {ganttHistory.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{ flex: item.duration }}
+                      className={`flex items-center justify-center border-r border-black/40 px-1 truncate ${item.ganttBg}`}
+                      title={`${item.name} (${item.start}s - ${item.start + item.duration}s)`}
+                    >
+                      {item.id}({item.duration}s)
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* Bagian Bawah Modal: Tombol Aksi */}
-            <div className="mt-6 flex items-center justify-between border-t border-cyan-500/30 pt-4">
-              <button
-                type="button"
-                onClick={handleResetQueue}
-                className="rounded-xl border border-white/20 bg-white/[0.04] px-5 py-2 text-xs font-bold text-gray-300 hover:border-rose-400 hover:text-rose-300 transition"
-              >
-                ↺ RESET ANTREAN
-              </button>
-
-              <button
-                type="button"
-                onClick={handleActivateReactor}
-                className="rounded-xl bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 px-6 py-2.5 text-xs font-black text-black shadow-[0_0_25px_rgba(34,211,238,0.6)] hover:scale-105 active:scale-95 transition"
-              >
-                ⚡ AKTIFKAN REAKTOR ➔
-              </button>
+            {/* 4. Footer & Action Buttons */}
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-cyan-500/30 pt-3.5 gap-3">
+              {reactorStatus === "failed" ? (
+                <div className="flex items-center justify-between w-full">
+                  <div className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                    <span>⚠️</span> Reaktor Overload! Batas waktu habis sebelum level selesai.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startReactorLevel(reactorLevel)}
+                    className="rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 px-5 py-2 text-xs font-bold text-white shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:scale-105 active:scale-95 transition"
+                  >
+                    ↺ Ulangi Level Ini
+                  </button>
+                </div>
+              ) : reactorStatus === "won_level" ? (
+                <div className="flex items-center justify-between w-full">
+                  <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <span>🎉</span> Level {reactorLevel} Sukses! Seluruh kapsul teralokasi dengan benar.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startReactorLevel((reactorLevel + 1) as 1 | 2 | 3)}
+                    className="rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 px-6 py-2 text-xs font-black text-black shadow-[0_0_20px_rgba(34,211,238,0.5)] hover:scale-105 active:scale-95 transition"
+                  >
+                    Lanjut ke Level {reactorLevel + 1} ➔
+                  </button>
+                </div>
+              ) : reactorStatus === "victory" ? (
+                <div className="flex items-center justify-between w-full">
+                  <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                    <span>🌟</span> Reaktor Stabil! Ketiga Algoritma Penjadwalan Berhasil Diselesaikan.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCloseReactorModal}
+                    className="rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 px-6 py-2.5 text-xs font-black text-black shadow-[0_0_25px_rgba(52,211,153,0.6)] hover:scale-105 active:scale-95 transition"
+                  >
+                    ✓ Selesaikan Misi & Buka Portal Stage 2 ➔
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <button
+                    type="button"
+                    onClick={() => startReactorLevel(reactorLevel)}
+                    className="rounded-xl border border-white/20 bg-white/[0.04] px-4 py-1.5 text-xs font-bold text-gray-300 hover:border-cyan-400 hover:text-cyan-300 transition"
+                  >
+                    ↺ Acak Ulang Level Ini
+                  </button>
+                  <span className="text-[11px] text-gray-400 font-mono">
+                    Selesaikan 3 level sebelum batas waktu habis untuk membuka Portal.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
