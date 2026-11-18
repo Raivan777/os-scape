@@ -51,18 +51,22 @@ export default function Stage1Platformer() {
 
   // State Tugas 1: Materi (Terminal) & Laser 4
   const [isMateriRead, setIsMateriRead] = useState(false);
+  const [materialModalTab, setMaterialModalTab] = useState<"material" | "quiz">("material");
+  const [fcfsQuizAnswers, setFcfsQuizAnswers] = useState<(number | null)[]>([null, null, null]);
 
-  // State Tugas 2: Tes 1 (PG Tunggal) & Laser 5
+  // State Tugas 2: Materi 2 (SJF) & Laser 5
   const [isTes1Done, setIsTes1Done] = useState(false);
   const [showTes1Modal, setShowTes1Modal] = useState(false);
   const [isNearTes1, setIsNearTes1] = useState(false);
-  const [tes1Answers, setTes1Answers] = useState<(number | null)[]>([null, null, null, null, null]);
+  const [tes1ModalTab, setTes1ModalTab] = useState<"material" | "quiz">("material");
+  const [sjfQuizAnswers, setSjfQuizAnswers] = useState<(number | null)[]>([null, null, null]);
 
-  // State Tugas 3: Tes 2 (PG Multi-Jawaban / Checkbox) & Laser 6
+  // State Tugas 3: Materi 3 (Round Robin) & Laser 6
   const [isTes2Done, setIsTes2Done] = useState(false);
   const [showTes2Modal, setShowTes2Modal] = useState(false);
   const [isNearTes2, setIsNearTes2] = useState(false);
-  const [tes2Answers, setTes2Answers] = useState<number[][]>([[], [], []]);
+  const [tes2ModalTab, setTes2ModalTab] = useState<"material" | "quiz">("material");
+  const [rrQuizAnswers, setRrQuizAnswers] = useState<(number | null)[]>([null, null, null]);
 
   // ─── STATE KOTAK KARGO ─────────────────────────────────────
   const [boxX, setBoxX] = useState(460);
@@ -303,8 +307,6 @@ export default function Stage1Platformer() {
 
       if (key === "escape") {
         if (showMaterial) {
-          setIsMateriRead(true);
-          setIsLaser4Active(false);
           setShowMaterial(false);
         }
         setIsMiniGameOpen(false);
@@ -903,165 +905,181 @@ export default function Stage1Platformer() {
   }, [showMaterial, isMiniGameOpen, isPortalActive, showTes1Modal, showTes2Modal]);
 
   // ─── KUIS DATA & HANDLERS ─────────────────────────────────
-  const tes1Questions = [
+  // ─── DATA KUIS SJF (TRIGGER 2 / MATERI 2) ──────────────────
+  const sjfQuestions = [
     {
-      question: "1. Komponen sistem operasi apa yang bertugas memilih proses dari Ready Queue untuk dialokasikan ke CPU?",
+      id: 1,
+      question: "Kriteria utama apa yang digunakan algoritma Shortest Job First (SJF) dalam memilih proses berikutnya untuk dieksekusi CPU?",
       options: [
-        "A. Long-Term Scheduler (Job Scheduler)",
-        "B. Short-Term Scheduler (CPU Scheduler)",
-        "C. Medium-Term Scheduler (Swapper)",
-        "D. I/O Device Controller",
+        "A. Proses yang pertama kali masuk ke Ready Queue",
+        "B. Proses dengan waktu eksekusi (Burst Time) paling singkat",
+        "C. Proses dengan ukuran memori paling besar",
+        "D. Proses yang memiliki nilai Time Quantum terbesar",
       ],
       correct: 1,
     },
     {
-      question: "2. Algoritma penjadwalan CPU mana yang memberikan rata-rata waktu tunggu (average waiting time) paling optimal?",
+      id: 2,
+      question: "Apa kelemahan utama dari algoritma SJF apabila proses-proses dengan Burst Time pendek terus berdatangan tanpa henti?",
       options: [
-        "A. First-Come, First-Served (FCFS)",
-        "B. Round Robin (RR)",
-        "C. Shortest Job First (SJF)",
-        "D. Priority Scheduling Non-Preemptive",
+        "A. Terjadinya Convoy Effect pada proses kecil",
+        "B. Proses dengan Burst Time panjang berisiko mengalami Starvation (tertunda terus-menerus)",
+        "C. CPU menjadi diam (idle) meskipun antrean penuh",
+        "D. Average Waiting Time menjadi paling tinggi dibanding semua algoritma lain",
+      ],
+      correct: 1,
+    },
+    {
+      id: 3,
+      question: "Jika 4 proses tiba bersamaan pada 0 ms dengan Burst Time: P1 = 6 ms, P2 = 8 ms, P3 = 7 ms, dan P4 = 3 ms, bagaimanakah urutan eksekusi yang benar pada SJF Non-Preemptive?",
+      options: [
+        "A. P1 -> P2 -> P3 -> P4",
+        "B. P2 -> P3 -> P1 -> P4",
+        "C. P4 -> P1 -> P3 -> P2",
+        "D. P4 -> P3 -> P2 -> P1",
+      ],
+      correct: 2,
+    },
+  ];
+
+  // ─── DATA KUIS ROUND ROBIN (TRIGGER 3 / MATERI 3) ─────────
+  const rrQuestions = [
+    {
+      id: 1,
+      question: "Apa yang terjadi jika sebuah proses pada algoritma Round Robin belum selesai dieksekusi setelah jatah Time Quantum (q) miliknya habis?",
+      options: [
+        "A. Proses langsung dihapus dari memori dan dianggap gagal",
+        "B. Proses tetap melanjutkan eksekusinya sampai selesai tanpa jeda",
+        "C. Proses dihentikan sementara (preempted) dan dikembalikan ke belakang Ready Queue",
+        "D. Nilai Time Quantum otomatis diperbesar untuk proses tersebut",
       ],
       correct: 2,
     },
     {
-      question: "3. Fenomena di mana proses pendek tertahan lama di belakang proses panjang pada FCFS dinamakan...",
+      id: 2,
+      question: "Apa dampak yang terjadi jika ukuran Time Quantum (q) pada algoritma Round Robin diatur terlalu kecil?",
       options: [
-        "A. Convoy Effect",
-        "B. Starvation",
-        "C. Thrashing",
-        "D. Deadlock",
+        "A. Round Robin akan berubah menjadi identik dengan algoritma FCFS",
+        "B. Terlalu sering terjadi Context Switch yang meningkatkan overhead dan menurunkan efisiensi CPU",
+        "C. Proses dengan Burst Time pendek akan mengalami Starvation",
+        "D. CPU tidak dapat menjalankan lebih dari dua proses secara bergantian",
+      ],
+      correct: 1,
+    },
+    {
+      id: 3,
+      question: "Diketahui Time Quantum q = 4 ms dengan 3 proses tiba bersamaan di 0 ms: P1 (Burst Time 24 ms), P2 (3 ms), dan P3 (3 ms). Pada milidetik ke berapa proses P3 selesai dieksekusi?",
+      options: [
+        "A. 7 ms",
+        "B. 10 ms",
+        "C. 12 ms",
+        "D. 30 ms",
+      ],
+      correct: 1,
+    },
+  ];
+
+  // ─── DATA KUIS FCFS (TERMINAL 1) ──────────────────────────
+  const fcfsQuestions = [
+    {
+      id: 1,
+      question: "Bagaimana cara kerja utama algoritma penjadwalan First-Come, First-Served (FCFS)?",
+      options: [
+        "A. Mendahulukan proses dengan waktu eksekusi tersingkat",
+        "B. Mengeksekusi proses berdasarkan urutan kedatangannya di antrean",
+        "C. Membagi jatah waktu (kwanta) yang sama secara bergilir",
+        "D. Menghentikan proses yang sedang berjalan jika ada proses baru masuk",
+      ],
+      correct: 1,
+    },
+    {
+      id: 2,
+      question: "FCFS termasuk ke dalam strategi penjadwalan Non-Preemptive. Apa maksud dari sifat tersebut?",
+      options: [
+        "A. Proses yang sedang berjalan tidak dapat dihentikan CPU sampai selesai",
+        "B. CPU bebas memotong proses kapan saja demi efisiensi",
+        "C. Setiap proses wajib memiliki burst time yang sama",
+        "D. Proses dengan prioritas rendah akan langsung dihapus dari memori",
       ],
       correct: 0,
     },
     {
-      question: "4. Dalam algoritma Round Robin (RR), alokasi potongan waktu tetap yang diberikan ke setiap proses disebut...",
+      id: 3,
+      question: "Jika urutan kedatangan adalah P1 (Burst Time 24 ms), P2 (3 ms), dan P3 (3 ms), berapa Waiting Time yang dialami oleh P2?",
       options: [
-        "A. Burst Time",
-        "B. Turnaround Time",
-        "C. Time Quantum / Time Slice",
-        "D. Latency Overhead",
+        "A. 0 ms",
+        "B. 3 ms",
+        "C. 24 ms",
+        "D. 27 ms",
       ],
       correct: 2,
     },
-    {
-      question: "5. Solusi untuk mengatasi Starvation pada proses prioritas rendah yang tak kunjung dieksekusi adalah...",
-      options: [
-        "A. Aging (menaikkan prioritas proses secara bertahap seiring waktu)",
-        "B. Reboot sistem operasi seketika",
-        "C. Menghapus paksa proses dari memori RAM",
-        "D. Menurunkan clock speed prosesor",
-      ],
-      correct: 0,
-    },
   ];
 
-  const tes2Questions = [
-    {
-      question: "1. Kriteria performa CPU scheduling yang ingin DIMAKSIMALKAN dalam sistem operasi adalah: (Pilih 2)",
-      options: [
-        "A. CPU Utilization (Persentase waktu CPU bekerja)",
-        "B. Throughput (Jumlah proses selesai per satuan waktu)",
-        "C. Turnaround Time (Total waktu dari submit hingga selesai)",
-        "D. Waiting Time (Waktu proses mengantre di Ready Queue)",
-      ],
-      correct: [0, 1],
-    },
-    {
-      question: "2. Algoritma penjadwalan berikut yang bersifat PREEMPTIVE (dapat menyela proses berjalan): (Pilih 3)",
-      options: [
-        "A. Round Robin (RR)",
-        "B. Shortest Remaining Time First (SRTF)",
-        "C. First-Come First-Served (FCFS) Murni",
-        "D. Preemptive Priority Scheduling",
-      ],
-      correct: [0, 1, 3],
-    },
-    {
-      question: "3. Status (Process State) resmi dalam 5-state process model sistem operasi standar meliputi: (Pilih 3)",
-      options: [
-        "A. Ready",
-        "B. Running",
-        "C. Waiting / Blocked",
-        "D. Sleeping Permanently",
-      ],
-      correct: [0, 1, 2],
-    },
-  ];
+  const isFcfsQuizAllCorrect = fcfsQuestions.every((q, idx) => fcfsQuizAnswers[idx] === q.correct);
 
-  const handleCloseTerminalMaterial = () => {
-    setIsMateriRead(true);
-    setIsLaser4Active(false);
-    setShowMaterial(false);
-  };
-
-  const handleSelectTes1 = (qIdx: number, optIdx: number) => {
-    setTes1Answers((prev) => {
+  const handleSelectFcfsQuiz = (qIdx: number, optIdx: number) => {
+    setFcfsQuizAnswers((prev) => {
       const next = [...prev];
       next[qIdx] = optIdx;
       return next;
     });
   };
 
-  const handleSubmitTes1 = () => {
-    if (tes1Answers.some((ans) => ans === null)) {
-      alert("⚠️ Harap jawab semua 5 pertanyaan sebelum mengirim jawaban!");
-      return;
-    }
-    let correctCount = 0;
-    tes1Answers.forEach((ans, idx) => {
-      if (ans === tes1Questions[idx].correct) {
-        correctCount++;
-      }
-    });
-
-    if (correctCount === 5) {
-      setIsTes1Done(true);
-      setIsLaser5Active(false);
-      setShowTes1Modal(false);
-      alert("🎉 SEMPURNA! Semua 5 soal Tes 1 terjawab dengan benar!\n\nLaser 5 (Merah) dinonaktifkan!");
-    } else {
-      alert(`❌ Jawaban belum tepat (${correctCount}/5 benar).\nSilakan baca kembali materi dan coba lagi!`);
-    }
+  const handleCompleteFcfsMateri = () => {
+    if (!isFcfsQuizAllCorrect && !isMateriRead) return;
+    setIsMateriRead(true);
+    setIsLaser4Active(false);
+    laser4ActiveRef.current = false;
+    setShowMaterial(false);
   };
 
-  const handleToggleTes2 = (qIdx: number, optIdx: number) => {
-    setTes2Answers((prev) => {
+  const handleCloseTerminalMaterial = () => {
+    setShowMaterial(false);
+  };
+
+  const isSjfQuizAllCorrect = sjfQuestions.every((q, idx) => sjfQuizAnswers[idx] === q.correct);
+
+  const handleSelectSjfQuiz = (qIdx: number, optIdx: number) => {
+    setSjfQuizAnswers((prev) => {
       const next = [...prev];
-      const currentSelected = next[qIdx] || [];
-      if (currentSelected.includes(optIdx)) {
-        next[qIdx] = currentSelected.filter((x) => x !== optIdx);
-      } else {
-        next[qIdx] = [...currentSelected, optIdx].sort((a, b) => a - b);
-      }
+      next[qIdx] = optIdx;
       return next;
     });
   };
 
-  const handleSubmitTes2 = () => {
-    if (tes2Answers.some((ans) => ans.length === 0)) {
-      alert("⚠️ Harap pilih jawaban untuk setiap soal sebelum mengirim!");
-      return;
-    }
+  const handleCompleteSjfMateri = () => {
+    if (!isSjfQuizAllCorrect && !isTes1Done) return;
+    setIsTes1Done(true);
+    setIsLaser5Active(false);
+    laser5ActiveRef.current = false;
+    setShowTes1Modal(false);
+  };
 
-    let allMatch = true;
-    for (let i = 0; i < tes2Questions.length; i++) {
-      const userAns = [...(tes2Answers[i] || [])].sort((a, b) => a - b);
-      const keyAns = [...tes2Questions[i].correct].sort((a, b) => a - b);
-      if (userAns.length !== keyAns.length || !userAns.every((val, idx) => val === keyAns[idx])) {
-        allMatch = false;
-        break;
-      }
-    }
+  const handleCloseTes1Modal = () => {
+    setShowTes1Modal(false);
+  };
 
-    if (allMatch) {
-      setIsTes2Done(true);
-      setIsLaser6Active(false);
-      setShowTes2Modal(false);
-      alert("🎉 LUAR BIASA! Seluruh kombinasi multi-jawaban Tes 2 COCOK PERSIS!\n\nLaser 6 (Biru Tua) dinonaktifkan!");
-    } else {
-      alert("❌ Kombinasi jawaban belum tepat untuk satu atau beberapa soal.\nPeriksa kembali kotak centang yang Anda pilih!");
-    }
+  const isRrQuizAllCorrect = rrQuestions.every((q, idx) => rrQuizAnswers[idx] === q.correct);
+
+  const handleSelectRrQuiz = (qIdx: number, optIdx: number) => {
+    setRrQuizAnswers((prev) => {
+      const next = [...prev];
+      next[qIdx] = optIdx;
+      return next;
+    });
+  };
+
+  const handleCompleteRrMateri = () => {
+    if (!isRrQuizAllCorrect && !isTes2Done) return;
+    setIsTes2Done(true);
+    setIsLaser6Active(false);
+    laser6ActiveRef.current = false;
+    setShowTes2Modal(false);
+  };
+
+  const handleCloseTes2Modal = () => {
+    setShowTes2Modal(false);
   };
 
   // ─── LOGIKA SJF (SHORTEST JOB FIRST) DRAG & DROP ──────────
@@ -1519,11 +1537,11 @@ export default function Stage1Platformer() {
           {isNearTes1 && (
             <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
               <span className="rounded bg-red-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
-                [E] Tes 1 (PG)
+                [E] Materi 2: SJF
               </span>
             </div>
           )}
-          <span className="text-base select-none">📝</span>
+          <span className="text-base select-none">🖥️</span>
         </div>
 
         {/* ─── TRIGGER TES 2 (Area Tengah) ───────────────────── */}
@@ -1540,11 +1558,11 @@ export default function Stage1Platformer() {
           {isNearTes2 && (
             <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
               <span className="rounded bg-blue-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
-                [E] Tes 2 (Multi)
+                [E] Materi 3: RR
               </span>
             </div>
           )}
-          <span className="text-base select-none">📋</span>
+          <span className="text-base select-none">🖥️</span>
         </div>
 
         {/* ─── LASER 1: ENERGI BIRU/CYAN (TEKANAN KOTAK) ─────── */}
@@ -1830,17 +1848,21 @@ export default function Stage1Platformer() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════
-          MODAL 1: TERMINAL LOG MATERI SISTEM OPERASI (MEMATIKAN LASER 4)
+          MODAL 1: TERMINAL LOG MATERI FCFS & KUIS (MEMATIKAN LASER 4)
           ═══════════════════════════════════════════════════════ */}
       {showMaterial && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
           <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border-2 border-cyan-400/60 bg-[#0d091e]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_50px_rgba(34,211,238,0.4)]">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-cyan-500/30 pb-3">
               <div className="flex items-center gap-3">
                 <span className="h-3 w-3 rounded-full bg-cyan-400 animate-ping" />
-                <h2 className="text-lg font-bold text-cyan-300 tracking-wider uppercase">
-                  🖥️ OMNI LOG // MATERI CPU SCHEDULER & PROCESS MANAGEMENT
-                </h2>
+                <div>
+                  <h2 className="text-base md:text-lg font-bold text-cyan-300 tracking-wider uppercase">
+                    🖥️ OMNI LOG // PENJADWALAN FIRST-COME, FIRST-SERVED (FCFS)
+                  </h2>
+                  <p className="text-[11px] text-gray-400">Terminal 1 • Modul Algoritma Penjadwalan & Kuis Pemahaman</p>
+                </div>
               </div>
               <button
                 type="button"
@@ -1851,58 +1873,308 @@ export default function Stage1Platformer() {
               </button>
             </div>
 
-            <div className="mt-4 space-y-4 text-xs md:text-sm text-gray-300 leading-relaxed">
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <h3 className="font-bold text-cyan-300">1. Apa itu CPU Scheduler?</h3>
-                <p className="mt-1">
-                  <strong>CPU Scheduler (Short-Term Scheduler)</strong> adalah modul inti sistem operasi yang bertugas memilih proses mana yang siap dieksekusi dari <em>Ready Queue</em> dan mengalokasikan CPU untuk proses tersebut saat proses berpindah status (state).
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <h3 className="font-bold text-purple-300">2. Preemptive vs Non-Preemptive</h3>
-                <ul className="mt-1 list-disc list-inside space-y-1">
-                  <li><strong>Preemptive:</strong> CPU dapat menyela (preempt) proses yang sedang berjalan ketika ada proses berprioritas lebih tinggi datang. Contoh: <em>Round Robin (RR)</em>, <em>Shortest Remaining Time First (SRTF)</em>, dan <em>Preemptive Priority</em>.</li>
-                  <li><strong>Non-Preemptive:</strong> Sekali CPU dialokasikan ke suatu proses, proses tersebut memegang CPU sampai selesai atau meminta I/O. Contoh: <em>FCFS (First-Come, First-Served) standar</em>.</li>
-                </ul>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <h3 className="font-bold text-amber-300">3. Kriteria Optimasi Penjadwalan</h3>
-                <p className="mt-1">
-                  Kriteria yang <strong>DIMAKSIMALKAN</strong>: <em>CPU Utilization</em> (persentase waktu kerja prosesor) dan <em>Throughput</em> (jumlah proses selesai per satuan waktu).<br />
-                  Kriteria yang <strong>DIMINIMALKAN</strong>: <em>Turnaround Time</em>, <em>Waiting Time</em>, dan <em>Response Time</em>.
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
-                <h3 className="font-bold text-emerald-300">4. Masalah Algoritma & Solusinya</h3>
-                <ul className="mt-1 list-disc list-inside space-y-1">
-                  <li><strong>Convoy Effect (FCFS):</strong> Proses-proses pendek tertahan lama menunggu proses panjang selesai.</li>
-                  <li><strong>Starvation:</strong> Proses prioritas rendah tidak pernah dieksekusi karena proses prioritas tinggi terus berdatangan. Solusinya: teknik <strong>Aging</strong> (menaikkan prioritas proses secara bertahap seiring berjalannya waktu).</li>
-                  <li><strong>Round Robin (RR):</strong> Menggunakan potongan waktu tetap (<strong>Time Quantum / Time Slice</strong>) untuk giliran eksekusi yang adil.</li>
-                </ul>
-              </div>
-
-              <div className="rounded-xl border border-purple-500/40 bg-purple-950/30 p-3.5 text-purple-200">
-                <p className="font-semibold text-purple-300 flex items-center gap-1.5">
-                  <span>💡</span> Kunci Membuka Rintangan:
-                </p>
-                <p className="mt-1 text-xs">
-                  Membaca dan menutup Terminal Log OS ini menandakan modul materi telah dikuasai. <strong>Laser 4 (Ungu Horizontal)</strong> akan otomatis padam dan terbuka!
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 flex justify-end">
+            {/* Navigation Tabs */}
+            <div className="mt-4 flex items-center gap-2 border-b border-white/10 pb-2">
               <button
                 type="button"
-                onClick={handleCloseTerminalMaterial}
-                className="rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 px-6 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_20px_rgba(34,211,238,0.5)] transition hover:scale-105 active:scale-95"
+                onClick={() => setMaterialModalTab("material")}
+                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                  materialModalTab === "material"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 shadow-[0_0_12px_rgba(34,211,238,0.3)]"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                }`}
               >
-                ✓ Selesai Membaca Log & Matikan Laser 4 ➔
+                <span>📖</span> Ringkasan Materi FCFS
+              </button>
+              <button
+                type="button"
+                onClick={() => setMaterialModalTab("quiz")}
+                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                  materialModalTab === "quiz"
+                    ? "bg-purple-500/20 text-purple-300 border border-purple-400/50 shadow-[0_0_12px_rgba(168,85,247,0.3)]"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                }`}
+              >
+                <span>📝</span> Kuis Pemahaman (3 Soal)
+                <span
+                  className={`ml-1 rounded px-1.5 py-0.2 text-[10px] font-bold ${
+                    isFcfsQuizAllCorrect
+                      ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/50"
+                      : "bg-white/10 text-gray-300"
+                  }`}
+                >
+                  {fcfsQuizAnswers.filter((ans, idx) => ans === fcfsQuestions[idx].correct).length}/3
+                </span>
               </button>
             </div>
+
+            {/* TAB 1: MATERI FCFS */}
+            {materialModalTab === "material" && (
+              <div className="mt-4 space-y-4 text-xs md:text-sm text-gray-300 leading-relaxed">
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4">
+                  <h3 className="font-bold text-cyan-300 text-sm md:text-base">
+                    Algoritma Penjadwalan: First-Come, First-Served (FCFS)
+                  </h3>
+                  <p className="mt-2 text-gray-200">
+                    <strong>First-Come, First-Served (FCFS)</strong> adalah algoritma penjadwalan CPU paling sederhana di mana proses dieksekusi berdasarkan urutan kedatangannya di antrean (<em>Ready Queue</em>), mengadopsi konsep antrean <strong>FIFO (First-In, First-Out)</strong>.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-purple-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-purple-300">1. Sifat Penjadwalan: Non-Preemptive</h4>
+                  <p className="mt-1">
+                    FCFS bersifat <strong>Non-Preemptive</strong>: sekali proses dialokasikan ke CPU, proses tersebut tidak dapat dihentikan atau disela (<em>preempted</em>) di tengah jalan hingga proses tersebut selesai dieksekusi atau melepaskan CPU secara sukarela.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-amber-300">2. Keuntungan & Kekurangan (Convoy Effect)</h4>
+                  <ul className="mt-1 list-disc list-inside space-y-1.5">
+                    <li>
+                      <strong className="text-emerald-300">Keuntungan:</strong> Sangat sederhana, adil dari segi antrean masuk, dan mudah diimplementasikan dengan struktur data FIFO queue sederhana.
+                    </li>
+                    <li>
+                      <strong className="text-rose-300">Kekurangan (Convoy Effect):</strong> Berisiko tinggi memunculkan <strong>Convoy Effect</strong>, yaitu fenomena di mana proses-proses kecil (burst time singkat) harus menunggu sangat lama di antrean di belakang satu proses besar (burst time sangat panjang), sehingga menyebabkan rata-rata waktu tunggu (average waiting time) menjadi sangat buruk.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border border-blue-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-blue-300">3. Contoh Simulasi Eksekusi</h4>
+                  <p className="mt-1 text-gray-300">
+                    Diketahui 3 proses datang berurutan (<strong>P1 → P2 → P3</strong>) dengan Burst Time:
+                  </p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-center font-mono text-xs">
+                    <div className="rounded border border-cyan-500/40 bg-cyan-950/30 p-2">
+                      <div className="font-bold text-cyan-300">P1</div>
+                      <div className="text-gray-300">Burst: 24 ms</div>
+                    </div>
+                    <div className="rounded border border-indigo-500/40 bg-indigo-950/30 p-2">
+                      <div className="font-bold text-indigo-300">P2</div>
+                      <div className="text-gray-300">Burst: 3 ms</div>
+                    </div>
+                    <div className="rounded border border-purple-500/40 bg-purple-950/30 p-2">
+                      <div className="font-bold text-purple-300">P3</div>
+                      <div className="text-gray-300">Burst: 3 ms</div>
+                    </div>
+                  </div>
+
+                  {/* Visual Gantt Chart */}
+                  <div className="mt-4">
+                    <div className="text-xs font-semibold text-gray-400 mb-1">Visualisasi Gantt Chart:</div>
+                    <div className="flex h-10 w-full overflow-hidden rounded-lg border border-white/20 text-xs font-bold text-black">
+                      <div className="flex flex-[8] items-center justify-center bg-cyan-400">
+                        P1 (24 ms)
+                      </div>
+                      <div className="flex flex-1 items-center justify-center bg-indigo-400 border-l border-black/40">
+                        P2 (3)
+                      </div>
+                      <div className="flex flex-1 items-center justify-center bg-purple-400 border-l border-black/40">
+                        P3 (3)
+                      </div>
+                    </div>
+                    {/* Timeline markers */}
+                    <div className="mt-1 flex justify-between font-mono text-[10px] text-gray-400">
+                      <span>0</span>
+                      <span className="translate-x-12">24</span>
+                      <span className="translate-x-4">27</span>
+                      <span>30 ms</span>
+                    </div>
+                  </div>
+
+                  {/* Perhitungan WT & TAT */}
+                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-black/40 p-3 rounded-lg border border-white/5 font-mono">
+                    <div>
+                      <div className="font-bold text-cyan-300">Waiting Time (WT):</div>
+                      <div>• P1 = 0 ms</div>
+                      <div>• P2 = 24 ms</div>
+                      <div>• P3 = 24 + 3 = 27 ms</div>
+                      <div className="mt-1 font-semibold text-amber-300">Rata-rata WT: 17 ms</div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-purple-300">Turnaround Time (TAT):</div>
+                      <div>• P1 = 24 ms</div>
+                      <div>• P2 = 27 ms</div>
+                      <div>• P3 = 30 ms</div>
+                      <div className="mt-1 font-semibold text-amber-300">Rata-rata TAT: 27 ms</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-cyan-500/40 bg-cyan-950/30 p-3.5 text-cyan-200">
+                  <p className="font-semibold text-cyan-300 flex items-center gap-1.5">
+                    <span>💡</span> Syarat Mematikan Laser 4:
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Kerjakan <strong>Kuis Singkat (3 Soal)</strong> berdasarkan materi di atas. Setelah ke-3 soal dijawab dengan benar, <strong>Laser 4 (Ungu Horizontal)</strong> akan dinonaktifkan!
+                  </p>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseTerminalMaterial}
+                    className="rounded-xl border border-white/20 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition"
+                  >
+                    Tutup Sementara
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMaterialModalTab("quiz")}
+                    className="rounded-xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 px-6 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_20px_rgba(34,211,238,0.5)] transition hover:scale-105 active:scale-95"
+                  >
+                    Lanjut ke Kuis Pemahaman (3 Soal) ➔
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: KUIS SINGKAT (3 SOAL) */}
+            {materialModalTab === "quiz" && (
+              <div className="mt-4 space-y-5 text-xs md:text-sm text-gray-300 leading-relaxed">
+                <div className="flex items-center justify-between rounded-xl border border-purple-500/30 bg-purple-950/20 px-4 py-2.5">
+                  <div className="text-xs text-purple-200">
+                    Pilih jawaban yang benar untuk setiap soal. Warna hijau menandakan jawaban benar.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMaterialModalTab("material")}
+                    className="flex items-center gap-1 rounded-lg border border-purple-400/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-300 hover:bg-purple-500/20 transition"
+                  >
+                    📖 Review Materi
+                  </button>
+                </div>
+
+                {fcfsQuestions.map((q, qIdx) => {
+                  const selectedOpt = fcfsQuizAnswers[qIdx];
+                  const isAnswered = selectedOpt !== null;
+                  const isCorrect = selectedOpt === q.correct;
+
+                  return (
+                    <div
+                      key={q.id}
+                      className={`rounded-xl border p-4 transition ${
+                        isAnswered
+                          ? isCorrect
+                            ? "border-emerald-500/60 bg-emerald-950/15"
+                            : "border-rose-500/60 bg-rose-950/15"
+                          : "border-white/10 bg-white/[0.03]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-bold text-white text-xs md:text-sm">
+                          {qIdx + 1}. {q.question}
+                        </h4>
+                        {isAnswered && (
+                          <span
+                            className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${
+                              isCorrect
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                            }`}
+                          >
+                            {isCorrect ? "✓ Benar" : "✕ Belum Tepat"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {q.options.map((opt, optIdx) => {
+                          const isOptionSelected = selectedOpt === optIdx;
+                          let btnStyle = "border-white/10 bg-white/[0.02] text-gray-300 hover:bg-white/[0.06] hover:border-white/20";
+
+                          if (isOptionSelected) {
+                            if (isCorrect) {
+                              btnStyle = "border-emerald-400 bg-emerald-500/25 text-emerald-200 font-semibold shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+                            } else {
+                              btnStyle = "border-rose-400 bg-rose-500/25 text-rose-200 font-semibold shadow-[0_0_15px_rgba(244,63,94,0.3)]";
+                            }
+                          }
+
+                          return (
+                            <button
+                              key={optIdx}
+                              type="button"
+                              onClick={() => handleSelectFcfsQuiz(qIdx, optIdx)}
+                              className={`w-full text-left rounded-lg border p-2.5 text-xs transition flex items-center justify-between ${btnStyle}`}
+                            >
+                              <span>{opt}</span>
+                              {isOptionSelected && (
+                                <span className="ml-2 font-bold text-xs">
+                                  {isCorrect ? "✓" : "✕"}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Feedback Text */}
+                      {isAnswered && (
+                        <div className="mt-2.5 text-[11px]">
+                          {isCorrect ? (
+                            <span className="text-emerald-400 font-medium flex items-center gap-1">
+                              <span>✓</span> Pilihan tepat! Sesuai dengan prinsip FCFS.
+                            </span>
+                          ) : (
+                            <span className="text-rose-400 font-medium flex items-center gap-1">
+                              <span>⚠️</span> Jawaban kurang tepat. Pelajari kembali materi dan pilih opsi lain!
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Status Box & Tombol Selesai */}
+                <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-semibold text-gray-300">
+                        Status Kuis:{" "}
+                        <span className={isFcfsQuizAllCorrect ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                          {fcfsQuizAnswers.filter((ans, idx) => ans === fcfsQuestions[idx].correct).length} dari 3 Soal Benar
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {isFcfsQuizAllCorrect
+                          ? "Semua jawaban benar! Silakan klik tombol untuk mematikan Laser 4."
+                          : "Jawab seluruh 3 soal dengan benar untuk membuka kunci Laser 4."}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={handleCloseTerminalMaterial}
+                        className="rounded-xl border border-white/20 px-3.5 py-2.5 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition"
+                      >
+                        Tutup
+                      </button>
+
+                      {isFcfsQuizAllCorrect || isMateriRead ? (
+                        <button
+                          type="button"
+                          onClick={handleCompleteFcfsMateri}
+                          className="flex-1 sm:flex-initial rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-5 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_25px_rgba(16,185,129,0.5)] transition hover:scale-105 active:scale-95"
+                        >
+                          ✓ {isMateriRead ? "Tutup (Laser 4 Telah Padam)" : "Selesai & Padamkan Laser 4 ➔"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 sm:flex-initial rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs md:text-sm font-bold text-gray-500 cursor-not-allowed"
+                        >
+                          🔒 Jawab Semua Benar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2078,161 +2350,694 @@ export default function Stage1Platformer() {
 
 
       {/* ═══════════════════════════════════════════════════════
-          MODAL 4: TES 1 (5 SOAL PG TUNGGAL - MEMATIKAN LASER 5)
+          MODAL 4: TRIGGER 2 / MATERI 2 SJF & KUIS (MEMATIKAN LASER 5)
           ═══════════════════════════════════════════════════════ */}
       {showTes1Modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
           <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border-2 border-red-500/70 bg-[#0d091e]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_50px_rgba(239,68,68,0.4)]">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-red-500/40 pb-3">
               <div className="flex items-center gap-3">
                 <span className="h-3 w-3 rounded-full bg-red-400 animate-ping" />
                 <div>
-                  <h2 className="text-lg font-bold text-red-300 tracking-wider uppercase">
-                    📝 TES 1 // EVALUASI PILIHAN GANDA TUNGGAL
+                  <h2 className="text-base md:text-lg font-bold text-red-300 tracking-wider uppercase">
+                    🖥️ OMNI LOG // PENJADWALAN SHORTEST JOB FIRST (SJF)
                   </h2>
-                  <p className="text-[11px] text-gray-400">Jawab ke-5 soal dengan benar untuk melumpuhkan Laser 5 (Merah).</p>
+                  <p className="text-[11px] text-gray-400">Trigger 2 • Modul Algoritma Penjadwalan & Kuis Pemahaman</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowTes1Modal(false)}
+                onClick={handleCloseTes1Modal}
                 className="rounded-lg border border-white/10 px-3 py-1 text-xs text-gray-400 hover:text-white hover:border-red-400 transition"
               >
                 ✕ Tutup
               </button>
             </div>
 
-            <div className="mt-4 space-y-5 text-xs md:text-sm">
-              {tes1Questions.map((q, qIdx) => (
-                <div key={qIdx} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                  <p className="font-semibold text-gray-100 mb-2.5">{q.question}</p>
-                  <div className="space-y-2">
-                    {q.options.map((opt, optIdx) => {
-                      const isSelected = tes1Answers[qIdx] === optIdx;
-                      return (
-                        <label
-                          key={optIdx}
-                          onClick={() => handleSelectTes1(qIdx, optIdx)}
-                          className={`flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer transition ${
-                            isSelected
-                              ? "border-red-400 bg-red-950/50 text-red-200 shadow-[0_0_10px_rgba(239,68,68,0.3)]"
-                              : "border-white/10 bg-white/[0.02] text-gray-300 hover:border-red-500/40 hover:bg-white/[0.05]"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`tes1-q-${qIdx}`}
-                            checked={isSelected}
-                            onChange={() => handleSelectTes1(qIdx, optIdx)}
-                            className="accent-red-500 cursor-pointer"
-                          />
-                          <span className="select-none">{opt}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex items-center justify-between border-t border-red-500/30 pt-4">
-              <span className="text-[11px] text-gray-400">
-                Dijawab: {tes1Answers.filter((a) => a !== null).length} / 5 Soal
-              </span>
+            {/* Navigation Tabs */}
+            <div className="mt-4 flex items-center gap-2 border-b border-white/10 pb-2">
               <button
                 type="button"
-                onClick={handleSubmitTes1}
-                className="rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 px-6 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_20px_rgba(239,68,68,0.5)] transition hover:scale-105 active:scale-95"
+                onClick={() => setTes1ModalTab("material")}
+                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                  tes1ModalTab === "material"
+                    ? "bg-red-500/20 text-red-300 border border-red-400/50 shadow-[0_0_12px_rgba(239,68,68,0.3)]"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                }`}
               >
-                Kirim Jawaban & Matikan Laser 5 ➔
+                <span>📖</span> Ringkasan Materi SJF
+              </button>
+              <button
+                type="button"
+                onClick={() => setTes1ModalTab("quiz")}
+                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                  tes1ModalTab === "quiz"
+                    ? "bg-rose-500/20 text-rose-300 border border-rose-400/50 shadow-[0_0_12px_rgba(244,63,94,0.3)]"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                }`}
+              >
+                <span>📝</span> Kuis Pemahaman (3 Soal)
+                <span
+                  className={`ml-1 rounded px-1.5 py-0.2 text-[10px] font-bold ${
+                    isSjfQuizAllCorrect
+                      ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/50"
+                      : "bg-white/10 text-gray-300"
+                  }`}
+                >
+                  {sjfQuizAnswers.filter((ans, idx) => ans === sjfQuestions[idx].correct).length}/3
+                </span>
               </button>
             </div>
+
+            {/* TAB 1: MATERI SJF */}
+            {tes1ModalTab === "material" && (
+              <div className="mt-4 space-y-4 text-xs md:text-sm text-gray-300 leading-relaxed">
+                <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-4">
+                  <h3 className="font-bold text-red-300 text-sm md:text-base">
+                    Algoritma Penjadwalan: Shortest Job First (SJF)
+                  </h3>
+                  <p className="mt-2 text-gray-200">
+                    <strong>Shortest Job First (SJF)</strong> adalah algoritma penjadwalan CPU yang memprioritaskan dan mengeksekusi proses dengan waktu eksekusi atau <strong>Burst Time paling singkat</strong> terlebih dahulu dari antrean (<em>Ready Queue</em>).
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-purple-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-purple-300">1. Dua Jenis Strategi SJF</h4>
+                  <ul className="mt-2 space-y-2">
+                    <li className="rounded-lg bg-black/30 p-2.5 border border-white/5">
+                      <strong className="text-cyan-300">a. Non-Preemptive SJF:</strong> Setelah proses dengan Burst Time terpendek mendapat jatah CPU, proses tersebut tidak dapat dihentikan hingga selesai.
+                    </li>
+                    <li className="rounded-lg bg-black/30 p-2.5 border border-white/5">
+                      <strong className="text-pink-300">b. Preemptive SJF (Shortest Remaining Time First / SRTF):</strong> Jika datang proses baru yang memiliki sisa waktu eksekusi (Burst Time) lebih singkat daripada sisa waktu proses yang sedang berjalan, maka proses yang sedang berjalan akan dihentikan sementara (<em>preempted</em>) untuk memberi jalan ke proses baru tersebut.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-amber-300">2. Keuntungan & Kekurangan</h4>
+                  <ul className="mt-1 list-disc list-inside space-y-1.5">
+                    <li>
+                      <strong className="text-emerald-300">Keuntungan:</strong> Sangat optimal dalam menghasilkan rata-rata waktu tunggu (<strong>Average Waiting Time</strong>) paling minimal dibanding algoritma non-preemptive lainnya.
+                    </li>
+                    <li>
+                      <strong className="text-rose-300">Kekurangan (Starvation):</strong> Berisiko menyebabkan <strong>Starvation</strong> (kelaparan proses), di mana proses dengan Burst Time panjang bisa tertunda terus-menerus jika proses-proses kecil terus berdatangan tanpa henti. Selain itu, sulit memprediksi durasi Burst Time secara pasti sebelum proses dijalankan di dunia nyata.
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border border-blue-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-blue-300">3. Contoh Simulasi Singkat (Non-Preemptive, Tiba pada t = 0 ms)</h4>
+                  <p className="mt-1 text-gray-300">
+                    Diketahui 4 proses dengan durasi Burst Time:
+                  </p>
+                  <div className="mt-2 grid grid-cols-4 gap-2 text-center font-mono text-xs">
+                    <div className="rounded border border-cyan-500/40 bg-cyan-950/30 p-2">
+                      <div className="font-bold text-cyan-300">P1</div>
+                      <div className="text-gray-300">Burst: 6 ms</div>
+                    </div>
+                    <div className="rounded border border-rose-500/40 bg-rose-950/30 p-2">
+                      <div className="font-bold text-rose-300">P2</div>
+                      <div className="text-gray-300">Burst: 8 ms</div>
+                    </div>
+                    <div className="rounded border border-purple-500/40 bg-purple-950/30 p-2">
+                      <div className="font-bold text-purple-300">P3</div>
+                      <div className="text-gray-300">Burst: 7 ms</div>
+                    </div>
+                    <div className="rounded border border-amber-500/40 bg-amber-950/30 p-2">
+                      <div className="font-bold text-amber-300">P4</div>
+                      <div className="text-gray-300">Burst: 3 ms</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs text-gray-300">
+                    <strong>Urutan Eksekusi (dari Burst Time terkecil):</strong>{" "}
+                    <span className="font-mono text-amber-300 font-bold">P4 (3 ms) → P1 (6 ms) → P3 (7 ms) → P2 (8 ms)</span>
+                  </div>
+
+                  {/* Visual Gantt Chart */}
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold text-gray-400 mb-1">Visualisasi Gantt Chart:</div>
+                    <div className="flex h-10 w-full overflow-hidden rounded-lg border border-white/20 text-xs font-bold text-black font-mono">
+                      <div className="flex flex-[3] items-center justify-center bg-amber-400">
+                        P4 (3)
+                      </div>
+                      <div className="flex flex-[6] items-center justify-center bg-cyan-400 border-l border-black/40">
+                        P1 (6 ms)
+                      </div>
+                      <div className="flex flex-[7] items-center justify-center bg-purple-400 border-l border-black/40">
+                        P3 (7 ms)
+                      </div>
+                      <div className="flex flex-[8] items-center justify-center bg-rose-400 border-l border-black/40">
+                        P2 (8 ms)
+                      </div>
+                    </div>
+                    {/* Timeline markers */}
+                    <div className="mt-1 flex justify-between font-mono text-[10px] text-gray-400">
+                      <span>0</span>
+                      <span className="translate-x-1">3</span>
+                      <span className="translate-x-4">9</span>
+                      <span className="translate-x-6">16</span>
+                      <span>24 ms</span>
+                    </div>
+                  </div>
+
+                  {/* Perhitungan WT */}
+                  <div className="mt-3 bg-black/40 p-3 rounded-lg border border-white/5 font-mono text-xs">
+                    <div className="font-bold text-red-300">Waiting Time (WT):</div>
+                    <div className="grid grid-cols-2 gap-1 mt-1 text-gray-300">
+                      <div>• P4 = 0 ms</div>
+                      <div>• P1 = 3 ms</div>
+                      <div>• P3 = 3 + 6 = 9 ms</div>
+                      <div>• P2 = 3 + 6 + 7 = 16 ms</div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-white/10 font-semibold text-amber-300">
+                      Rata-rata WT: (0 + 3 + 9 + 16) / 4 = <span className="text-emerald-300 font-bold text-sm">7 ms</span>{" "}
+                      <span className="text-[10px] text-gray-400">(Jauh lebih efisien daripada FCFS: 10,25 ms)</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-red-500/40 bg-red-950/30 p-3.5 text-red-200">
+                  <p className="font-semibold text-red-300 flex items-center gap-1.5">
+                    <span>💡</span> Syarat Mematikan Laser 5:
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Kerjakan <strong>Kuis Singkat (3 Soal)</strong> berdasarkan materi SJF di atas. Setelah ke-3 soal dijawab dengan benar, <strong>Laser 5 (Merah Horizontal)</strong> akan dinonaktifkan!
+                  </p>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseTes1Modal}
+                    className="rounded-xl border border-white/20 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition"
+                  >
+                    Tutup Sementara
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTes1ModalTab("quiz")}
+                    className="rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 px-6 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_20px_rgba(239,68,68,0.5)] transition hover:scale-105 active:scale-95"
+                  >
+                    Lanjut ke Kuis Pemahaman (3 Soal) ➔
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: KUIS SINGKAT SJF (3 SOAL) */}
+            {tes1ModalTab === "quiz" && (
+              <div className="mt-4 space-y-5 text-xs md:text-sm text-gray-300 leading-relaxed">
+                <div className="flex items-center justify-between rounded-xl border border-red-500/30 bg-red-950/20 px-4 py-2.5">
+                  <div className="text-xs text-red-200">
+                    Pilih jawaban yang benar untuk setiap soal SJF. Warna hijau menandakan jawaban benar.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTes1ModalTab("material")}
+                    className="flex items-center gap-1 rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-300 hover:bg-red-500/20 transition"
+                  >
+                    📖 Review Materi
+                  </button>
+                </div>
+
+                {sjfQuestions.map((q, qIdx) => {
+                  const selectedOpt = sjfQuizAnswers[qIdx];
+                  const isAnswered = selectedOpt !== null;
+                  const isCorrect = selectedOpt === q.correct;
+
+                  return (
+                    <div
+                      key={q.id}
+                      className={`rounded-xl border p-4 transition ${
+                        isAnswered
+                          ? isCorrect
+                            ? "border-emerald-500/60 bg-emerald-950/15"
+                            : "border-rose-500/60 bg-rose-950/15"
+                          : "border-white/10 bg-white/[0.03]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-bold text-white text-xs md:text-sm">
+                          {qIdx + 1}. {q.question}
+                        </h4>
+                        {isAnswered && (
+                          <span
+                            className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${
+                              isCorrect
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                            }`}
+                          >
+                            {isCorrect ? "✓ Benar" : "✕ Belum Tepat"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {q.options.map((opt, optIdx) => {
+                          const isOptionSelected = selectedOpt === optIdx;
+                          let btnStyle = "border-white/10 bg-white/[0.02] text-gray-300 hover:bg-white/[0.06] hover:border-white/20";
+
+                          if (isOptionSelected) {
+                            if (isCorrect) {
+                              btnStyle = "border-emerald-400 bg-emerald-500/25 text-emerald-200 font-semibold shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+                            } else {
+                              btnStyle = "border-rose-400 bg-rose-500/25 text-rose-200 font-semibold shadow-[0_0_15px_rgba(244,63,94,0.3)]";
+                            }
+                          }
+
+                          return (
+                            <button
+                              key={optIdx}
+                              type="button"
+                              onClick={() => handleSelectSjfQuiz(qIdx, optIdx)}
+                              className={`w-full text-left rounded-lg border p-2.5 text-xs transition flex items-center justify-between ${btnStyle}`}
+                            >
+                              <span>{opt}</span>
+                              {isOptionSelected && (
+                                <span className="ml-2 font-bold text-xs">
+                                  {isCorrect ? "✓" : "✕"}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Feedback Text */}
+                      {isAnswered && (
+                        <div className="mt-2.5 text-[11px]">
+                          {isCorrect ? (
+                            <span className="text-emerald-400 font-medium flex items-center gap-1">
+                              <span>✓</span> Pilihan tepat! Sesuai dengan prinsip Shortest Job First (SJF).
+                            </span>
+                          ) : (
+                            <span className="text-rose-400 font-medium flex items-center gap-1">
+                              <span>⚠️</span> Jawaban kurang tepat. Pelajari kembali materi dan pilih opsi lain!
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Status Box & Tombol Selesai */}
+                <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-semibold text-gray-300">
+                        Status Kuis:{" "}
+                        <span className={isSjfQuizAllCorrect ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                          {sjfQuizAnswers.filter((ans, idx) => ans === sjfQuestions[idx].correct).length} dari 3 Soal Benar
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {isSjfQuizAllCorrect
+                          ? "Semua jawaban benar! Silakan klik tombol untuk mematikan Laser 5."
+                          : "Jawab seluruh 3 soal dengan benar untuk membuka kunci Laser 5."}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={handleCloseTes1Modal}
+                        className="rounded-xl border border-white/20 px-3.5 py-2.5 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition"
+                      >
+                        Tutup
+                      </button>
+
+                      {isSjfQuizAllCorrect || isTes1Done ? (
+                        <button
+                          type="button"
+                          onClick={handleCompleteSjfMateri}
+                          className="flex-1 sm:flex-initial rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-5 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_25px_rgba(16,185,129,0.5)] transition hover:scale-105 active:scale-95"
+                        >
+                          ✓ {isTes1Done ? "Tutup (Laser 5 Telah Padam)" : "Selesai & Padamkan Laser 5 ➔"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 sm:flex-initial rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs md:text-sm font-bold text-gray-500 cursor-not-allowed"
+                        >
+                          🔒 Jawab Semua Benar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* ═══════════════════════════════════════════════════════
-          MODAL 5: TES 2 (3 SOAL PG MULTI-JAWABAN CHECKBOX - MEMATIKAN LASER 6)
+          MODAL 5: TRIGGER 3 / MATERI 3 ROUND ROBIN & KUIS (MEMATIKAN LASER 6)
           ═══════════════════════════════════════════════════════ */}
       {showTes2Modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
           <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border-2 border-blue-500/70 bg-[#0d091e]/95 p-6 md:p-8 text-[#e9e4ff] shadow-[0_0_50px_rgba(59,130,246,0.4)]">
+            {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-blue-500/40 pb-3">
               <div className="flex items-center gap-3">
                 <span className="h-3 w-3 rounded-full bg-blue-400 animate-ping" />
                 <div>
-                  <h2 className="text-lg font-bold text-blue-300 tracking-wider uppercase">
-                    📋 TES 2 // EVALUASI MULTI-JAWABAN (CHECKBOX)
+                  <h2 className="text-base md:text-lg font-bold text-blue-300 tracking-wider uppercase">
+                    🖥️ OMNI LOG // PENJADWALAN ROUND ROBIN (RR)
                   </h2>
-                  <p className="text-[11px] text-gray-400">
-                    Tiap soal memiliki 2 hingga 3 jawaban benar. Semua pilihan yang dicentang harus cocok persis dengan kunci!
-                  </p>
+                  <p className="text-[11px] text-gray-400">Trigger 3 • Modul Algoritma Penjadwalan & Kuis Pemahaman</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowTes2Modal(false)}
+                onClick={handleCloseTes2Modal}
                 className="rounded-lg border border-white/10 px-3 py-1 text-xs text-gray-400 hover:text-white hover:border-blue-400 transition"
               >
                 ✕ Tutup
               </button>
             </div>
 
-            <div className="mt-4 space-y-5 text-xs md:text-sm">
-              {tes2Questions.map((q, qIdx) => {
-                const selectedList = tes2Answers[qIdx] || [];
-                return (
-                  <div key={qIdx} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-center justify-between mb-2.5">
-                      <p className="font-semibold text-gray-100">{q.question}</p>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 whitespace-nowrap">
-                        Terpilih: {selectedList.length}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {q.options.map((opt, optIdx) => {
-                        const isChecked = selectedList.includes(optIdx);
-                        return (
-                          <label
-                            key={optIdx}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              handleToggleTes2(qIdx, optIdx);
-                            }}
-                            className={`flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer transition select-none ${
-                              isChecked
-                                ? "border-blue-400 bg-blue-950/50 text-blue-200 shadow-[0_0_10px_rgba(59,130,246,0.3)]"
-                                : "border-white/10 bg-white/[0.02] text-gray-300 hover:border-blue-500/40 hover:bg-white/[0.05]"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {}} // handled by label onClick
-                              className="accent-blue-500 cursor-pointer h-4 w-4 rounded"
-                            />
-                            <span>{opt}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 flex items-center justify-between border-t border-blue-500/30 pt-4">
-              <span className="text-[11px] text-gray-400">
-                Format: Checkbox Multi-Selection
-              </span>
+            {/* Navigation Tabs */}
+            <div className="mt-4 flex items-center gap-2 border-b border-white/10 pb-2">
               <button
                 type="button"
-                onClick={handleSubmitTes2}
-                className="rounded-xl bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-600 px-6 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_20px_rgba(59,130,246,0.5)] transition hover:scale-105 active:scale-95"
+                onClick={() => setTes2ModalTab("material")}
+                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                  tes2ModalTab === "material"
+                    ? "bg-blue-500/20 text-blue-300 border border-blue-400/50 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                }`}
               >
-                Kirim Jawaban & Matikan Laser 6 ➔
+                <span>📖</span> Ringkasan Materi RR
+              </button>
+              <button
+                type="button"
+                onClick={() => setTes2ModalTab("quiz")}
+                className={`flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition ${
+                  tes2ModalTab === "quiz"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]"
+                }`}
+              >
+                <span>📝</span> Kuis Pemahaman (3 Soal)
+                <span
+                  className={`ml-1 rounded px-1.5 py-0.2 text-[10px] font-bold ${
+                    isRrQuizAllCorrect
+                      ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/50"
+                      : "bg-white/10 text-gray-300"
+                  }`}
+                >
+                  {rrQuizAnswers.filter((ans, idx) => ans === rrQuestions[idx].correct).length}/3
+                </span>
               </button>
             </div>
+
+            {/* TAB 1: MATERI ROUND ROBIN */}
+            {tes2ModalTab === "material" && (
+              <div className="mt-4 space-y-4 text-xs md:text-sm text-gray-300 leading-relaxed">
+                <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-4">
+                  <h3 className="font-bold text-blue-300 text-sm md:text-base">
+                    Algoritma Penjadwalan: Round Robin (RR)
+                  </h3>
+                  <p className="mt-2 text-gray-200">
+                    <strong>Round Robin (RR)</strong> adalah algoritma penjadwalan CPU yang dirancang khusus untuk sistem <em>time-sharing</em>. Setiap proses mendapat jatah waktu eksekusi yang sama secara bergiliran sebesar <strong>Time Quantum (q)</strong> (umumnya 10–100 milidetik) dari antrean melingkar (<em>circular queue</em> / FIFO).
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-purple-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-purple-300">1. Sifat Penjadwalan: Preemptive</h4>
+                  <p className="mt-1">
+                    Jika proses belum selesai setelah jatah <strong>Time Quantum (q)</strong> miliknya habis, CPU akan menghentikan proses tersebut sementara (<em>preempted</em>) dan mengembalikannya ke bagian belakang antrean (<em>Ready Queue</em>) untuk menunggu giliran berikutnya. Jika proses selesai sebelum <em>q</em> habis, proses langsung melepaskan CPU secara sukarela.
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-amber-300">2. Keuntungan & Kekurangan (Pengaruh Time Quantum)</h4>
+                  <ul className="mt-1 list-disc list-inside space-y-1.5">
+                    <li>
+                      <strong className="text-emerald-300">Keuntungan:</strong> Sangat adil (<em>fair</em>), mencegah terjadinya <em>Starvation</em> dan <em>Convoy Effect</em>, serta memberikan <em>Response Time</em> yang cepat untuk sistem interaktif.
+                    </li>
+                    <li>
+                      <strong className="text-rose-300">Kekurangan:</strong> Performa sangat bergantung pada ukuran <strong>Time Quantum (q)</strong>:
+                      <div className="mt-1.5 ml-4 space-y-1 text-gray-300">
+                        <div>• Jika <em>q</em> <strong>terlalu besar</strong>, Round Robin akan berperilaku sama persis seperti <strong>FCFS</strong>.</div>
+                        <div>• Jika <em>q</em> <strong>terlalu kecil</strong>, akan terjadi terlalu banyak <strong>Context Switch</strong> (perpindahan proses) yang menimbulkan overhead tinggi dan menurunkan efisiensi CPU.</div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="rounded-xl border border-cyan-500/30 bg-white/[0.03] p-4">
+                  <h4 className="font-bold text-cyan-300">3. Contoh Simulasi Singkat (Time Quantum q = 4 ms, Tiba pada t = 0 ms)</h4>
+                  <p className="mt-1 text-gray-300">
+                    Diketahui 3 proses dengan Burst Time: <strong>P1 = 24 ms</strong>, <strong>P2 = 3 ms</strong>, dan <strong>P3 = 3 ms</strong>.
+                  </p>
+
+                  {/* Visual Gantt Chart RR */}
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold text-gray-400 mb-1">Visualisasi Gantt Chart (q = 4 ms):</div>
+                    <div className="flex h-10 w-full overflow-hidden rounded-lg border border-white/20 text-[10px] md:text-xs font-bold text-black font-mono">
+                      <div className="flex flex-[4] items-center justify-center bg-cyan-400" title="P1: 0 - 4 ms">
+                        P1(4)
+                      </div>
+                      <div className="flex flex-[3] items-center justify-center bg-amber-400 border-l border-black/40" title="P2: 4 - 7 ms">
+                        P2(3)
+                      </div>
+                      <div className="flex flex-[3] items-center justify-center bg-purple-400 border-l border-black/40" title="P3: 7 - 10 ms">
+                        P3(3)
+                      </div>
+                      <div className="flex flex-[4] items-center justify-center bg-cyan-400 border-l border-black/40" title="P1: 10 - 14 ms">
+                        P1(4)
+                      </div>
+                      <div className="flex flex-[4] items-center justify-center bg-cyan-300 border-l border-black/40" title="P1: 14 - 18 ms">
+                        P1(4)
+                      </div>
+                      <div className="flex flex-[4] items-center justify-center bg-cyan-400 border-l border-black/40" title="P1: 18 - 22 ms">
+                        P1(4)
+                      </div>
+                      <div className="flex flex-[4] items-center justify-center bg-cyan-300 border-l border-black/40" title="P1: 22 - 26 ms">
+                        P1(4)
+                      </div>
+                      <div className="flex flex-[4] items-center justify-center bg-cyan-400 border-l border-black/40" title="P1: 26 - 30 ms">
+                        P1(4)
+                      </div>
+                    </div>
+                    {/* Timeline markers */}
+                    <div className="mt-1 flex justify-between font-mono text-[9px] md:text-[10px] text-gray-400">
+                      <span>0</span>
+                      <span>4</span>
+                      <span>7</span>
+                      <span className="font-bold text-purple-300">10 (P3 fin)</span>
+                      <span>14</span>
+                      <span>18</span>
+                      <span>22</span>
+                      <span>26</span>
+                      <span>30 ms</span>
+                    </div>
+                  </div>
+
+                  {/* Penjelasan Siklus & Waiting Time */}
+                  <div className="mt-3 bg-black/40 p-3 rounded-lg border border-white/5 space-y-2 text-xs">
+                    <div>
+                      <strong className="text-gray-200">Penjelasan Siklus:</strong>
+                      <p className="mt-0.5 text-gray-300 leading-normal">
+                        Pada putaran pertama, P1 berjalan 4 ms (sisa 20 ms) lalu dialihkan ke belakang antrean; P2 berjalan 3 ms (langsung selesai sebelum 4 ms habis); P3 berjalan 3 ms (langsung selesai pada t = 10 ms); kemudian P1 melanjutkan sisa 20 ms waktunya per 4 ms hingga tuntas di t = 30 ms.
+                      </p>
+                    </div>
+                    <div className="pt-2 border-t border-white/10 font-mono">
+                      <div className="font-bold text-blue-300">Waiting Time (WT):</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-1 text-gray-300">
+                        <div>• P1 = 10 - 4 = 6 ms</div>
+                        <div>• P2 = 4 ms</div>
+                        <div>• P3 = 7 ms</div>
+                      </div>
+                      <div className="mt-2 text-amber-300 font-semibold">
+                        Rata-rata WT: (6 + 4 + 7) / 3 = <span className="text-emerald-300 font-bold text-sm">5,67 ms</span>{" "}
+                        <span className="text-[10px] text-gray-400">(Jauh lebih responsif dibanding FCFS yang bernilai 17 ms!)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-blue-500/40 bg-blue-950/30 p-3.5 text-blue-200">
+                  <p className="font-semibold text-blue-300 flex items-center gap-1.5">
+                    <span>💡</span> Syarat Mematikan Laser 6:
+                  </p>
+                  <p className="mt-1 text-xs">
+                    Kerjakan <strong>Kuis Singkat (3 Soal)</strong> berdasarkan materi Round Robin di atas. Setelah ke-3 soal dijawab dengan benar, <strong>Laser 6 (Biru Tua Vertikal)</strong> akan dinonaktifkan!
+                  </p>
+                </div>
+
+                <div className="mt-5 flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCloseTes2Modal}
+                    className="rounded-xl border border-white/20 px-4 py-2 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition"
+                  >
+                    Tutup Sementara
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTes2ModalTab("quiz")}
+                    className="rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 px-6 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_20px_rgba(59,130,246,0.5)] transition hover:scale-105 active:scale-95"
+                  >
+                    Lanjut ke Kuis Pemahaman (3 Soal) ➔
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: KUIS SINGKAT ROUND ROBIN (3 SOAL) */}
+            {tes2ModalTab === "quiz" && (
+              <div className="mt-4 space-y-5 text-xs md:text-sm text-gray-300 leading-relaxed">
+                <div className="flex items-center justify-between rounded-xl border border-blue-500/30 bg-blue-950/20 px-4 py-2.5">
+                  <div className="text-xs text-blue-200">
+                    Pilih jawaban yang benar untuk setiap soal Round Robin. Warna hijau menandakan jawaban benar.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTes2ModalTab("material")}
+                    className="flex items-center gap-1 rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-300 hover:bg-blue-500/20 transition"
+                  >
+                    📖 Review Materi
+                  </button>
+                </div>
+
+                {rrQuestions.map((q, qIdx) => {
+                  const selectedOpt = rrQuizAnswers[qIdx];
+                  const isAnswered = selectedOpt !== null;
+                  const isCorrect = selectedOpt === q.correct;
+
+                  return (
+                    <div
+                      key={q.id}
+                      className={`rounded-xl border p-4 transition ${
+                        isAnswered
+                          ? isCorrect
+                            ? "border-emerald-500/60 bg-emerald-950/15"
+                            : "border-rose-500/60 bg-rose-950/15"
+                          : "border-white/10 bg-white/[0.03]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-bold text-white text-xs md:text-sm">
+                          {qIdx + 1}. {q.question}
+                        </h4>
+                        {isAnswered && (
+                          <span
+                            className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-bold ${
+                              isCorrect
+                                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                            }`}
+                          >
+                            {isCorrect ? "✓ Benar" : "✕ Belum Tepat"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {q.options.map((opt, optIdx) => {
+                          const isOptionSelected = selectedOpt === optIdx;
+                          let btnStyle = "border-white/10 bg-white/[0.02] text-gray-300 hover:bg-white/[0.06] hover:border-white/20";
+
+                          if (isOptionSelected) {
+                            if (isCorrect) {
+                              btnStyle = "border-emerald-400 bg-emerald-500/25 text-emerald-200 font-semibold shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+                            } else {
+                              btnStyle = "border-rose-400 bg-rose-500/25 text-rose-200 font-semibold shadow-[0_0_15px_rgba(244,63,94,0.3)]";
+                            }
+                          }
+
+                          return (
+                            <button
+                              key={optIdx}
+                              type="button"
+                              onClick={() => handleSelectRrQuiz(qIdx, optIdx)}
+                              className={`w-full text-left rounded-lg border p-2.5 text-xs transition flex items-center justify-between ${btnStyle}`}
+                            >
+                              <span>{opt}</span>
+                              {isOptionSelected && (
+                                <span className="ml-2 font-bold text-xs">
+                                  {isCorrect ? "✓" : "✕"}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Feedback Text */}
+                      {isAnswered && (
+                        <div className="mt-2.5 text-[11px]">
+                          {isCorrect ? (
+                            <span className="text-emerald-400 font-medium flex items-center gap-1">
+                              <span>✓</span> Pilihan tepat! Sesuai dengan prinsip Round Robin (RR).
+                            </span>
+                          ) : (
+                            <span className="text-rose-400 font-medium flex items-center gap-1">
+                              <span>⚠️</span> Jawaban kurang tepat. Pelajari kembali materi dan pilih opsi lain!
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Status Box & Tombol Selesai */}
+                <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-semibold text-gray-300">
+                        Status Kuis:{" "}
+                        <span className={isRrQuizAllCorrect ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                          {rrQuizAnswers.filter((ans, idx) => ans === rrQuestions[idx].correct).length} dari 3 Soal Benar
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        {isRrQuizAllCorrect
+                          ? "Semua jawaban benar! Silakan klik tombol untuk mematikan Laser 6."
+                          : "Jawab seluruh 3 soal dengan benar untuk membuka kunci Laser 6."}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={handleCloseTes2Modal}
+                        className="rounded-xl border border-white/20 px-3.5 py-2.5 text-xs text-gray-300 hover:text-white hover:bg-white/5 transition"
+                      >
+                        Tutup
+                      </button>
+
+                      {isRrQuizAllCorrect || isTes2Done ? (
+                        <button
+                          type="button"
+                          onClick={handleCompleteRrMateri}
+                          className="flex-1 sm:flex-initial rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-5 py-2.5 text-xs md:text-sm font-bold text-white shadow-[0_0_25px_rgba(16,185,129,0.5)] transition hover:scale-105 active:scale-95"
+                        >
+                          ✓ {isTes2Done ? "Tutup (Laser 6 Telah Padam)" : "Selesai & Padamkan Laser 6 ➔"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          className="flex-1 sm:flex-initial rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs md:text-sm font-bold text-gray-500 cursor-not-allowed"
+                        >
+                          🔒 Jawab Semua Benar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
