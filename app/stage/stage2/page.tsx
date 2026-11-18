@@ -176,7 +176,7 @@ export default function Stage2Platformer() {
   const purpleGateObj = { x: 232, y: 90, w: 14, h: 158 };
   const keycardObj = { x: 912, y: 162, w: 26, h: 26 };
   const plasmaPools = [
-    { id: 1, x: 250, y: 531, w: 70, h: 12 },
+    { id: 1, x: 262, y: 531, w: 54, h: 12 },
     { id: 2, x: 400, y: 531, w: 45, h: 12 },
   ];
 
