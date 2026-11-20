@@ -10,25 +10,35 @@ import DeadlockQuizModal from "@/components/DeadlockQuizModal";
 export default function Stage4Page() {
   const router = useRouter();
 
+  // ─── KONSTANTA KANVAS (16:9 Fixed, selaras Stage 1) ────────
   const GAME_WIDTH = 1024;
-  const GAME_HEIGHT = 543;
+  const GAME_HEIGHT = 576;
 
   // ─── KONSTANTA PEMAIN & SPRITE (Sama dengan Stage 1) ────────
-  // Dimensi visual karakter (sedikit diperbesar proporsional 2:3)
   const VISUAL_W = 54;
   const VISUAL_H = 82;
 
-  // Dimensi Hitbox Fisika
+  // Dimensi Hitbox Fisika & Konstanta Gerak Halus
   const PLAYER_W = 44;
   const PLAYER_H = 76;
   const MOVE_SPEED = 3.6;
-  const JUMP_POWER = -8.9; // Lompatan pertama lebih terukur / tidak melayang tinggi
-  const DOUBLE_JUMP_POWER = -9.5; // Double jump terukur
-  const GRAVITY = 0.6;
+  const JUMP_POWER = -9.2;
+  const DOUBLE_JUMP_POWER = -9.6;
+  const GRAVITY = 0.52;
+  const BASE_GRAVITY = 0.52;
+  const FALL_MULTIPLIER = 1.42; // Snappier descent saat mulai jatuh
+  const LOW_JUMP_MULTIPLIER = 1.85; // Variable jump height saat tombol dilepas
+  const MAX_FALL_SPEED = 12.0; // Terminal velocity
+  const COYOTE_TIME = 0.1; // 100ms toleransi lompat di ujung platform
+  const JUMP_BUFFER_TIME = 0.12; // 120ms buffer input sebelum menyentuh lantai
 
+  // ─── SPAWN AWAL: Pojok Kiri Bawah (Pintu Masuk) ────────────
+  // Permukaan lantai bawah (metal floor) pada stage4bg.jpg berada tepat di y = 540
+  const GROUND_Y = 540;
   const SPAWN_X = 85;
-  const SPAWN_Y = 495 - PLAYER_H;
+  const SPAWN_Y = GROUND_Y - PLAYER_H;
 
+  // ─── STATE PEMAIN & FISIKA ──────────────────────────────────
   const [playerX, setPlayerX] = useState(SPAWN_X);
   const [playerY, setPlayerY] = useState(SPAWN_Y);
   const [velocityY, setVelocityY] = useState(0);
@@ -37,29 +47,46 @@ export default function Stage4Page() {
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
 
-  // ─── STATE ANIMASI SPRITE (File PNG Tunggal per Frame, sama dengan Stage 1) ────
+  // ─── STATE ANIMASI SPRITE ───────────────────────────────────
   const [playerSprite, setPlayerSprite] = useState<string>("/idle.png");
 
-  // State Modal
+  // ─── STATE SISTEM LASER (3 LASER STAGE 4) ──────────────────
+  // L1 (Merah 1 - Vertikal): Di atas meja tengah (di bawah SASCO) memblokir jalur ke Modul — dibuka via Tombol [E] di terminal kiri
+  const [isLaser1Active, setIsLaser1Active] = useState(true);
+  // L2 (Merah 2 - Vertikal): Sisi kanan platform tengah sebelum Level 5 — dibuka setelah Modul selesai
+  const [isLaser2Active, setIsLaser2Active] = useState(true);
+  // L3 (Kuning - Vertikal): Di celah antara ujung kanan platform kiri dan sisi kiri platform tengah — dibuka via Life-Support Banker
+  const [isLaser3Active, setIsLaser3Active] = useState(true);
+
+  // Refs laser untuk pembacaan instan dalam game loop
+  const laser1ActiveRef = useRef(true);
+  const laser2ActiveRef = useRef(true);
+  const laser3ActiveRef = useRef(true);
+
+  // ─── STATE MODAL ────────────────────────────────────────────
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [showMiniGameModal, setShowMiniGameModal] = useState(false);
 
-  // State Rintangan Menuju Modul Kuis
-  const [droneX, setDroneX] = useState(330);
-  const [droneDir, setDroneDir] = useState<"left" | "right">("right");
-  const [isSparkActive, setIsSparkActive] = useState(true);
-
-  // State Misi & Skor
+  // ─── STATE MISI & PROGRES ───────────────────────────────────
   const [quizPassed, setQuizPassed] = useState(false);
+  const [bankerDone, setBankerDone] = useState(false);
+  const [portalUsed, setPortalUsed] = useState(false);
+
+  // State gembok untuk kompatibilitas AlienLifeSupportMiniGame
   const [unlockedLocks, setUnlockedLocks] = useState({
     green: false,
     blue: false,
     purple: false,
   });
-  const [portalUsed, setPortalUsed] = useState(false);
 
+  // ─── STATE KEDEKATAN INTERAKSI ──────────────────────────────
+  const [isNearButton1, setIsNearButton1] = useState(false);
+  const [isNearHologram, setIsNearHologram] = useState(false);
+  const [isNearBanker, setIsNearBanker] = useState(false);
+  const [isNearPortal, setIsNearPortal] = useState(false);
+
+  // ─── TOAST NOTIFIKASI ───────────────────────────────────────
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
@@ -67,50 +94,88 @@ export default function Stage4Page() {
     }, 3200);
   };
 
-  const platforms = [
-    { x: 0, y: 495, w: 1024, h: 48 },
-    { x: 30, y: 382, w: 290, h: 22 },
-    { x: 245, y: 318, w: 640, h: 22 },
-    { x: 760, y: 395, w: 200, h: 20 },
-    { x: 730, y: 195, w: 240, h: 20 },
+  // ─── HITBOX PLATFORM (Diselaraskan Presisi dengan stage4bg.jpg) ─
+  // 1. Lantai dasar bawah (x: 0..1024, permukaan y = 540)
+  const groundPlatform = { x: 0, y: GROUND_Y, w: GAME_WIDTH, h: GAME_HEIGHT - GROUND_Y };
+
+  // 2. Platform kiri di atas pintu masuk (permukaan y = 412, x: 0..330)
+  //    Meja/pijakan panel kontrol kiri atas background
+  const leftUpperPlatform = { x: 0, y: 412, w: 330, h: 22 };
+
+  // 3. Platform tengah atas (meja besar laboratorium, permukaan y = 340, x: 345..860)
+  //    Permukaan meja besar tempat SASCO, Modul, hologram, dan robot berada
+  const midPlatform = { x: 345, y: 340, w: 515, h: 22 };
+
+  // 4. Platform kanan bawah di puncak tangga (permukaan y = 440, x: 840..1024)
+  const rightLowerPlatform = { x: 840, y: 440, w: 184, h: 22 };
+
+  // 5. Platform kanan atas area Level 5 (permukaan y = 205, x: 745..1024)
+  const rightUpperPlatform = { x: 745, y: 205, w: 279, h: 22 };
+
+  const allPlatforms = [
+    midPlatform,
+    leftUpperPlatform,
+    rightLowerPlatform,
+    rightUpperPlatform,
   ];
 
-  // Koordinat Objek Interaktif
-  const hologramObj = { x: 485, y: 245, w: 70, h: 70 };
-  const miniGameStationObj = { x: 480, y: 435, w: 70, h: 60 };
-  const portalObj = { x: 825, y: 240, w: 65, h: 80 };
+  // ─── HITBOX LASER (Sesuai Posisi Coretan Merah & Kuning) ─────
+  // Laser Merah 1 (L1): Vertikal — di atas meja tengah di bawah SASCO/SWICC (x = 410, y = 245..340)
+  // Memblokir jalur dari sisi kiri meja menuju MODUL: STAGE 4
+  const laser1 = { x: 410, y: 245, w: 14, h: 95 };
 
-  // Koordinat Rintangan
-  const DRONE_Y = 278;
-  const DRONE_W = 34;
-  const DRONE_H = 26;
-  const SPARK_TRAP = { x: 370, y: 306, w: 38, h: 14 };
+  // Laser Kuning (L3): Vertikal — di celah antara ujung kanan platform kiri dan sisi kiri platform tengah (x = 335, y = 240..412)
+  // Memblokir jalur lompatan/penyeberangan antara platform kiri dan meja tengah
+  const laser3 = { x: 335, y: 240, w: 14, h: 172 };
 
-  const [isNearHologram, setIsNearHologram] = useState(false);
-  const [isNearStation, setIsNearStation] = useState(false);
-  const [isNearPortal, setIsNearPortal] = useState(false);
+  // Laser Merah 2 (L2): Vertikal — di sisi kanan platform tengah atas sebelum area Level 5 (x = 818, y = 205..340)
+  // Memblokir jalur dari meja tengah ke arah Level 5
+  const laser2 = { x: 818, y: 205, w: 14, h: 135 };
 
-  const keysPressed = useRef<Set<string>>(new Set());
-  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
-  // Ref pelacak animasi pemain (File PNG Tunggal per Frame, sama dengan Stage 1)
-  const animRef = useRef({
-    action: "idle",
-    frame: 1,
-    lastFrameTime: 0,
-    isDoubleJumping: false,
-    facing: "right" as "right" | "left",
-  });
-  playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+  // ─── KOORDINAT OBJEK INTERAKTIF ─────────────────────────────
+  // Tombol terminal kiri (Lingkaran Merah di platform kiri) — membuka Laser Merah 1
+  const button1Obj = { x: 55, y: 358, w: 50, h: 50 };
 
+  // Modul: Stage 4 — hologram kuis di platform tengah atas
+  const hologramObj = { x: 490, y: 268, w: 70, h: 70 };
+
+  // Life-Support Banker — di platform kanan bawah dekat tangga
+  const bankerObj = { x: 865, y: 378, w: 60, h: 60 };
+
+  // Portal Level 5 — di platform kanan atas
+  const portalObj = { x: 920, y: 120, w: 65, h: 85 };
+
+  // Portal siap hanya jika quiz selesai DAN banker selesai
+  const isPortalReady = quizPassed && bankerDone;
+
+  // ─── SKOR ───────────────────────────────────────────────────
   const currentScore =
-    (quizPassed ? 100 : 0) +
-    (unlockedLocks.green ? 100 : 0) +
-    (unlockedLocks.blue ? 100 : 0) +
-    (unlockedLocks.purple ? 100 : 0) +
+    (!isLaser1Active ? 50 : 0) +
+    (quizPassed ? 150 : 0) +
+    (!isLaser2Active ? 50 : 0) +
+    (bankerDone ? 100 : 0) +
+    (!isLaser3Active ? 50 : 0) +
     (portalUsed ? 100 : 0);
 
-  const allLocksUnlocked = unlockedLocks.green && unlockedLocks.blue && unlockedLocks.purple;
-  const isPortalReady = quizPassed && allLocksUnlocked;
+  // ─── HANDLER INTERAKSI ──────────────────────────────────────
+  const handlePressButton1 = () => {
+    if (isLaser1Active) {
+      setIsLaser1Active(false);
+      laser1ActiveRef.current = false;
+      showToast("🔓 Tombol Terminal Ditekan — Laser Merah 1 (L1) Dinonaktifkan! Jalur ke Modul Stage 4 kini terbuka.");
+    } else {
+      showToast("✅ Laser Merah 1 sudah dinonaktifkan. Lanjutkan ke Modul Stage 4.");
+    }
+  };
+
+  const handlePassQuiz = () => {
+    if (!quizPassed) {
+      setQuizPassed(true);
+      setIsLaser2Active(false);
+      laser2ActiveRef.current = false;
+      showToast("🎉 Modul Stage 4 Selesai! Laser Merah 2 (L2) Dinonaktifkan — Jalur ke Level 5 kini terbuka.");
+    }
+  };
 
   const handleUnlockLock = (lockType: "green" | "blue" | "purple") => {
     setUnlockedLocks((prev) => {
@@ -122,53 +187,85 @@ export default function Stage4Page() {
           : lockType === "blue"
           ? "Gembok Biru (Resource-Request)"
           : "Gembok Ungu (Deadlock Detection)";
-      showToast(`🔓 ${lockName} Berhasil Dibuka! (+100 poin)`);
+      showToast(`🔓 ${lockName} Berhasil Dibuka!`);
+
+      const allUnlocked = next.green && next.blue && next.purple;
+      if (allUnlocked && !bankerDone) {
+        setBankerDone(true);
+        setIsLaser3Active(false);
+        laser3ActiveRef.current = false;
+        showToast("🟡 Life-Support Banker Selesai! Laser Kuning (L3) Dinonaktifkan — Jalur penyeberangan celah terbuka.");
+      }
       return next;
     });
   };
 
-  const handlePassQuiz = () => {
-    if (!quizPassed) {
-      setQuizPassed(true);
-      showToast("🎉 Kuis Lulus! Memperoleh +100 poin.");
-    }
-  };
-
   const handleEnterPortal = () => {
     if (!isPortalReady) {
-      showToast("⚠️ Selesaikan kuis dan buka ketiga gembok mini-game terlebih dahulu.");
+      if (!quizPassed && !bankerDone) {
+        showToast("⚠️ Selesaikan Modul Stage 4 dan Life-Support Banker terlebih dahulu.");
+      } else if (!quizPassed) {
+        showToast("⚠️ Selesaikan Modul Stage 4 terlebih dahulu.");
+      } else {
+        showToast("⚠️ Selesaikan Life-Support Banker terlebih dahulu.");
+      }
       return;
     }
     setPortalUsed(true);
-    showToast("🌀 Memasuki Portal Level 5 (+100 poin)...");
+    showToast("🌀 Memasuki Level 5 (+100 poin)...");
     setTimeout(() => {
       router.push("/stage/stage5");
     }, 1200);
   };
 
-  // Timer siklus semburan listrik (aktif 2.2 detik, padam 2.2 detik)
-  useEffect(() => {
-    const sparkTimer = setInterval(() => {
-      setIsSparkActive((prev) => !prev);
-    }, 2200);
+  // ─── REFS GAME LOOP ─────────────────────────────────────────
+  const keysPressed = useRef<Set<string>>(new Set());
+  const playerRef = useRef({
+    x: SPAWN_X,
+    y: SPAWN_Y,
+    vy: 0,
+    jumping: false,
+    canDoubleJump: false,
+  });
+  const animRef = useRef({
+    action: "idle",
+    frame: 1,
+    lastFrameTime: 0,
+    isDoubleJumping: false,
+    facing: "right" as "right" | "left",
+  });
 
-    return () => clearInterval(sparkTimer);
-  }, []);
+  playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+  laser1ActiveRef.current = isLaser1Active;
+  laser2ActiveRef.current = isLaser2Active;
+  laser3ActiveRef.current = isLaser3Active;
 
-  // Keyboard Event Listener
+  // ─── KEYBOARD EVENTS ────────────────────────────────────────
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
 
       if (key === "e") {
-        if (isNearHologram && !showQuizModal) {
-          setShowQuizModal(true);
+        // Tombol Terminal (Lingkaran Merah) — membuka L1
+        if (isNearButton1 && !showQuizModal && !showMiniGameModal) {
+          handlePressButton1();
           return;
         }
-        if (isNearStation && !showMiniGameModal) {
+        // Modul: Stage 4 — hanya dapat diakses setelah L1 dinonaktifkan
+        if (isNearHologram && !showQuizModal && !showMiniGameModal) {
+          if (!isLaser1Active) {
+            setShowQuizModal(true);
+          } else {
+            showToast("⚠️ Jalur ke Modul masih terblokir Laser Merah 1 (L1). Tekan tombol terminal kiri terlebih dahulu.");
+          }
+          return;
+        }
+        // Life-Support Banker
+        if (isNearBanker && !showQuizModal && !showMiniGameModal) {
           setShowMiniGameModal(true);
           return;
         }
+        // Portal Level 5
         if (isNearPortal) {
           handleEnterPortal();
           return;
@@ -187,18 +284,16 @@ export default function Stage4Page() {
         }
       }
 
-      // Handler Lompatan (Lompatan Pertama & Double Jump)
+      // Lompatan & Double Jump
       if (key === "w" || key === "arrowup" || key === " ") {
         if (!showQuizModal && !showMiniGameModal) {
           const p = playerRef.current;
           if (!p.jumping) {
-            // Kondisi 1: Lompatan Pertama dari tanah/platform
             p.vy = JUMP_POWER;
             p.jumping = true;
             p.canDoubleJump = true;
             animRef.current.isDoubleJumping = false;
           } else if (p.canDoubleJump) {
-            // Kondisi 2: Double Jump saat di udara
             p.vy = DOUBLE_JUMP_POWER;
             p.canDoubleJump = false;
             animRef.current.isDoubleJumping = true;
@@ -250,9 +345,20 @@ export default function Stage4Page() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isNearHologram, isNearStation, isNearPortal, showQuizModal, showMiniGameModal, isPortalReady]);
+  }, [
+    isNearButton1,
+    isNearHologram,
+    isNearBanker,
+    isNearPortal,
+    showQuizModal,
+    showMiniGameModal,
+    isLaser1Active,
+    isPortalReady,
+    quizPassed,
+    bankerDone,
+  ]);
 
-  // Game Loop Fisika 60 FPS
+  // ─── GAME LOOP FISIKA 60 FPS ─────────────────────────────────
   useEffect(() => {
     let animId: number;
 
@@ -261,15 +367,7 @@ export default function Stage4Page() {
         const p = { ...playerRef.current };
         const keys = keysPressed.current;
 
-        // 1. Pergerakan Patrol Drone Rintangan
-        setDroneX((prevX) => {
-          let nextX = prevX + (droneDir === "right" ? 1.7 : -1.7);
-          if (nextX >= 450) setDroneDir("left");
-          if (nextX <= 300) setDroneDir("right");
-          return nextX;
-        });
-
-        // 2. Kontrol Horizontal Pemain
+        // 1. GERAKAN HORIZONTAL
         let moveX = 0;
         if (keys.has("a") || keys.has("arrowleft")) {
           moveX -= MOVE_SPEED;
@@ -283,10 +381,9 @@ export default function Stage4Page() {
           setFacingRight(true);
           animRef.current.facing = "right";
         }
-
         setIsWalking(moveX !== 0);
 
-        // 3. Lompat & Gravitasi
+        // 2. LOMPAT
         const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
         if (wantsJump && !p.jumping) {
           p.vy = JUMP_POWER;
@@ -295,77 +392,110 @@ export default function Stage4Page() {
           animRef.current.isDoubleJumping = false;
         }
 
+        // 3. GRAVITASI
         p.vy += GRAVITY;
         p.y += p.vy;
-        p.x += moveX;
 
-        p.x = Math.max(0, Math.min(GAME_WIDTH - PLAYER_W, p.x));
+        // 4. LANTAI DASAR
+        if (p.y + PLAYER_H >= GROUND_Y) {
+          p.y = GROUND_Y - PLAYER_H;
+          p.vy = 0;
+          p.jumping = false;
+          p.canDoubleJump = false;
+          animRef.current.isDoubleJumping = false;
+        }
 
-        // 4. Tabrakan dengan Platform
-        let onPlatform = false;
-        for (const plat of platforms) {
-          const isHorizontallyOver =
-            p.x + PLAYER_W - 8 > plat.x && p.x + 8 < plat.x + plat.w;
-          const isVerticallyAtSurface =
-            p.y + PLAYER_H >= plat.y && p.y + PLAYER_H - p.vy <= plat.y + 14;
+        // 5. TABRAKAN PLATFORM (Mendarat dari atas)
+        let nextPlayerX = p.x + moveX;
 
-          if (isHorizontallyOver && isVerticallyAtSurface) {
-            p.y = plat.y - PLAYER_H;
+        for (const plat of allPlatforms) {
+          const horizontallyOver =
+            p.x + PLAYER_W > plat.x + 3 && p.x < plat.x + plat.w - 3;
+
+          if (!horizontallyOver) continue;
+
+          // Mendarat dari ATAS (toleransi mulus agar tidak nyangkut saat melompat atau mendarat)
+          if (p.vy >= 0) {
+            const footY = p.y + PLAYER_H;
+            const prevFootY = footY - p.vy;
+            if (footY >= plat.y && prevFootY <= plat.y + 16) {
+              p.y = plat.y - PLAYER_H;
+              p.vy = 0;
+              p.jumping = false;
+              p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
+            }
+          }
+        }
+
+        // 6. RAMP TANGGA KANAN (x: 740 s.d. 840 — dari lantai dasar y=540 ke platform kanan y=440)
+        const charFootX = nextPlayerX + PLAYER_W * 0.5;
+        if (charFootX >= 740 && charFootX <= 840) {
+          const t = (charFootX - 740) / (840 - 740);
+          const stairsGroundY = 540 - t * (540 - 440);
+          const footY = p.y + PLAYER_H;
+
+          if (!p.jumping) {
+            if (Math.abs(footY - stairsGroundY) <= 24) {
+              p.y = stairsGroundY - PLAYER_H;
+              p.vy = 0;
+              p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
+            }
+          } else if (p.vy >= 0) {
+            if (footY >= stairsGroundY && footY - p.vy <= stairsGroundY + 16) {
+              p.y = stairsGroundY - PLAYER_H;
+              p.vy = 0;
+              p.jumping = false;
+              p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
+            }
+          }
+        }
+
+        // 7. TABRAKAN SISTEM LASER (Barrier + Respawn)
+        const allLasers = [
+          { ...laser1, active: laser1ActiveRef.current },
+          { ...laser2, active: laser2ActiveRef.current },
+          { ...laser3, active: laser3ActiveRef.current },
+        ];
+
+        for (const laser of allLasers) {
+          if (!laser.active) continue;
+
+          // A. Barrier: tidak bisa menembus laser aktif
+          const inLaserYRange = p.y + PLAYER_H > laser.y && p.y < laser.y + laser.h;
+          if (inLaserYRange) {
+            if (p.x + PLAYER_W <= laser.x && nextPlayerX + PLAYER_W > laser.x) {
+              nextPlayerX = laser.x - PLAYER_W;
+            } else if (p.x >= laser.x + laser.w && nextPlayerX < laser.x + laser.w) {
+              nextPlayerX = laser.x + laser.w;
+            }
+          }
+
+          // B. Menyentuh langsung → respawn ke Pintu Masuk
+          const isTouching =
+            nextPlayerX + PLAYER_W > laser.x + 2 &&
+            nextPlayerX < laser.x + laser.w - 2 &&
+            p.y + PLAYER_H > laser.y + 2 &&
+            p.y < laser.y + laser.h - 2;
+
+          if (isTouching) {
+            nextPlayerX = SPAWN_X;
+            p.y = SPAWN_Y;
             p.vy = 0;
             p.jumping = false;
             p.canDoubleJump = false;
             animRef.current.isDoubleJumping = false;
-            onPlatform = true;
-            break;
+            animRef.current.facing = "right";
+            showToast("⚡ Tersengat Laser! Kembali ke Pintu Masuk.");
           }
         }
 
-        if (!onPlatform && p.vy !== 0) {
-          p.jumping = true;
-        }
+        // 8. BATAS LAYAR HORIZONTAL
+        p.x = Math.max(5, Math.min(nextPlayerX, GAME_WIDTH - PLAYER_W - 5));
 
-        // 5. Rintangan 1: Drone Patroli Pengawas
-        const isHitDrone =
-          p.x + PLAYER_W > droneX &&
-          p.x < droneX + DRONE_W &&
-          p.y + PLAYER_H > DRONE_Y &&
-          p.y < DRONE_Y + DRONE_H;
-
-        if (isHitDrone) {
-          p.x = SPAWN_X;
-          p.y = SPAWN_Y;
-          p.vy = 0;
-          p.jumping = false;
-          p.canDoubleJump = false;
-          animRef.current.isDoubleJumping = false;
-          setFacingLeft(false);
-          setFacingRight(true);
-          animRef.current.facing = "right";
-          showToast("⚡ Tersengat Drone Keamanan! Respawn di pintu masuk.");
-        }
-
-        // 6. Rintangan 2: Fluks Listrik Statis di Meja
-        const isHitSpark =
-          isSparkActive &&
-          p.x + PLAYER_W > SPARK_TRAP.x &&
-          p.x < SPARK_TRAP.x + SPARK_TRAP.w &&
-          p.y + PLAYER_H >= SPARK_TRAP.y &&
-          p.y + PLAYER_H <= SPARK_TRAP.y + 16;
-
-        if (isHitSpark) {
-          p.x = SPAWN_X;
-          p.y = SPAWN_Y;
-          p.vy = 0;
-          p.jumping = false;
-          p.canDoubleJump = false;
-          animRef.current.isDoubleJumping = false;
-          setFacingLeft(false);
-          setFacingRight(true);
-          animRef.current.facing = "right";
-          showToast("⚡ Terkena Semburan Listrik Statis! Respawn di pintu masuk.");
-        }
-
-        // Batas Bawah Layar
+        // 9. BATAS BAWAH LAYAR (jatuh dari kanvas)
         if (p.y > GAME_HEIGHT) {
           p.x = SPAWN_X;
           p.y = SPAWN_Y;
@@ -375,19 +505,19 @@ export default function Stage4Page() {
           animRef.current.isDoubleJumping = false;
         }
 
-        const checkNear = (obj: { x: number; y: number; w: number; h: number }, range = 45) => {
-          const px = p.x + PLAYER_W / 2;
-          const py = p.y + PLAYER_H / 2;
-          const ox = obj.x + obj.w / 2;
-          const oy = obj.y + obj.h / 2;
-          return Math.abs(px - ox) < obj.w / 2 + range && Math.abs(py - oy) < obj.h / 2 + range;
+        // 10. CEK KEDEKATAN OBJEK INTERAKTIF
+        const checkNear = (obj: { x: number; y: number; w: number; h: number }, range = 55) => {
+          const dx = Math.abs(p.x + PLAYER_W / 2 - (obj.x + obj.w / 2));
+          const dy = Math.abs(p.y + PLAYER_H / 2 - (obj.y + obj.h / 2));
+          return dx < obj.w / 2 + range && dy < obj.h / 2 + range;
         };
 
-        setIsNearHologram(checkNear(hologramObj));
-        setIsNearStation(checkNear(miniGameStationObj));
-        setIsNearPortal(checkNear(portalObj, 50));
+        setIsNearButton1(checkNear(button1Obj, 50));
+        setIsNearHologram(checkNear(hologramObj, 55));
+        setIsNearBanker(checkNear(bankerObj, 50));
+        setIsNearPortal(checkNear(portalObj, 55));
 
-        // Update State Animasi Sprite Pemain (Sama persis dengan Stage 1)
+        // 11. UPDATE STATE ANIMASI SPRITE (Sama persis dengan Stage 1)
         const ar = animRef.current;
         const nowAnim = performance.now();
         const isAirborne = p.jumping || Math.abs(p.vy) > 0.05;
@@ -396,11 +526,10 @@ export default function Stage4Page() {
 
         let nextSprite = "/idle.png";
 
-        // PRIORITAS 1 - MELOMPAT / DI UDARA (!isGrounded)
+        // PRIORITAS 1 - MELOMPAT / DI UDARA
         if (isAirborne) {
           const isDoubleJump = ar.isDoubleJumping || (!p.canDoubleJump && p.jumping);
           if (isDoubleJump) {
-            // Animasi bergantian antara /jetpack-1.png dan /jetpack-2.png saat double jump
             if (ar.action !== "jetpack") {
               ar.action = "jetpack";
               ar.frame = 1;
@@ -411,37 +540,36 @@ export default function Stage4Page() {
             }
             nextSprite = `/jetpack-${ar.frame}.png`;
           } else {
-            // Lompat pertama biasa: /jump-1.png
             ar.action = "jump";
             ar.frame = 1;
             nextSprite = "/jump-1.png";
           }
         }
-        // PRIORITAS 2 - BERJALAN KE KANAN (isWalking && !facingLeft)
+        // PRIORITAS 2 - BERJALAN KE KANAN
         else if (walking && !isFacingLeft) {
           if (ar.action !== "walk_r") {
             ar.action = "walk_r";
             ar.frame = 1;
             ar.lastFrameTime = nowAnim;
           } else if (nowAnim - ar.lastFrameTime >= 120) {
-            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.frame = (ar.frame % 6) + 1;
             ar.lastFrameTime = nowAnim;
           }
           nextSprite = `/walk-r-${ar.frame}.png`;
         }
-        // PRIORITAS 3 - BERJALAN KE KIRI (isWalking && facingLeft)
+        // PRIORITAS 3 - BERJALAN KE KIRI
         else if (walking && isFacingLeft) {
           if (ar.action !== "walk_l") {
             ar.action = "walk_l";
             ar.frame = 1;
             ar.lastFrameTime = nowAnim;
           } else if (nowAnim - ar.lastFrameTime >= 120) {
-            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.frame = (ar.frame % 6) + 1;
             ar.lastFrameTime = nowAnim;
           }
           nextSprite = `/walk-l-${ar.frame}.png`;
         }
-        // PRIORITAS 4 - DIAM / IDLE (!isWalking && isGrounded)
+        // PRIORITAS 4 - DIAM / IDLE
         else {
           ar.action = "idle";
           ar.frame = 0;
@@ -449,7 +577,6 @@ export default function Stage4Page() {
         }
 
         setPlayerSprite(nextSprite);
-
         setPlayerX(p.x);
         setPlayerY(p.y);
         setVelocityY(p.vy);
@@ -461,124 +588,133 @@ export default function Stage4Page() {
 
     animId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animId);
-  }, [showQuizModal, showMiniGameModal, droneDir, isSparkActive]);
+  }, [showQuizModal, showMiniGameModal]);
 
+  // ═══════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-black p-2 md:p-4 select-none">
-      {/* Top HUD */}
-      <div className="mb-2 flex w-full max-w-[1024px] flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-500/30 bg-[#071324]/90 px-4 py-2 text-xs text-gray-200 backdrop-blur-md shadow-lg">
+    <main className="min-h-screen bg-black text-[#e9e4ff] select-none flex flex-col items-center justify-center">
+
+      {/* ═══ HUD ATAS (Struktur selaras Stage 1) ══════════════════ */}
+      <div className="flex w-[1024px] items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2 text-xs text-gray-300 backdrop-blur-md mb-3">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="font-bold tracking-wide text-cyan-300 font-mono">STAGE 4</span>
-          <span className="text-gray-400">| Deadlock &amp; Penanganannya</span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
-          <span className="text-gray-300">
-            Kuis:{" "}
-            <strong className={quizPassed ? "text-emerald-400" : "text-amber-400"}>
-              {quizPassed ? "LULUS (100)" : "Belum (0)"}
-            </strong>
-          </span>
-
-          <span className="text-gray-300">
-            Gembok:{" "}
-            <strong className={allLocksUnlocked ? "text-emerald-400" : "text-amber-400"}>
-              {[unlockedLocks.green, unlockedLocks.blue, unlockedLocks.purple].filter(Boolean).length}/3
-            </strong>
-          </span>
-
-          <span className="text-gray-300">
-            Total Skor: <strong className="text-cyan-300 text-sm">{currentScore} PTS</strong>
+          <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+          <span className="font-bold tracking-wider text-[#ffb347] uppercase text-[11px]">
+            Stage 4 // Deadlock &amp; Penanganannya
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowQuizModal(true)}
-            className="rounded-lg border border-cyan-400/40 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/20"
+        <div className="flex items-center gap-2 text-[10px]">
+          <span>
+            <strong className="text-white">A/D</strong>: Jalan •{" "}
+            <strong className="text-white">W/Spasi</strong>: Lompat •{" "}
+            <strong className="text-white">E</strong>: Tombol
+          </span>
+
+          {/* Status Laser L1 (Merah 1 — Jalur ke Modul) */}
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded ${
+              !isLaser1Active
+                ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                : "bg-red-950/60 text-red-400 border border-red-400/30 animate-pulse"
+            }`}
           >
-            MODUL: STAGE 4 [E]
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowMiniGameModal(true)}
-            className="rounded-lg border border-purple-400/40 bg-purple-500/10 px-2.5 py-1 text-[11px] font-semibold text-purple-200 hover:bg-purple-500/20"
+            L1 (MRH): {isLaser1Active ? "ON" : "OFF"}
+          </span>
+
+          {/* Status Laser L2 (Merah 2 — Jalur ke Level 5) */}
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded ${
+              !isLaser2Active
+                ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                : "bg-red-950/60 text-red-400 border border-red-400/30 animate-pulse"
+            }`}
           >
-            Banker Mini-Game [E]
-          </button>
+            L2 (MRH): {isLaser2Active ? "ON" : "OFF"}
+          </span>
+
+          {/* Status Laser L3 (Kuning — Celah Platform Kiri & Tengah) */}
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded ${
+              !isLaser3Active
+                ? "bg-yellow-500/20 text-yellow-300 border border-yellow-500/40"
+                : "bg-yellow-950/60 text-yellow-400 border border-yellow-400/30 animate-pulse"
+            }`}
+          >
+            L3 (KNG): {isLaser3Active ? "ON" : "OFF"}
+          </span>
+
+          {/* Status Portal */}
+          <span
+            className={`font-mono font-bold px-1.5 py-0.5 rounded ${
+              isPortalReady
+                ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                : "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+            }`}
+          >
+            {isPortalReady ? "PORTAL: UNLOCK" : "PORTAL: LOCK"}
+          </span>
+
+          {/* Skor */}
+          <span className="font-mono font-bold text-cyan-300 px-1.5 py-0.5 rounded bg-cyan-950/40 border border-cyan-400/20">
+            {currentScore} PTS
+          </span>
         </div>
       </div>
 
-      {/* Arena Platformer 1024 x 543 */}
+      {/* ═══ ARENA PLATFORMER 1024×576 ════════════════════════════ */}
       <div
-        className="relative overflow-hidden rounded-2xl border-2 border-cyan-500/40 shadow-2xl"
-        style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
+        className="relative overflow-hidden rounded-2xl border-2 border-cyan-500/30 shadow-[0_0_50px_rgba(0,0,0,0.9)]"
+        style={{
+          width: `${GAME_WIDTH}px`,
+          height: `${GAME_HEIGHT}px`,
+        }}
       >
+        {/* Background Stage 4 (dipertahankan tanpa perubahan gambar) */}
         <DeadlockBackground />
 
-        {/* Indikator Pintu Masuk */}
+        {/* ─── INDIKATOR PINTU MASUK (Kiri Bawah) ─────────────── */}
         <div
           className="absolute z-10 pointer-events-none flex flex-col items-center"
-          style={{
-            left: `${SPAWN_X - 18}px`,
-            top: `${SPAWN_Y - 32}px`,
-            width: "80px",
-          }}
+          style={{ left: `${SPAWN_X - 20}px`, top: `${SPAWN_Y - 36}px`, width: "80px" }}
         >
           <span className="flex items-center gap-1 rounded bg-black/70 border border-cyan-400/40 px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wider text-cyan-300">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
             PINTU MASUK
           </span>
-          <div className="mt-1 h-20 w-16 rounded-t-lg border border-dashed border-cyan-500/20 bg-gradient-to-t from-cyan-500/10 to-transparent" />
+          <div className="mt-1 h-16 w-14 rounded-t-lg border border-dashed border-cyan-500/20 bg-gradient-to-t from-cyan-500/10 to-transparent" />
         </div>
 
-        {/* ─── RINTANGAN 1: FLUKSI LISTRIK STATIS DI ATAS MEJA ────────── */}
+        {/* ─── TOMBOL TERMINAL KIRI (Lingkaran Merah — buka L1) ─── */}
         <div
-          className="absolute z-20 flex flex-col items-center pointer-events-none"
+          className={`absolute z-20 flex flex-col items-center justify-center cursor-pointer rounded-xl border-2 transition-all ${
+            !isLaser1Active
+              ? "border-gray-500/40 bg-gray-900/40 opacity-50"
+              : "border-red-400 bg-red-950/80 shadow-[0_0_20px_rgba(239,68,68,0.6)] hover:scale-105 hover:shadow-[0_0_30px_rgba(239,68,68,0.9)]"
+          }`}
           style={{
-            left: `${SPARK_TRAP.x}px`,
-            top: `${SPARK_TRAP.y}px`,
-            width: `${SPARK_TRAP.w}px`,
-            height: `${SPARK_TRAP.h}px`,
+            left: `${button1Obj.x}px`,
+            top: `${button1Obj.y}px`,
+            width: `${button1Obj.w}px`,
+            height: `${button1Obj.h}px`,
           }}
+          onClick={handlePressButton1}
         >
-          <div
-            className={`w-full h-full rounded transition-all duration-200 flex items-center justify-center ${
-              isSparkActive
-                ? "border border-amber-400 bg-amber-400/40 shadow-[0_0_15px_#fbbf24] animate-pulse"
-                : "border border-gray-600/40 bg-gray-900/30 opacity-40"
-            }`}
-          >
-            {isSparkActive && <span className="text-[10px] font-bold text-amber-200">⚡</span>}
-          </div>
+          {isNearButton1 && isLaser1Active && (
+            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30 pointer-events-none">
+              <span className="rounded bg-red-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
+                [E] Terminal Kunci
+              </span>
+            </div>
+          )}
+          <span className="text-lg select-none">{!isLaser1Active ? "✅" : "🔴"}</span>
+          <span className="text-[8px] font-mono font-bold text-red-200 mt-0.5 uppercase tracking-wider">
+            {!isLaser1Active ? "OPEN" : "BTN 1"}
+          </span>
         </div>
 
-        {/* ─── RINTANGAN 2: DRONE PATROLI KEAMANAN MINI ───────────────── */}
-        <div
-          className="absolute z-20 pointer-events-none transition-transform duration-75"
-          style={{
-            left: `${droneX}px`,
-            top: `${DRONE_Y}px`,
-            width: `${DRONE_W}px`,
-            height: `${DRONE_H}px`,
-          }}
-        >
-          <div className="relative w-full h-full flex flex-col items-center">
-            {/* Lampu Scanner Sensor ke Bawah */}
-            <div className="absolute top-5 w-6 h-8 bg-gradient-to-b from-rose-500/40 to-transparent blur-[1px] animate-pulse" />
-            <div className="w-8 h-5 rounded-md border border-rose-400/80 bg-rose-950/80 flex items-center justify-center shadow-[0_0_12px_rgba(244,63,94,0.7)]">
-              <span className="h-2 w-2 rounded-full bg-rose-400 animate-ping" />
-            </div>
-            <div className="flex justify-between w-7 -mt-0.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
-            </div>
-          </div>
-        </div>
-
-        {/* Hologram MODUL: STAGE 4 */}
+        {/* ─── HOLOGRAM MODUL: STAGE 4 (Platform Tengah Atas) ───── */}
         <div
           className="absolute z-20 flex flex-col items-center cursor-pointer"
           style={{
@@ -587,50 +723,74 @@ export default function Stage4Page() {
             width: `${hologramObj.w}px`,
             height: `${hologramObj.h}px`,
           }}
-          onClick={() => setShowQuizModal(true)}
+          onClick={() => {
+            if (!isLaser1Active) {
+              setShowQuizModal(true);
+            } else {
+              showToast("⚠️ Jalur ke Modul Stage 4 masih terblokir! Tekan tombol terminal kiri terlebih dahulu.");
+            }
+          }}
         >
           {isNearHologram && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce">
-              <span className="rounded bg-cyan-400 px-2 py-0.5 text-[10px] font-black text-black shadow-md">
-                [E] MODUL: STAGE 4
+            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30">
+              <span
+                className={`rounded px-2 py-0.5 text-[9px] font-black shadow-md ${
+                  !isLaser1Active
+                    ? "bg-cyan-400 text-black"
+                    : "bg-gray-700 text-gray-200"
+                }`}
+              >
+                {!isLaser1Active ? "[E] MODUL: STAGE 4" : "🔒 Terkunci (L1)"}
               </span>
             </div>
           )}
-          <div className="flex h-12 w-14 items-center justify-center rounded-xl border border-cyan-400/80 bg-cyan-950/60 shadow-[0_0_20px_rgba(34,211,238,0.7)] animate-pulse">
-            <span className="text-xl">📜</span>
+          <div
+            className={`flex h-12 w-14 items-center justify-center rounded-xl border transition-all ${
+              quizPassed
+                ? "border-emerald-400/80 bg-emerald-950/60 shadow-[0_0_20px_rgba(52,211,153,0.7)]"
+                : "border-cyan-400/80 bg-cyan-950/60 shadow-[0_0_20px_rgba(34,211,238,0.7)] animate-pulse"
+            }`}
+          >
+            <span className="text-xl">{quizPassed ? "✅" : "📜"}</span>
           </div>
           <span className="mt-1 text-[9px] font-mono font-bold tracking-wider text-cyan-300 bg-black/60 px-1.5 py-0.5 rounded border border-cyan-400/30">
             MODUL: STAGE 4
           </span>
         </div>
 
-        {/* Stasiun Mini-Game Banker */}
+        {/* ─── LIFE-SUPPORT BANKER (Kanan Bawah Dekat Tangga) ─────── */}
         <div
           className="absolute z-20 flex flex-col items-center cursor-pointer"
           style={{
-            left: `${miniGameStationObj.x}px`,
-            top: `${miniGameStationObj.y}px`,
-            width: `${miniGameStationObj.w}px`,
-            height: `${miniGameStationObj.h}px`,
+            left: `${bankerObj.x}px`,
+            top: `${bankerObj.y}px`,
+            width: `${bankerObj.w}px`,
+            height: `${bankerObj.h}px`,
           }}
           onClick={() => setShowMiniGameModal(true)}
         >
-          {isNearStation && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce">
-              <span className="rounded bg-purple-400 px-2 py-0.5 text-[10px] font-black text-black shadow-md">
+          {isNearBanker && (
+            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30">
+              <span className="rounded bg-yellow-400 px-2 py-0.5 text-[9px] font-black text-black shadow-md">
                 [E] Life-Support Banker
               </span>
             </div>
           )}
-          <div className="flex h-11 w-12 items-center justify-center rounded-xl border border-purple-400/80 bg-purple-950/70 shadow-[0_0_20px_rgba(168,85,247,0.7)]">
-            <span className="text-lg">🧪</span>
+          <div
+            className={`flex h-11 w-12 items-center justify-center rounded-xl border transition-all ${
+              bankerDone
+                ? "border-emerald-400/80 bg-emerald-950/60 shadow-[0_0_20px_rgba(52,211,153,0.7)]"
+                : "border-yellow-400/80 bg-yellow-950/70 shadow-[0_0_20px_rgba(234,179,8,0.7)] animate-pulse"
+            }`}
+          >
+            <span className="text-lg">{bankerDone ? "✅" : "🧪"}</span>
           </div>
-          <span className="mt-1 text-[9px] font-mono font-bold text-purple-300 bg-black/60 px-1 rounded border border-purple-400/30">
+          <span className="mt-1 text-[9px] font-mono font-bold text-yellow-300 bg-black/60 px-1 rounded border border-yellow-400/30">
             BANKER CORE
           </span>
         </div>
 
-        {/* Portal ke Level 5 */}
+        {/* ─── PORTAL LEVEL 5 (Platform Kanan Atas) ───────────────── */}
         <div
           className="absolute z-20 flex flex-col items-center justify-center cursor-pointer"
           style={{
@@ -642,32 +802,176 @@ export default function Stage4Page() {
           onClick={handleEnterPortal}
         >
           {isNearPortal && (
-            <div className="absolute -top-7 whitespace-nowrap animate-bounce">
+            <div className="absolute -top-7 whitespace-nowrap animate-bounce z-30">
               <span
-                className={`rounded px-2 py-0.5 text-[10px] font-black shadow-md ${
+                className={`rounded px-2 py-0.5 text-[9px] font-black shadow-md ${
                   isPortalReady ? "bg-emerald-400 text-black" : "bg-gray-700 text-gray-300"
                 }`}
               >
-                {isPortalReady ? "[E] Masuk Level 5" : "Portal Terkunci"}
+                {isPortalReady ? "[E] Masuk Level 5" : "🔒 Portal Terkunci"}
               </span>
             </div>
           )}
           <div
-            className={`absolute inset-0 rounded-full border-2 transition-all ${
+            className={`absolute inset-0 rounded-full border-2 transition-all duration-500 ${
               isPortalReady
-                ? "border-emerald-400 bg-emerald-500/30 shadow-[0_0_30px_rgba(52,211,153,0.8)] animate-pulse"
-                : "border-gray-600 bg-gray-900/60 opacity-60"
+                ? "border-emerald-400 bg-emerald-500/30 shadow-[0_0_35px_rgba(52,211,153,0.9)] animate-pulse"
+                : "border-purple-400 bg-purple-600/30 shadow-[0_0_20px_rgba(168,85,247,0.5)] opacity-70"
             }`}
           />
-          <div className="relative z-10 text-center">
-            <span className="text-2xl inline-block">{isPortalReady ? "🌀" : "🔒"}</span>
-            <span className="block text-[8px] font-mono font-black tracking-widest text-white uppercase mt-0.5">
+          <div className="relative z-10 text-center pointer-events-none">
+            <span
+              className="text-2xl animate-spin inline-block"
+              style={{ animationDuration: "8s" }}
+            >
+              {isPortalReady ? "🌀" : "🔒"}
+            </span>
+            <span
+              className={`block text-[8px] font-black tracking-widest uppercase mt-0.5 ${
+                isPortalReady ? "text-emerald-300" : "text-cyan-200"
+              }`}
+            >
               LEVEL 5
             </span>
           </div>
         </div>
 
-        {/* Karakter Pemain */}
+        {/* ═══════════════════════════════════════════════════════
+            LASER 1: MERAH TERANG (Vertikal — Di atas meja tengah di bawah SASCO/SWICC)
+            Posisi: x = 410, y = 245..340
+            Dibuka setelah Tombol Terminal Kiri ditekan
+            ═══════════════════════════════════════════════════════ */}
+        <div
+          className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
+            !isLaser1Active ? "opacity-0 scale-95" : "opacity-100 z-20"
+          }`}
+          style={{
+            left: `${laser1.x}px`,
+            top: `${laser1.y}px`,
+            width: `${laser1.w}px`,
+            height: `${laser1.h}px`,
+          }}
+        >
+          {/* Emitter Atas */}
+          <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-red-600 to-slate-900 border border-red-300 flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" />
+          </div>
+          {/* Sinar Laser Vertikal */}
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
+            <div className="relative w-3 h-full bg-gradient-to-b from-red-500 via-red-300 to-red-500 rounded-full laser-alive-red flex items-center justify-center overflow-hidden">
+              <div className="w-1 h-full bg-white rounded-full opacity-90 laser-core-flicker" />
+              <div className="absolute inset-x-0 h-10 bg-gradient-to-b from-transparent via-white to-transparent opacity-80 laser-energy-pulse" />
+            </div>
+          </div>
+          {/* Emitter Bawah */}
+          <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-red-600 to-slate-900 border border-red-300 flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+
+        {/* Label L1 */}
+        {isLaser1Active && (
+          <div
+            className="absolute z-25 pointer-events-none"
+            style={{ left: `${laser1.x + laser1.w + 3}px`, top: `${laser1.y + Math.floor(laser1.h / 2) - 8}px` }}
+          >
+            <span className="text-[8px] font-mono font-bold text-red-400 bg-black/80 px-1 py-0.5 rounded border border-red-500/30">
+              L1
+            </span>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════
+            LASER 3: KUNING TERANG (Vertikal — Celah Platform Kiri & Meja Tengah)
+            Posisi: x = 335, y = 240..412
+            Dibuka setelah Life-Support Banker selesai
+            ═══════════════════════════════════════════════════════ */}
+        <div
+          className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
+            !isLaser3Active ? "opacity-0 scale-95" : "opacity-100 z-20"
+          }`}
+          style={{
+            left: `${laser3.x}px`,
+            top: `${laser3.y}px`,
+            width: `${laser3.w}px`,
+            height: `${laser3.h}px`,
+          }}
+        >
+          {/* Emitter Atas */}
+          <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-yellow-500 to-slate-900 border border-yellow-300 flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" />
+          </div>
+          {/* Sinar Laser Vertikal */}
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
+            <div className="relative w-3 h-full bg-gradient-to-b from-yellow-500 to-yellow-300 rounded-full laser-alive-yellow flex items-center justify-center overflow-hidden">
+              <div className="w-1 h-full bg-white rounded-full opacity-90 laser-core-flicker" />
+              <div className="absolute inset-x-0 h-12 bg-gradient-to-b from-transparent via-white to-transparent opacity-80 laser-energy-pulse" />
+            </div>
+          </div>
+          {/* Emitter Bawah */}
+          <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-yellow-500 to-slate-900 border border-yellow-300 flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+
+        {/* Label L3 */}
+        {isLaser3Active && (
+          <div
+            className="absolute z-25 pointer-events-none"
+            style={{ left: `${laser3.x + laser3.w + 3}px`, top: `${laser3.y + Math.floor(laser3.h / 2) - 8}px` }}
+          >
+            <span className="text-[8px] font-mono font-bold text-yellow-400 bg-black/80 px-1 py-0.5 rounded border border-yellow-500/30">
+              L3
+            </span>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════
+            LASER 2: MERAH TERANG (Vertikal — Sisi Kanan Platform Tengah Atas sebelum Level 5)
+            Posisi: x = 818, y = 205..340
+            Dibuka setelah Modul Stage 4 selesai dikerjakan
+            ═══════════════════════════════════════════════════════ */}
+        <div
+          className={`absolute flex flex-col items-center justify-between transition-all duration-500 pointer-events-none ${
+            !isLaser2Active ? "opacity-0 scale-95" : "opacity-100 z-20"
+          }`}
+          style={{
+            left: `${laser2.x}px`,
+            top: `${laser2.y}px`,
+            width: `${laser2.w}px`,
+            height: `${laser2.h}px`,
+          }}
+        >
+          {/* Emitter Atas */}
+          <div className="relative w-6 h-2.5 -mt-1 rounded-sm bg-gradient-to-r from-slate-900 via-red-600 to-slate-900 border border-red-300 flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" />
+          </div>
+          {/* Sinar Laser Vertikal */}
+          <div className="relative w-full flex-1 flex items-center justify-center overflow-visible my-0.5">
+            <div className="relative w-3 h-full bg-gradient-to-b from-red-500 via-red-300 to-red-500 rounded-full laser-alive-red flex items-center justify-center overflow-hidden">
+              <div className="w-1 h-full bg-white rounded-full opacity-90 laser-core-flicker" />
+              <div className="absolute inset-x-0 h-10 bg-gradient-to-b from-transparent via-white to-transparent opacity-80 laser-energy-pulse" />
+            </div>
+          </div>
+          {/* Emitter Bawah */}
+          <div className="relative w-6 h-2.5 -mb-1 rounded-sm bg-gradient-to-r from-slate-900 via-red-600 to-slate-900 border border-red-300 flex items-center justify-center z-30">
+            <span className="w-2 h-1 rounded-full bg-white animate-ping" style={{ animationDelay: "0.3s" }} />
+          </div>
+        </div>
+
+        {/* Label L2 */}
+        {isLaser2Active && (
+          <div
+            className="absolute z-25 pointer-events-none"
+            style={{ left: `${laser2.x + laser2.w + 3}px`, top: `${laser2.y + Math.floor(laser2.h / 2) - 8}px` }}
+          >
+            <span className="text-[8px] font-mono font-bold text-red-400 bg-black/80 px-1 py-0.5 rounded border border-red-500/30">
+              L2
+            </span>
+          </div>
+        )}
+
+        {/* ─── KARAKTER PLAYER ─────────────────────────────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -687,7 +991,6 @@ export default function Stage4Page() {
               height: `${VISUAL_H}px`,
             }}
           >
-            {/* Elemen sprite utama persegi (VISUAL_H x VISUAL_H) */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={playerSprite}
@@ -701,9 +1004,10 @@ export default function Stage4Page() {
                 left: "50%",
                 objectFit: "contain",
                 objectPosition: "center bottom",
-                transform: ((isJumping || !isWalking) && facingLeft)
-                  ? "translateX(-50%) scaleX(-1)"
-                  : "translateX(-50%)",
+                transform:
+                  (isJumping || !isWalking) && facingLeft
+                    ? "translateX(-50%) scaleX(-1)"
+                    : "translateX(-50%)",
                 transformOrigin: "center bottom",
               }}
             />
@@ -711,7 +1015,7 @@ export default function Stage4Page() {
         </div>
       </div>
 
-      {/* Navigasi & Info Bawah */}
+      {/* ═══ NAVIGASI & KONTROL BAWAH ═════════════════════════════ */}
       <div className="mt-2 flex w-full max-w-[1024px] flex-wrap items-center justify-between gap-2 text-xs text-gray-400 font-mono">
         <div className="flex items-center gap-4">
           <Link href="/stage/stage3" className="hover:text-cyan-300 transition">
@@ -728,20 +1032,21 @@ export default function Stage4Page() {
         </div>
 
         <div className="text-gray-400">
-          Kontrol: <span className="text-cyan-300 font-bold">[A/D]</span> Jalan •{" "}
+          Kontrol:{" "}
+          <span className="text-cyan-300 font-bold">[A/D]</span> Jalan •{" "}
           <span className="text-cyan-300 font-bold">[W/Spasi]</span> Lompat •{" "}
           <span className="text-cyan-300 font-bold">[E]</span> Interaksi
         </div>
       </div>
 
-      {/* Notifikasi Toast */}
+      {/* ═══ TOAST NOTIFIKASI ═══════════════════════════════════════ */}
       {toastMessage && (
         <div className="fixed bottom-6 z-50 rounded-xl border border-cyan-500/40 bg-[#071324]/95 px-5 py-2.5 text-xs text-cyan-200 shadow-xl backdrop-blur-md">
           {toastMessage}
         </div>
       )}
 
-      {/* Modal Kuis & Briefing */}
+      {/* ═══ MODAL KUIS: MODUL STAGE 4 ═══════════════════════════════ */}
       <DeadlockQuizModal
         isOpen={showQuizModal}
         onClose={() => setShowQuizModal(false)}
@@ -749,7 +1054,7 @@ export default function Stage4Page() {
         isAlreadyPassed={quizPassed}
       />
 
-      {/* Modal Mini-Game Alien Life-Support Banker */}
+      {/* ═══ MODAL MINI-GAME: LIFE-SUPPORT BANKER ════════════════════ */}
       {showMiniGameModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 md:p-6 backdrop-blur-md">
           <div className="relative max-h-[94vh] w-full max-w-3xl overflow-y-auto">
@@ -765,6 +1070,87 @@ export default function Stage4Page() {
           </div>
         </div>
       )}
+
+      {/* ═══ ANIMASI LASER (Selaras Stage 1) ═══════════════════════ */}
+      <style jsx>{`
+        @keyframes laserFlickerRed {
+          0%, 100% {
+            opacity: 1;
+            filter: drop-shadow(0 0 14px rgba(239, 68, 68, 0.95)) drop-shadow(0 0 28px rgba(220, 38, 38, 0.7));
+          }
+          20% {
+            opacity: 0.86;
+            filter: drop-shadow(0 0 9px rgba(239, 68, 68, 0.75)) drop-shadow(0 0 16px rgba(220, 38, 38, 0.5));
+          }
+          40% {
+            opacity: 1;
+            filter: drop-shadow(0 0 18px rgba(239, 68, 68, 1)) drop-shadow(0 0 32px rgba(220, 38, 38, 0.85));
+          }
+          65% {
+            opacity: 0.92;
+            filter: drop-shadow(0 0 11px rgba(239, 68, 68, 0.8)) drop-shadow(0 0 20px rgba(220, 38, 38, 0.6));
+          }
+          85% {
+            opacity: 0.84;
+            filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.65));
+          }
+        }
+        .laser-alive-red {
+          animation: laserFlickerRed 0.16s infinite alternate ease-in-out;
+        }
+
+        @keyframes laserFlickerYellow {
+          0%, 100% {
+            opacity: 1;
+            filter: drop-shadow(0 0 14px rgba(234, 179, 8, 0.95)) drop-shadow(0 0 28px rgba(202, 138, 4, 0.7));
+          }
+          20% {
+            opacity: 0.86;
+            filter: drop-shadow(0 0 9px rgba(234, 179, 8, 0.75)) drop-shadow(0 0 16px rgba(202, 138, 4, 0.5));
+          }
+          40% {
+            opacity: 1;
+            filter: drop-shadow(0 0 18px rgba(234, 179, 8, 1)) drop-shadow(0 0 32px rgba(202, 138, 4, 0.85));
+          }
+          65% {
+            opacity: 0.92;
+            filter: drop-shadow(0 0 11px rgba(234, 179, 8, 0.8)) drop-shadow(0 0 20px rgba(202, 138, 4, 0.6));
+          }
+          85% {
+            opacity: 0.84;
+            filter: drop-shadow(0 0 8px rgba(234, 179, 8, 0.65));
+          }
+        }
+        .laser-alive-yellow {
+          animation: laserFlickerYellow 0.16s infinite alternate ease-in-out;
+        }
+
+        @keyframes laserCoreFlicker {
+          0%, 100% {
+            opacity: 0.98;
+            transform: scaleX(1);
+          }
+          50% {
+            opacity: 0.75;
+            transform: scaleX(0.7);
+          }
+        }
+        .laser-core-flicker {
+          animation: laserCoreFlicker 0.12s infinite alternate ease-in-out;
+        }
+
+        @keyframes laserPulseFlow {
+          0% {
+            transform: translateY(-100%);
+          }
+          100% {
+            transform: translateY(200%);
+          }
+        }
+        .laser-energy-pulse {
+          animation: laserPulseFlow 1.1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+      `}</style>
     </main>
   );
 }
