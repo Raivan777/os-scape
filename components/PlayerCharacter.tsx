@@ -37,7 +37,7 @@ export default function PlayerCharacter({
 
       {/* Sprite astronot dengan efek kedip merah saat terkena rintangan */}
       <img
-        src="/astronaut-front.png"
+        src="/idle.png"
         alt="Astronaut"
         className={`h-full w-full object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)] transition-transform duration-100 ${
           isHurt ? "animate-pulse brightness-150 contrast-125 sepia hue-rotate-[300deg]" : ""

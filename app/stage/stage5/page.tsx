@@ -291,12 +291,18 @@ export default function Stage5Page() {
   const GAME_HEIGHT = 576;
   const GROUND_Y = 536;
 
-  // ─── DIMENSI & FISIKA KARAKTER (PERSIS SEPERTI STAGE 3) ────────
+  // ─── KONSTANTA PEMAIN & SPRITE (Sama dengan Stage 1) ────────
+  // Dimensi visual karakter (sedikit diperbesar proporsional 2:3)
+  const VISUAL_W = 54;
+  const VISUAL_H = 82;
+
+  // Dimensi Hitbox Fisika
   const PLAYER_W = 44;
-  const PLAYER_H = 64;
-  const MOVE_SPEED = 4.2;
-  const JUMP_POWER = -12.5;
-  const GRAVITY = 0.58;
+  const PLAYER_H = 76;
+  const MOVE_SPEED = 3.6;
+  const JUMP_POWER = -8.9; // Lompatan pertama lebih terukur / tidak melayang tinggi
+  const DOUBLE_JUMP_POWER = -9.5; // Double jump terukur
+  const GRAVITY = 0.6;
 
   // ─── STATE ENTITAS LEVEL (DARI STORAGE/DEFAULT) ────────────────
   const [platforms, setPlatforms] = useState<Platform[]>(DEFAULT_PLATFORMS);
@@ -326,9 +332,13 @@ export default function Stage5Page() {
   const [playerY, setPlayerY] = useState(DEFAULT_OBJECTS.spawn.y);
   const [velocityY, setVelocityY] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
+  const [facingLeft, setFacingLeft] = useState(false);
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
   const [screenFlash, setScreenFlash] = useState(false);
+
+  // ─── STATE ANIMASI SPRITE (File PNG Tunggal per Frame, sama dengan Stage 1) ────
+  const [playerSprite, setPlayerSprite] = useState<string>("/idle.png");
 
   // ─── STATE MODAL & TERMINAL ───────────────────────────────────
   const [showMaterial, setShowMaterial] = useState(false);
@@ -337,10 +347,11 @@ export default function Stage5Page() {
   // Load konfigurasi kustom dari localStorage agar platform buatan user tetap aktif
   useEffect(() => {
     try {
-      const savedCompleted = localStorage.getItem("stage5_minigame_completed");
-      if (savedCompleted === "true") {
-        setIsMiniGameCompleted(true);
-      }
+      // Status "mini game selesai" TIDAK disimpan/dipulihkan lagi: setiap kali stage 5 dibuka,
+      // portal selalu terkunci sampai pemain mengerjakan Directory Architect di sesi itu.
+      // Sisa kunci lama dibersihkan agar tidak ada status "selesai" yang tertinggal.
+      localStorage.removeItem("stage5_minigame_completed");
+      localStorage.removeItem("stage5_directory_challenge_done");
 
       // Bersihkan data custom localStorage lama agar semua client (termasuk teman saat git pull)
       // selalu tersinkron 100% menggunakan data resmi dari file Git ini
@@ -398,8 +409,16 @@ export default function Stage5Page() {
 
   // ─── REFS GAME LOOP ───────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
-  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
-  playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
+  // Ref pelacak animasi pemain (File PNG Tunggal per Frame, sama dengan Stage 1)
+  const animRef = useRef({
+    action: "idle",
+    frame: 1,
+    lastFrameTime: 0,
+    isDoubleJumping: false,
+    facing: "right" as "right" | "left",
+  });
+  playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
 
   // ─── ACTION HANDLERS INTERAKSI ────────────────────────────────
   const handleOpenMaterial = () => {
@@ -438,11 +457,11 @@ export default function Stage5Page() {
   };
 
   const handleMiniGameComplete = () => {
+    // Portal hanya boleh terbuka bila terminal Directory Architect memang sedang dibuka
+    // (dan kunci sudah diambil). Sinyal "selesai" dari tempat lain diabaikan.
+    if (!hasArchitectKeyRef.current || !showArchitectTerminal) return;
     setIsMiniGameCompleted(true);
     isMiniGameCompletedRef.current = true;
-    try {
-      localStorage.setItem("stage5_minigame_completed", "true");
-    } catch (_) {}
     triggerAlert("🎉 MINI GAME SELESAI! Directory Architect berhasil tervalidasi. Portal Stage 6 kini TELAH TERBUKA!");
   };
 
@@ -512,11 +531,60 @@ export default function Stage5Page() {
         }
       }
 
+      // Handler Lompatan (Lompatan Pertama & Double Jump)
+      if (key === "w" || key === "arrowup" || key === " ") {
+        if (!showMaterial && !showArchitectTerminal) {
+          const p = playerRef.current;
+          if (!p.jumping) {
+            // Kondisi 1: Lompatan Pertama dari tanah/platform
+            p.vy = JUMP_POWER;
+            p.jumping = true;
+            p.canDoubleJump = true;
+            animRef.current.isDoubleJumping = false;
+          } else if (p.canDoubleJump) {
+            // Kondisi 2: Double Jump saat di udara
+            p.vy = DOUBLE_JUMP_POWER;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = true;
+          }
+        }
+      }
+
+      if (key === "a" || key === "arrowleft") {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+        animRef.current.facing = "left";
+      } else if (key === "d" || key === "arrowright") {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+        animRef.current.facing = "right";
+      }
+
       keysPressed.current.add(key);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysPressed.current.delete(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keysPressed.current.delete(key);
+
+      const stillHasA = keysPressed.current.has("a") || keysPressed.current.has("arrowleft");
+      const stillHasD = keysPressed.current.has("d") || keysPressed.current.has("arrowright");
+
+      if (stillHasA) {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+        animRef.current.facing = "left";
+      } else if (stillHasD) {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+        animRef.current.facing = "right";
+      } else if (key === "a" || key === "arrowleft" || key === "d" || key === "arrowright") {
+        setIsWalking(false);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -552,20 +620,26 @@ export default function Stage5Page() {
         let moveX = 0;
         if (keys.has("a") || keys.has("arrowleft")) {
           moveX -= MOVE_SPEED;
+          setFacingLeft(true);
           setFacingRight(false);
+          animRef.current.facing = "left";
         }
         if (keys.has("d") || keys.has("arrowright")) {
           moveX += MOVE_SPEED;
+          setFacingLeft(false);
           setFacingRight(true);
+          animRef.current.facing = "right";
         }
 
-        setIsWalking(moveX !== 0 && !p.jumping);
+        setIsWalking(moveX !== 0);
 
         // 2. LOMPAT PEMAIN
         const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
         if (wantsJump && !p.jumping) {
           p.vy = JUMP_POWER;
           p.jumping = true;
+          p.canDoubleJump = true;
+          animRef.current.isDoubleJumping = false;
         }
 
         // 3. GRAVITASI
@@ -645,6 +719,8 @@ export default function Stage5Page() {
             p.y = plat.y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
           }
         }
 
@@ -680,6 +756,8 @@ export default function Stage5Page() {
               p.y = stairsGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
+              p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
             }
           }
         }
@@ -689,6 +767,8 @@ export default function Stage5Page() {
           p.y = GROUND_Y - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
+          p.canDoubleJump = false;
+          animRef.current.isDoubleJumping = false;
         }
 
         // 8. BATAS KANVAS
@@ -720,6 +800,11 @@ export default function Stage5Page() {
             p.y = levelObjectsRef.current.spawn.y;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
+            setFacingLeft(false);
+            setFacingRight(true);
+            animRef.current.facing = "right";
             triggerLaserDeath();
             break;
           }
@@ -766,6 +851,69 @@ export default function Stage5Page() {
         const distPortalX = Math.abs(p.x + PLAYER_W / 2 - (objs.portal.x + objs.portal.w / 2));
         const distPortalY = Math.abs(p.y + PLAYER_H / 2 - (objs.portal.y + objs.portal.h / 2));
         setIsNearPortal(distPortalX < 70 && distPortalY < 65);
+
+        // Update State Animasi Sprite Pemain (Sama persis dengan Stage 1)
+        const ar = animRef.current;
+        const nowAnim = performance.now();
+        const isAirborne = p.jumping || Math.abs(p.vy) > 0.05;
+        const isFacingLeft = ar.facing === "left";
+        const walking = moveX !== 0;
+
+        let nextSprite = "/idle.png";
+
+        // PRIORITAS 1 - MELOMPAT / DI UDARA (!isGrounded)
+        if (isAirborne) {
+          const isDoubleJump = ar.isDoubleJumping || (!p.canDoubleJump && p.jumping);
+          if (isDoubleJump) {
+            // Animasi bergantian antara /jetpack-1.png dan /jetpack-2.png saat double jump
+            if (ar.action !== "jetpack") {
+              ar.action = "jetpack";
+              ar.frame = 1;
+              ar.lastFrameTime = nowAnim;
+            } else if (nowAnim - ar.lastFrameTime >= 100) {
+              ar.frame = ar.frame === 1 ? 2 : 1;
+              ar.lastFrameTime = nowAnim;
+            }
+            nextSprite = `/jetpack-${ar.frame}.png`;
+          } else {
+            // Lompat pertama biasa: /jump-1.png
+            ar.action = "jump";
+            ar.frame = 1;
+            nextSprite = "/jump-1.png";
+          }
+        }
+        // PRIORITAS 2 - BERJALAN KE KANAN (isWalking && !facingLeft)
+        else if (walking && !isFacingLeft) {
+          if (ar.action !== "walk_r") {
+            ar.action = "walk_r";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 120) {
+            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/walk-r-${ar.frame}.png`;
+        }
+        // PRIORITAS 3 - BERJALAN KE KIRI (isWalking && facingLeft)
+        else if (walking && isFacingLeft) {
+          if (ar.action !== "walk_l") {
+            ar.action = "walk_l";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 120) {
+            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/walk-l-${ar.frame}.png`;
+        }
+        // PRIORITAS 4 - DIAM / IDLE (!isWalking && isGrounded)
+        else {
+          ar.action = "idle";
+          ar.frame = 0;
+          nextSprite = "/idle.png";
+        }
+
+        setPlayerSprite(nextSprite);
 
         // Update State
         setPlayerX(p.x);
@@ -1036,7 +1184,7 @@ export default function Stage5Page() {
           )}
         </div>
 
-        {/* ─── KARAKTER ASTRONOT PEMAIN ──────────────────────────────── */}
+        {/* ─── KARAKTER PEMAIN ───────────────────────────────────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1046,21 +1194,35 @@ export default function Stage5Page() {
             height: `${PLAYER_H}px`,
           }}
         >
+          {/* Kontainer visual VISUAL_W x VISUAL_H terpusat pada hitbox */}
           <div
-            className="h-full w-full transition-transform duration-100 ease-out"
+            className="absolute"
             style={{
-              transformOrigin: "bottom center",
-              transform: isJumping
-                ? `${facingRight ? "scaleX(0.88)" : "scaleX(-0.88)"} scaleY(1.12)`
-                : `${facingRight ? "scaleX(1)" : "scaleX(-1)"} scaleY(1)`,
+              left: `${(PLAYER_W - VISUAL_W) / 2}px`,
+              bottom: "0px",
+              width: `${VISUAL_W}px`,
+              height: `${VISUAL_H}px`,
             }}
           >
+            {/* Elemen sprite utama persegi (VISUAL_H x VISUAL_H) */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/astronaut-front.png"
-              alt="Astronaut"
-              className={`h-full w-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] ${
-                isWalking && !isJumping ? "animate-waddle" : ""
-              }`}
+              src={playerSprite}
+              alt="Player"
+              draggable={false}
+              className="absolute select-none pointer-events-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
+              style={{
+                width: `${VISUAL_H}px`,
+                height: `${VISUAL_H}px`,
+                bottom: 0,
+                left: "50%",
+                objectFit: "contain",
+                objectPosition: "center bottom",
+                transform: ((isJumping || !isWalking) && facingLeft)
+                  ? "translateX(-50%) scaleX(-1)"
+                  : "translateX(-50%)",
+                transformOrigin: "center bottom",
+              }}
             />
           </div>
         </div>

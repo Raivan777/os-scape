@@ -7,21 +7,21 @@
 export type PageSizeMode = 2 | 4 | 8; // Dalam KB
 
 export interface ProcessInput {
-  id: "A" | "B";
+  id: "A" | "B" | string;
   name: string;
   sizeKB: number;
-  color: "cyan" | "purple";
+  color: "cyan" | "purple" | "amber" | "emerald" | "rose" | "blue" | string;
   badgeClass: string;
 }
 
 export interface PageItem {
   id: string; // Misal "A-P0", "A-P1"
-  processId: "A" | "B";
+  processId: "A" | "B" | string;
   processName: string;
   pageIndex: number;
   usedKB: number;
   internalFragKB: number;
-  color: "cyan" | "purple";
+  color: "cyan" | "purple" | "amber" | "emerald" | "rose" | "blue" | string;
 }
 
 export interface FrameItem {
@@ -329,5 +329,275 @@ export function autoMapPagesToFrames(
   }
 
   return updatedFrames;
+}
+
+// ============================================================================
+// FUNGSI & TIPE TAMBAHAN: LAB PAGING (INTERACTIVE CUSTOM SIMULATOR)
+// ============================================================================
+
+/**
+ * Menghitung indeks frame yang di-reserved untuk sistem (OMNI_SYS).
+ * Mempertahankan nilai statis untuk 32 KB dan memberikan pola proporsional (~1/4 frame) untuk ukuran bebas.
+ */
+export function computeReservedFrames(totalFrames: number): number[] {
+  if (totalFrames <= 1) return [];
+  if (totalFrames === 16) return RESERVED_FRAMES_MAP[2]; // [1, 4, 9, 13]
+  if (totalFrames === 8) return RESERVED_FRAMES_MAP[4]; // [1, 5]
+  if (totalFrames === 4) return RESERVED_FRAMES_MAP[8]; // [1]
+
+  const reserved: number[] = [];
+  const step = Math.max(Math.floor(totalFrames / 4), 2);
+  for (let f = 1; f < totalFrames; f += step) {
+    reserved.push(f);
+  }
+  return reserved.length > 0 ? reserved : [1];
+}
+
+/**
+ * Memecah proses menjadi PageItem untuk ukuran Page dan Proses bebas.
+ */
+export function generatePagesForProcessesCustom(
+  processes: ProcessInput[],
+  pageSizeKB: number
+): PageItem[] {
+  const pages: PageItem[] = [];
+  if (pageSizeKB <= 0) return pages;
+
+  for (const proc of processes) {
+    if (proc.sizeKB <= 0) continue;
+    const numPages = Math.ceil(proc.sizeKB / pageSizeKB);
+
+    for (let p = 0; p < numPages; p++) {
+      const isLastPage = p === numPages - 1;
+      let usedKB = pageSizeKB;
+      let internalFragKB = 0;
+
+      if (isLastPage) {
+        const remainder = proc.sizeKB % pageSizeKB;
+        usedKB = remainder === 0 ? pageSizeKB : remainder;
+        internalFragKB = pageSizeKB - usedKB;
+      }
+
+      pages.push({
+        id: `${proc.id}-P${p}`,
+        processId: proc.id,
+        processName: proc.name,
+        pageIndex: p,
+        usedKB,
+        internalFragKB,
+        color: proc.color,
+      });
+    }
+  }
+
+  return pages;
+}
+
+/**
+ * Menginisialisasi Frame fisik untuk ukuran Total Memori dan Ukuran Page dinamis.
+ */
+export function initializeFramesCustom(
+  totalMemoryKB: number,
+  pageSizeKB: number,
+  customReserved?: number[]
+): FrameItem[] {
+  if (totalMemoryKB <= 0 || pageSizeKB <= 0) return [];
+  const totalFrames = Math.floor(totalMemoryKB / pageSizeKB);
+  const reservedIndices = new Set(customReserved ?? computeReservedFrames(totalFrames));
+  const frames: FrameItem[] = [];
+
+  for (let f = 0; f < totalFrames; f++) {
+    const isReserved = reservedIndices.has(f);
+    frames.push({
+      frameIndex: f,
+      isReserved,
+      reservedLabel: isReserved ? "OMNI_SYS" : undefined,
+      mappedPage: null,
+    });
+  }
+
+  return frames;
+}
+
+export interface MappingStep {
+  stepIndex: number;
+  page: PageItem;
+  frameIndex: number;
+  framesSnapshot: FrameItem[];
+  log: string;
+}
+
+/**
+ * Menyusun urutan langkah demi langkah pemetaan Page ke Frame kosong.
+ */
+export function buildMappingSteps(
+  pages: PageItem[],
+  initialFrames: FrameItem[]
+): MappingStep[] {
+  const steps: MappingStep[] = [];
+  let currentFrames: FrameItem[] = initialFrames.map((f) => ({
+    ...f,
+    mappedPage: f.mappedPage ? { ...f.mappedPage } : null,
+  }));
+
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    const freeFrameIdx = currentFrames.findIndex(
+      (f) => !f.isReserved && f.mappedPage === null
+    );
+
+    if (freeFrameIdx === -1) {
+      break; // Memori habis
+    }
+
+    currentFrames = currentFrames.map((f, idx) =>
+      idx === freeFrameIdx ? { ...f, mappedPage: { ...page } } : { ...f }
+    );
+
+    steps.push({
+      stepIndex: i + 1,
+      page,
+      frameIndex: freeFrameIdx,
+      framesSnapshot: currentFrames.map((f) => ({
+        ...f,
+        mappedPage: f.mappedPage ? { ...f.mappedPage } : null,
+      })),
+      log: `Langkah ${i + 1}: Page [${page.id}] (${page.processName}) dialokasikan ke Frame [${freeFrameIdx}]`,
+    });
+  }
+
+  return steps;
+}
+
+export interface CustomPagingMetric {
+  pageSizeKB: number;
+  totalFrames: number;
+  reservedFrames: number;
+  availableFrames: number;
+  totalPages: number;
+  allocatedMemoryKB: number;
+  actualUsedMemoryKB: number;
+  totalInternalFragKB: number;
+  efficiencyPercentage: number;
+  isOutOfMemory: boolean;
+  fragRating: "Rendah" | "Sedang" | "Tinggi";
+  tableOverheadRating: "Rendah" | "Sedang" | "Tinggi";
+}
+
+/**
+ * Menghitung metrik performa paging dinamis untuk beberapa ukuran page.
+ */
+export function getPagingMetricsFor(
+  processes: ProcessInput[],
+  totalMemoryKB: number,
+  pageSizes: number[] = [2, 4, 8]
+): CustomPagingMetric[] {
+  const actualUsedMemoryKB = processes.reduce((sum, p) => sum + Math.max(p.sizeKB, 0), 0);
+
+  return pageSizes.map((pageSize) => {
+    const pages = generatePagesForProcessesCustom(processes, pageSize);
+    const totalFrames = Math.floor(totalMemoryKB / pageSize);
+    const reservedIndices = computeReservedFrames(totalFrames);
+    const reservedFrames = reservedIndices.length;
+    const availableFrames = Math.max(0, totalFrames - reservedFrames);
+    const totalPages = pages.length;
+
+    const isOutOfMemory = totalPages > availableFrames;
+    const totalInternalFragKB = pages.reduce((sum, p) => sum + p.internalFragKB, 0);
+    const allocatedMemoryKB = totalPages * pageSize;
+    const efficiencyPercentage =
+      allocatedMemoryKB > 0
+        ? Number(((actualUsedMemoryKB / allocatedMemoryKB) * 100).toFixed(1))
+        : 0;
+
+    let fragRating: "Rendah" | "Sedang" | "Tinggi" = "Sedang";
+    if (totalInternalFragKB <= 2) fragRating = "Rendah";
+    else if (totalInternalFragKB > 6) fragRating = "Tinggi";
+
+    let tableOverheadRating: "Rendah" | "Sedang" | "Tinggi" = "Sedang";
+    if (totalPages <= 4) tableOverheadRating = "Rendah";
+    else if (totalPages > 10) tableOverheadRating = "Tinggi";
+
+    return {
+      pageSizeKB: pageSize,
+      totalFrames,
+      reservedFrames,
+      availableFrames,
+      totalPages,
+      allocatedMemoryKB,
+      actualUsedMemoryKB,
+      totalInternalFragKB,
+      efficiencyPercentage,
+      isOutOfMemory,
+      fragRating,
+      tableOverheadRating,
+    };
+  });
+}
+
+export interface AddressTranslationDetail {
+  isValidAddress: boolean;
+  logicalKB: number;
+  pageSizeKB: number;
+  pageIndex: number;
+  offsetKB: number;
+  frameIndex: number | null;
+  physicalAddressKB: number | null;
+  message: string;
+}
+
+/**
+ * Menghitung translasi alamat MMU bertahap:
+ * Page = floor(Logical / PageSize)
+ * Offset = Logical % PageSize
+ * Physical = (Frame * PageSize) + Offset
+ */
+export function translateAddress(
+  logicalKB: number,
+  procSizeKB: number,
+  pageSizeKB: number,
+  pageTable: Record<string | number, number | null>
+): AddressTranslationDetail {
+  if (logicalKB < 0 || logicalKB >= procSizeKB) {
+    return {
+      isValidAddress: false,
+      logicalKB,
+      pageSizeKB,
+      pageIndex: Math.floor(Math.max(0, logicalKB) / pageSizeKB),
+      offsetKB: Math.max(0, logicalKB) % pageSizeKB,
+      frameIndex: null,
+      physicalAddressKB: null,
+      message: `TRAP / SEGMENTATION FAULT: Alamat logis ${logicalKB} KB berada di luar batas alokasi proses (${procSizeKB} KB)!`,
+    };
+  }
+
+  const pageIndex = Math.floor(logicalKB / pageSizeKB);
+  const offsetKB = logicalKB % pageSizeKB;
+  const frameIndex = pageTable[pageIndex] ?? null;
+
+  if (frameIndex === null || frameIndex === undefined) {
+    return {
+      isValidAddress: true,
+      logicalKB,
+      pageSizeKB,
+      pageIndex,
+      offsetKB,
+      frameIndex: null,
+      physicalAddressKB: null,
+      message: `PAGE FAULT: Page ${pageIndex} belum dialokasikan ke Frame fisik manapun.`,
+    };
+  }
+
+  const physicalAddressKB = frameIndex * pageSizeKB + offsetKB;
+  return {
+    isValidAddress: true,
+    logicalKB,
+    pageSizeKB,
+    pageIndex,
+    offsetKB,
+    frameIndex,
+    physicalAddressKB,
+    message: `TRANSLASI BERHASIL: Page ${pageIndex} berada di Frame ${frameIndex}. Physical = (${frameIndex} × ${pageSizeKB}) + ${offsetKB} = ${physicalAddressKB} KB.`,
+  };
 }
 

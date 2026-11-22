@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import PagingLabPanel from "@/components/PagingLabPanel";
 import {
   type PageSizeMode,
   type FrameItem,
@@ -90,11 +91,17 @@ export default function Stage3Page() {
   const GAME_HEIGHT = 576;
   const GROUND_Y = 540; // Lantai dasar solid mengikuti garis lantai gambar baru
 
-  // ─── KONSTANTA PEMAIN ────────────────────────────────────────
-  const PLAYER_W = 40;
-  const PLAYER_H = 70;
+  // ─── KONSTANTA PEMAIN & SPRITE (Sama dengan Stage 1) ────────
+  // Dimensi visual karakter (sedikit diperbesar proporsional 2:3)
+  const VISUAL_W = 54;
+  const VISUAL_H = 82;
+
+  // Dimensi Hitbox Fisika
+  const PLAYER_W = 44;
+  const PLAYER_H = 76;
   const MOVE_SPEED = 3.6;
-  const JUMP_POWER = -10;
+  const JUMP_POWER = -8.9; // Lompatan pertama lebih terukur / tidak melayang tinggi
+  const DOUBLE_JUMP_POWER = -9.5; // Double jump terukur
   const GRAVITY = 0.6;
 
   // ─── TITIK AWAL PEMAIN (SPAWN POINT) ─────────────────────────
@@ -110,6 +117,9 @@ export default function Stage3Page() {
   const [facingRight, setFacingRight] = useState(true);
   const [isWalking, setIsWalking] = useState(false);
   const [isHurt, setIsHurt] = useState(false);
+
+  // ─── STATE ANIMASI SPRITE (File PNG Tunggal per Frame, sama dengan Stage 1) ────
+  const [playerSprite, setPlayerSprite] = useState<string>("/idle.png");
 
   // ─── STATE TOAST NOTIFIKASI ──────────────────────────────────
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -246,6 +256,7 @@ export default function Stage3Page() {
   const [showMapperModal, setShowMapperModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [showMetricsModal, setShowMetricsModal] = useState(false);
+  const [showLabModal, setShowLabModal] = useState(false);
   const [hasAutoOpenedMetrics, setHasAutoOpenedMetrics] = useState(false);
 
   // Cek apakah seluruh 3 mode telah selesai
@@ -482,6 +493,14 @@ export default function Stage3Page() {
   // ─── REFS GAME LOOP ──────────────────────────────────────────
   const keysPressed = useRef<Set<string>>(new Set());
   const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
+  // Ref pelacak animasi pemain (File PNG Tunggal per Frame, sama dengan Stage 1)
+  const animRef = useRef({
+    action: "idle",
+    frame: 1,
+    lastFrameTime: 0,
+    isDoubleJumping: false,
+    facing: "right" as "right" | "left",
+  });
   const laserOpenRef = useRef(isAllModesCompleted);
   // Tembok Biru terbuka bersamaan dengan portal menuju Stage 4 setelah menyelesaikan mini-game
   const isWallBlueOpen = isAllModesCompleted;
@@ -504,6 +523,7 @@ export default function Stage3Page() {
     setFacingLeft(false);
     setFacingRight(true);
     playerRef.current = { x: SPAWN_X, y: SPAWN_Y, vy: 0, jumping: false, canDoubleJump: false };
+    animRef.current.isDoubleJumping = false;
 
     if (reason) triggerAlert(reason);
   };
@@ -516,7 +536,7 @@ export default function Stage3Page() {
       // Interaksi tombol E
       if (key === "e") {
         // 1. Komputer Tengah Kanan (Membuka Tembok Kuning di Kiri)
-        if (isNearMidRightSwitch && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearMidRightSwitch && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (!isWallCenterOpen) {
             setIsWallCenterOpen(true);
             triggerAlert("🔓 Tembok Kuning Terbuka! Akses menuju Komputer Kiri sekarang terbuka.");
@@ -527,7 +547,7 @@ export default function Stage3Page() {
         }
 
         // 2. Komputer Kiri (Membuka Tembok Merah di Catwalk Kanan)
-        if (isNearMidLeftSwitch && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearMidLeftSwitch && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (!isWallMaterialOpen) {
             setIsWallMaterialOpen(true);
             triggerAlert("🔓 Tembok Merah Terbuka! Akses Catwalk menuju Komputer Materi (Kanan Atas) sekarang terbuka.");
@@ -538,14 +558,14 @@ export default function Stage3Page() {
         }
 
         // 3. Komputer Materi (Kanan Atas)
-        if (isNearConsole && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearConsole && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           setShowManualModal(true);
           setHasReadMaterial(true);
           return;
         }
 
         // 4. Komputer Tengah (Page Mapper)
-        if (isNearTerminal && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearTerminal && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (!hasReadMaterial) {
             triggerAlert("🔒 Terminal Terkunci! Buka dan pelajari Manual OMNI di komputer kanan atas terlebih dahulu.");
           } else {
@@ -555,7 +575,7 @@ export default function Stage3Page() {
         }
 
         // 5. Portal Keluar (Kiri Atas)
-        if (isNearPortal && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearPortal && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (isAllModesCompleted) {
             router.push("/stage/stage4");
           } else {
@@ -567,12 +587,17 @@ export default function Stage3Page() {
 
       // Tombol ESC menutup modal
       if (key === "escape") {
+        if (showLabModal) {
+          setShowLabModal(false);
+          return;
+        }
         if (showManualModal && !isAllModesCompleted) {
           triggerAlert("✅ Log Manual OMNI dipelajari! Terminal Page Mapper di meja tengah sekarang terbuka.");
         }
         setShowManualModal(false);
         setShowMapperModal(false);
         setShowMetricsModal(false);
+        setShowLabModal(false);
         return;
       }
 
@@ -582,17 +607,19 @@ export default function Stage3Page() {
 
       // Handler Lompatan (Lompatan Pertama & Double Jump)
       if (key === "w" || key === "arrowup" || key === " ") {
-        if (!showManualModal && !showMapperModal && !showMetricsModal) {
+        if (!showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           const p = playerRef.current;
           if (!p.jumping) {
             // Kondisi 1: Lompatan Pertama dari tanah/platform
             p.vy = JUMP_POWER;
             p.jumping = true;
             p.canDoubleJump = true;
+            animRef.current.isDoubleJumping = false;
           } else if (p.canDoubleJump) {
             // Kondisi 2: Double Jump saat di udara
-            p.vy = JUMP_POWER;
+            p.vy = DOUBLE_JUMP_POWER;
             p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = true;
           }
         }
       }
@@ -601,10 +628,12 @@ export default function Stage3Page() {
         setFacingLeft(true);
         setFacingRight(false);
         setIsWalking(true);
+        animRef.current.facing = "left";
       } else if (key === "d" || key === "arrowright") {
         setFacingLeft(false);
         setFacingRight(true);
         setIsWalking(true);
+        animRef.current.facing = "right";
       }
 
       keysPressed.current.add(key);
@@ -621,10 +650,12 @@ export default function Stage3Page() {
         setFacingLeft(true);
         setFacingRight(false);
         setIsWalking(true);
+        animRef.current.facing = "left";
       } else if (stillHasD) {
         setFacingLeft(false);
         setFacingRight(true);
         setIsWalking(true);
+        animRef.current.facing = "right";
       } else if (key === "a" || key === "arrowleft" || key === "d" || key === "arrowright") {
         setIsWalking(false);
       }
@@ -648,6 +679,7 @@ export default function Stage3Page() {
     showManualModal,
     showMapperModal,
     showMetricsModal,
+    showLabModal,
     isAllModesCompleted,
     hasReadMaterial,
     router,
@@ -658,7 +690,7 @@ export default function Stage3Page() {
     let animId: number;
 
     const gameLoop = () => {
-      const isPaused = showManualModal || showMapperModal || showMetricsModal;
+      const isPaused = showManualModal || showMapperModal || showMetricsModal || showLabModal;
 
       if (!isPaused) {
         const p = { ...playerRef.current };
@@ -671,11 +703,13 @@ export default function Stage3Page() {
           moveX -= MOVE_SPEED;
           setFacingLeft(true);
           setFacingRight(false);
+          animRef.current.facing = "left";
         }
         if (keys.has("d") || keys.has("arrowright")) {
           moveX += MOVE_SPEED;
           setFacingLeft(false);
           setFacingRight(true);
+          animRef.current.facing = "right";
         }
 
         setIsWalking(moveX !== 0);
@@ -687,6 +721,7 @@ export default function Stage3Page() {
           p.vy = JUMP_POWER;
           p.jumping = true;
           p.canDoubleJump = true;
+          animRef.current.isDoubleJumping = false;
         }
 
         // 3. GRAVITASI
@@ -732,6 +767,7 @@ export default function Stage3Page() {
             p.vy = 0;
             p.jumping = false;
             p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
           }
         }
 
@@ -762,6 +798,7 @@ export default function Stage3Page() {
               p.vy = 0;
               p.jumping = false;
               p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
             }
           }
         }
@@ -772,6 +809,7 @@ export default function Stage3Page() {
           p.vy = 0;
           p.jumping = false;
           p.canDoubleJump = false;
+          animRef.current.isDoubleJumping = false;
         }
 
         // 9. PENGHALANG PINTU LASER FIREWALL (DI PIJAKAN KIRI ATAS SEBELUM SELESAI)
@@ -920,6 +958,69 @@ export default function Stage3Page() {
         const distMidLeftY = Math.abs(p.y + PLAYER_H / 2 - (consoleMidLeftObj.y + consoleMidLeftObj.h / 2));
         setIsNearMidLeftSwitch(distMidLeftX < 65 && distMidLeftY < 65);
 
+        // Update State Animasi Sprite Pemain (Sama persis dengan Stage 1)
+        const ar = animRef.current;
+        const nowAnim = performance.now();
+        const isAirborne = p.jumping || Math.abs(p.vy) > 0.05;
+        const isFacingLeft = ar.facing === "left";
+        const walking = moveX !== 0;
+
+        let nextSprite = "/idle.png";
+
+        // PRIORITAS 1 - MELOMPAT / DI UDARA (!isGrounded)
+        if (isAirborne) {
+          const isDoubleJump = ar.isDoubleJumping || (!p.canDoubleJump && p.jumping);
+          if (isDoubleJump) {
+            // Animasi bergantian antara /jetpack-1.png dan /jetpack-2.png saat double jump
+            if (ar.action !== "jetpack") {
+              ar.action = "jetpack";
+              ar.frame = 1;
+              ar.lastFrameTime = nowAnim;
+            } else if (nowAnim - ar.lastFrameTime >= 100) {
+              ar.frame = ar.frame === 1 ? 2 : 1;
+              ar.lastFrameTime = nowAnim;
+            }
+            nextSprite = `/jetpack-${ar.frame}.png`;
+          } else {
+            // Lompat pertama biasa: /jump-1.png
+            ar.action = "jump";
+            ar.frame = 1;
+            nextSprite = "/jump-1.png";
+          }
+        }
+        // PRIORITAS 2 - BERJALAN KE KANAN (isWalking && !facingLeft)
+        else if (walking && !isFacingLeft) {
+          if (ar.action !== "walk_r") {
+            ar.action = "walk_r";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 120) {
+            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/walk-r-${ar.frame}.png`;
+        }
+        // PRIORITAS 3 - BERJALAN KE KIRI (isWalking && facingLeft)
+        else if (walking && isFacingLeft) {
+          if (ar.action !== "walk_l") {
+            ar.action = "walk_l";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 120) {
+            ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/walk-l-${ar.frame}.png`;
+        }
+        // PRIORITAS 4 - DIAM / IDLE (!isWalking && isGrounded)
+        else {
+          ar.action = "idle";
+          ar.frame = 0;
+          nextSprite = "/idle.png";
+        }
+
+        setPlayerSprite(nextSprite);
+
         // Sinkronisasi state React
         setPlayerX(p.x);
         setPlayerY(p.y);
@@ -932,7 +1033,7 @@ export default function Stage3Page() {
 
     animId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animId);
-  }, [showManualModal, showMapperModal, showMetricsModal, isAllModesCompleted]);
+  }, [showManualModal, showMapperModal, showMetricsModal, showLabModal, isAllModesCompleted]);
 
   // ============================================================================
   // RENDER UTAMA
@@ -1008,6 +1109,13 @@ export default function Stage3Page() {
 
         {/* Right: Controls */}
         <div className="flex items-center gap-2 text-[10px] font-mono">
+          <button
+            type="button"
+            onClick={() => setShowLabModal(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-950/60 px-2.5 py-1 text-[10px] font-mono font-bold text-cyan-300 hover:bg-cyan-900/70 transition shadow-[0_0_12px_rgba(34,211,238,0.35)] cursor-pointer"
+          >
+            <span>🧪 Lab Paging</span>
+          </button>
           <Link
             href="/stage/stage2"
             className="rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-400 hover:text-white hover:border-white/20 transition"
@@ -1351,7 +1459,7 @@ export default function Stage3Page() {
           </div>
         </div>
 
-        {/* ─── KARAKTER PLAYER (SPRITE SHEET 2D) ────────────── */}
+        {/* ─── KARAKTER PLAYER ──────────────────────────────── */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1361,21 +1469,39 @@ export default function Stage3Page() {
             height: `${PLAYER_H}px`,
           }}
         >
+          {/* Kontainer visual VISUAL_W x VISUAL_H terpusat pada hitbox */}
           <div
-            className={`h-full w-full ${isWalking ? "animate-player-walk" : ""} ${
+            className={`absolute ${
               isHurt ? "brightness-150 contrast-125 sepia animate-pulse" : ""
             }`}
             style={{
-              backgroundImage: "url('/player-sprite.png')",
-              backgroundSize: "400% 400%",
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: !isWalking ? "0% 0%" : undefined,
-              backgroundPositionY: isWalking ? "33.8%" : "0%",
-              imageRendering: "pixelated",
-              transform: facingLeft ? "scaleX(-1)" : "scaleX(1)",
-              transformOrigin: "center bottom",
+              left: `${(PLAYER_W - VISUAL_W) / 2}px`,
+              bottom: "0px",
+              width: `${VISUAL_W}px`,
+              height: `${VISUAL_H}px`,
             }}
-          />
+          >
+            {/* Elemen sprite utama persegi (VISUAL_H x VISUAL_H) */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={playerSprite}
+              alt="Player"
+              draggable={false}
+              className="absolute select-none pointer-events-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
+              style={{
+                width: `${VISUAL_H}px`,
+                height: `${VISUAL_H}px`,
+                bottom: 0,
+                left: "50%",
+                objectFit: "contain",
+                objectPosition: "center bottom",
+                transform: ((isJumping || !isWalking) && facingLeft)
+                  ? "translateX(-50%) scaleX(-1)"
+                  : "translateX(-50%)",
+                transformOrigin: "center bottom",
+              }}
+            />
+          </div>
         </div>
 
       </div>
@@ -1442,6 +1568,15 @@ export default function Stage3Page() {
                     📊 Laporan Metrik
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowLabModal(true)}
+                  className="flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-mono font-bold border border-cyan-400/50 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/30 transition shadow-[0_0_12px_rgba(34,211,238,0.3)]"
+                  title="Buka Lab Paging dengan Input Bebas"
+                >
+                  🧪 Lab Kustom
+                </button>
 
                 <button
                   type="button"
@@ -2268,6 +2403,14 @@ export default function Stage3Page() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => setShowLabModal(true)}
+                  className="rounded-xl border border-cyan-400/60 bg-cyan-950/70 px-4 py-1.5 font-mono text-xs font-bold text-cyan-300 hover:bg-cyan-900/80 transition shadow-[0_0_15px_rgba(34,211,238,0.4)] flex items-center gap-1.5"
+                >
+                  <span>🧪 Buka Lab Paging Kustom</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => {
                     setShowMetricsModal(false);
                     setShowMapperModal(true);
@@ -2291,21 +2434,10 @@ export default function Stage3Page() {
         </div>
       )}
 
-      {/* ─── KEYFRAME ANIMASI PLAYER & WALK ─────────────── */}
-      <style jsx>{`
-        @keyframes playerWalk {
-          from {
-            background-position-x: 0%;
-          }
-          to {
-            /* Untuk 4 frame (0%, 33.33%, 66.66%, 100%), pergeseran total steps(4) adalah 4 * 33.3333% = 133.3333% */
-            background-position-x: 133.3333%;
-          }
-        }
-        .animate-player-walk {
-          animation: playerWalk 0.7s steps(4) infinite;
-        }
-      `}</style>
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/* MODAL 4: LAB PAGING (INTERACTIVE CUSTOM SIMULATOR)      */}
+      {/* ═══════════════════════════════════════════════════════ */}
+      {showLabModal && <PagingLabPanel onClose={() => setShowLabModal(false)} />}
 
     </main>
   );

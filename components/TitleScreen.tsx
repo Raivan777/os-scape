@@ -49,7 +49,7 @@ type Props = {
   nextHref?: string;
 };
 
-export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
+export default function TitleScreen({ nextHref = "/story/prologue" }: Props) {
   const router = useRouter();
   const [visible, setVisible] = useState(0); // jumlah baris boot yang sudah tampil
   const [launching, setLaunching] = useState(false);
@@ -190,7 +190,7 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
             <div className="dome" />
             <div className="saucer" />
             <div className="beam" />
-            <img src="/astronaut-front.png" alt="Astronaut" className="figure" />
+            <img src="/idle.png" alt="Astronaut" className="figure" />
           </div>
         </section>
       </div>
@@ -268,7 +268,7 @@ export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
           position: absolute;
           left: 50%;
           bottom: 2.2rem;
-          width: 4.5rem;
+          width: 5.5rem;
           height: auto;
           transform: translateX(-50%);
           animation: bob 3.2s ease-in-out infinite;

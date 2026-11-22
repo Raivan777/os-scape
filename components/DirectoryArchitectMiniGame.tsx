@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import LaserHeadMiniGame from "./LaserHeadMiniGame";
 import DirectorySearchLab from "./DirectorySearchLab";
 
 interface DirectoryArchitectMiniGameProps {
@@ -21,11 +20,10 @@ interface FileItem {
 
 export default function DirectoryArchitectMiniGame({
   onComplete,
-  onOpenMaterial,
   onOpenQuiz,
 }: DirectoryArchitectMiniGameProps) {
-  // Tab pilihan sub-modul: "directory" (Arsitektur Direktori), "search" (Search Lab), atau "disk" (Disk Scheduling)
-  const [activeTab, setActiveTab] = useState<"directory" | "search" | "disk">("directory");
+  // Tab pilihan sub-modul: "directory" (Arsitektur Direktori) atau "search" (Search Lab)
+  const [activeTab, setActiveTab] = useState<"directory" | "search">("directory");
 
   // Level Arsitektur: 1 = Single-Level, 2 = Two-Level (MFD/UFD), 3 = Hierarchical Tree
   const [currentLevel, setCurrentLevel] = useState<number>(1);
@@ -112,6 +110,8 @@ export default function DirectoryArchitectMiniGame({
         "✅ Tabrakan nama diatasi dengan mengubah nama file menjadi 'telemetry_userB.dat'. Namun, ini tidak praktis untuk sistem besar!"
       );
     } else {
+      setSingleSolved(true);
+      setSingleCollisionDetected(false);
       setCurrentLevel(2);
       setStatusMsg(
         "🚀 Beralih ke Two-Level Directory! MFD sekarang mengisolasi UFD tiap user sehingga nama file sama dapat berdampingan."
@@ -190,12 +190,12 @@ export default function DirectoryArchitectMiniGame({
               </span>
             </div>
             <p className="text-xs text-gray-400 font-mono">
-              Zero-G File System Organizing & Storage Head Calibrator
+              Zero-G File System Organizing &amp; Directory Structures
             </p>
           </div>
         </div>
 
-        {/* Tab Switcher: Directory Architect vs Search Lab vs Disk Head Scheduler */}
+        {/* Tab Switcher: Directory Architect vs Search Lab */}
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl bg-black/50 p-1 border border-white/10 text-xs font-bold font-mono">
             <button
@@ -219,17 +219,6 @@ export default function DirectoryArchitectMiniGame({
               }`}
             >
               🔎 Search Lab
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("disk")}
-              className={`rounded-lg px-3 py-1.5 transition ${
-                activeTab === "disk"
-                  ? "bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.6)]"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              💽 Disk Head Calibrator
             </button>
           </div>
 
@@ -256,20 +245,26 @@ export default function DirectoryArchitectMiniGame({
             </div>
             {/* Level Stepper Indicator */}
             <div className="flex gap-1.5">
-              {[1, 2, 3].map((lvl) => (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => setCurrentLevel(lvl)}
-                  className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
-                    currentLevel === lvl
-                      ? "bg-cyan-400 text-black shadow-[0_0_8px_#22d3ee]"
-                      : "bg-white/10 text-gray-400 hover:text-white"
-                  }`}
-                >
-                  Lvl {lvl}: {lvl === 1 ? "Single" : lvl === 2 ? "Two-Level" : "Tree"}
-                </button>
-              ))}
+              {[1, 2, 3].map((lvl) => {
+                // Level terkunci sampai tantangan sebelumnya selesai
+                const isLocked = (lvl === 2 && !singleSolved) || (lvl === 3 && !level2Success);
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    disabled={isLocked}
+                    title={isLocked ? "Selesaikan tantangan sebelumnya terlebih dahulu" : undefined}
+                    onClick={() => setCurrentLevel(lvl)}
+                    className={`rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                      currentLevel === lvl
+                        ? "bg-cyan-400 text-black shadow-[0_0_8px_#22d3ee]"
+                        : "bg-white/10 text-gray-400 hover:text-white"
+                    } ${isLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+                  >
+                    {isLocked ? "🔒 " : ""}Lvl {lvl}: {lvl === 1 ? "Single" : lvl === 2 ? "Two-Level" : "Tree"}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -549,22 +544,12 @@ export default function DirectoryArchitectMiniGame({
             </div>
           )}
         </div>
-      ) : activeTab === "search" ? (
+      ) : (
         /* Konten Tab 2: Directory Search Lab */
         <div className="mt-4">
           <DirectorySearchLab />
-        </div>
-      ) : (
-        /* Konten Tab 3: Laser Head Disk Scheduling */
-        <div className="mt-4">
-          <LaserHeadMiniGame
-            onCalibrationComplete={onComplete}
-            onOpenMaterial={onOpenMaterial}
-            onOpenQuiz={onOpenQuiz}
-          />
         </div>
       )}
     </div>
   );
 }
-

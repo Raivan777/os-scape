@@ -33,25 +33,35 @@ export default function Stage2Platformer() {
   const GAME_WIDTH = 1000;
   const GAME_HEIGHT = 600;
 
-  // Dimensi Karakter Pemain (Astronaut)
-  const PLAYER_W = 48;
-  const PLAYER_H = 68;
-  const MOVE_SPEED = 4.5;
-  const JUMP_POWER = -12.5;
+  // ─── KONSTANTA PEMAIN & SPRITE (Sama dengan Stage 1) ────────
+  // Dimensi visual karakter (sedikit diperbesar proporsional 2:3)
+  const VISUAL_W = 54;
+  const VISUAL_H = 82;
+
+  // Dimensi Hitbox Fisika
+  const PLAYER_W = 44;
+  const PLAYER_H = 76;
+  const MOVE_SPEED = 3.6;
+  const JUMP_POWER = -8.9; // Lompatan pertama lebih terukur / tidak melayang tinggi
+  const DOUBLE_JUMP_POWER = -9.5; // Double jump terukur
   const GRAVITY = 0.6;
 
   // Titik Awal Pemain (Spawn Point) - Di Platform 3 Paling Kanan
   // Platform 3: x = 737, y = 307, w = 262 (ujung kanan = 999 px)
   const SPAWN_X = 945;
-  const SPAWN_Y = 307 - PLAYER_H; // 239 px (tepat menapak di atas Platform 3)
+  const SPAWN_Y = 307 - PLAYER_H; // tepat menapak di atas Platform 3
 
   // 1. State Pemain & Fisika Dasar
   const [playerX, setPlayerX] = useState(SPAWN_X);
   const [playerY, setPlayerY] = useState(SPAWN_Y);
   const [velocityY, setVelocityY] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
+  const [facingLeft, setFacingLeft] = useState(true);
   const [facingRight, setFacingRight] = useState(false);
   const [isWalking, setIsWalking] = useState(false);
+
+  // State Animasi Sprite (File PNG Tunggal per Frame, sama dengan Stage 1)
+  const [playerSprite, setPlayerSprite] = useState<string>("/idle.png");
 
   // 2. State Sistem Misi
   const [tasks, setTasks] = useState<TaskState>({
@@ -118,9 +128,9 @@ export default function Stage2Platformer() {
   const GATE_STAGE3 = true;
 
   const platforms = [
-    { id: 1, x: 40, y: 543, w: 581, h: 40, label: "Lantai Kiri" },
+    { id: 1, x: 20, y: 543, w: 601, h: 40, label: "Lantai Kiri" },
     { id: 2, x: 652, y: 572, w: 347, h: 26, label: "Lantai Kanan" },
-    { id: 3, x: 109, y: 426, w: 108, h: 26, label: "Platform 1" },
+    { id: 3, x: 102, y: 439, w: 122, h: 26, label: "Platform 1" },
     { id: 4, x: -5, y: 248, w: 386, h: 43, label: "Platform 2" },
     { id: 5, x: 737, y: 307, w: 262, h: 26, label: "Platform 3" },
     { id: 6, x: 809, y: 190, w: 193, h: 26, label: "Platform 4" },
@@ -162,21 +172,16 @@ export default function Stage2Platformer() {
   // Objek Misi Khusus
   const pressurePlateObj = { x: 862, y: 564, w: 58, h: 8 };
   const yellowGateObj = { x: 638, y: 372, w: 14, h: 200 };
-  const leverObj = { x: 190, y: 392, w: 22, h: 34 };
+  const leverObj = { x: 320, y: 509, w: 22, h: 34 };
   const purpleGateObj = { x: 232, y: 90, w: 14, h: 158 };
   const keycardObj = { x: 912, y: 162, w: 26, h: 26 };
   const plasmaPools = [
-    { id: 1, x: 250, y: 531, w: 70, h: 12 },
     { id: 2, x: 400, y: 531, w: 45, h: 12 },
   ];
 
   // Zona Interaksi Platform 2
   const materiZone = { x: 272, y: 170, w: 74, h: 78 };
-  const consoleZone = { x: 36, y: 178, w: 52, h: 70 };
-
-  // Penanda Atas (Dashed Area Header)
-  const markerMateri = { x: 220, y: 50, w: 130, h: 42, label: "[ Area Materi ]" };
-  const markerMiniGame = { x: 150, y: 50, w: 130, h: 42, label: "[ Mini Game ]" };
+  const consoleZone = { x: 74, y: 180, w: 48, h: 68 };
 
   // ──────────────────────────────────────────────────────────────
   // REFS UNTUK GAME LOOP & KONTROL
@@ -184,8 +189,18 @@ export default function Stage2Platformer() {
   const teleportCooldownRef = useRef(0);
   const hasExitedPortalRef = useRef(true);
   const keysPressed = useRef<Set<string>>(new Set());
-  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping });
-  playerRef.current = { x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
+  const playerRef = useRef({ x: playerX, y: playerY, vy: velocityY, jumping: isJumping, canDoubleJump: false });
+
+  // Ref pelacak animasi pemain (File PNG Tunggal per Frame, sama dengan Stage 1)
+  const animRef = useRef({
+    action: "idle",
+    frame: 1,
+    lastFrameTime: 0,
+    isDoubleJumping: false,
+    facing: "left" as "right" | "left",
+  });
+
+  playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
 
   // Timer Toast
   useEffect(() => {
@@ -413,11 +428,60 @@ export default function Stage2Platformer() {
         handleInteractE();
       }
 
+      // Handler Lompatan (Lompatan Pertama & Double Jump)
+      if (key === "w" || key === "arrowup" || key === " ") {
+        if (!showMateriModalRef.current && !showGameModalRef.current && !isSuctioningRef.current) {
+          const p = playerRef.current;
+          if (!p.jumping) {
+            // Kondisi 1: Lompatan Pertama dari tanah/platform
+            p.vy = JUMP_POWER;
+            p.jumping = true;
+            p.canDoubleJump = true;
+            animRef.current.isDoubleJumping = false;
+          } else if (p.canDoubleJump) {
+            // Kondisi 2: Double Jump saat di udara
+            p.vy = DOUBLE_JUMP_POWER;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = true;
+          }
+        }
+      }
+
+      if (key === "a" || key === "arrowleft") {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+        animRef.current.facing = "left";
+      } else if (key === "d" || key === "arrowright") {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+        animRef.current.facing = "right";
+      }
+
       keysPressed.current.add(key);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      keysPressed.current.delete(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      keysPressed.current.delete(key);
+
+      const stillHasA = keysPressed.current.has("a") || keysPressed.current.has("arrowleft");
+      const stillHasD = keysPressed.current.has("d") || keysPressed.current.has("arrowright");
+
+      if (stillHasA) {
+        setFacingLeft(true);
+        setFacingRight(false);
+        setIsWalking(true);
+        animRef.current.facing = "left";
+      } else if (stillHasD) {
+        setFacingLeft(false);
+        setFacingRight(true);
+        setIsWalking(true);
+        animRef.current.facing = "right";
+      } else if (key === "a" || key === "arrowleft" || key === "d" || key === "arrowright") {
+        setIsWalking(false);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -449,20 +513,26 @@ export default function Stage2Platformer() {
       let moveX = 0;
       if (keys.has("a") || keys.has("arrowleft")) {
         moveX -= MOVE_SPEED;
+        setFacingLeft(true);
         setFacingRight(false);
+        animRef.current.facing = "left";
       }
       if (keys.has("d") || keys.has("arrowright")) {
         moveX += MOVE_SPEED;
+        setFacingLeft(false);
         setFacingRight(true);
+        animRef.current.facing = "right";
       }
 
-      setIsWalking(moveX !== 0 && !p.jumping);
+      setIsWalking(moveX !== 0);
 
-      // 2. Lompat (W / Spasi)
+      // 2. Lompat
       const wantsJump = keys.has("w") || keys.has("arrowup") || keys.has(" ");
       if (wantsJump && !p.jumping) {
         p.vy = JUMP_POWER;
         p.jumping = true;
+        p.canDoubleJump = true;
+        animRef.current.isDoubleJumping = false;
       }
 
       // 3. Batasan Penghalang Aktif
@@ -533,6 +603,8 @@ export default function Stage2Platformer() {
         p.y = bY - PLAYER_H;
         p.vy = 0;
         p.jumping = false;
+        p.canDoubleJump = false;
+        animRef.current.isDoubleJumping = false;
       }
 
       // Cek Tekanan Tombol Kuning oleh Kotak (Titik Tengah Kotak bX + 22)
@@ -556,6 +628,8 @@ export default function Stage2Platformer() {
             nextY = barrier.y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
           } else if (p.vy < 0 && p.y >= barrier.y + barrier.h - 12 && nextY <= barrier.y + barrier.h) {
             nextY = barrier.y + barrier.h;
             p.vy = 0;
@@ -583,6 +657,8 @@ export default function Stage2Platformer() {
           p.y = rampSurfaceY - PLAYER_H;
           p.vy = 0;
           p.jumping = false;
+          p.canDoubleJump = false;
+          animRef.current.isDoubleJumping = false;
           onRamp = true;
         }
       }
@@ -598,14 +674,14 @@ export default function Stage2Platformer() {
             p.y = plat.y - PLAYER_H;
             p.vy = 0;
             p.jumping = false;
+            p.canDoubleJump = false;
+            animRef.current.isDoubleJumping = false;
           }
         }
       }
 
       // Rekam Posisi Tanah Aman (Bukan di area kolam plasma)
-      const inPlasmaZone =
-        (playerFootX >= 240 && playerFootX <= 330) ||
-        (playerFootX >= 390 && playerFootX <= 455);
+      const inPlasmaZone = playerFootX >= 390 && playerFootX <= 455;
 
       if (!p.jumping && p.vy === 0 && !inPlasmaZone && p.y < 580) {
         safeGroundRef.current = { x: p.x, y: p.y };
@@ -626,6 +702,8 @@ export default function Stage2Platformer() {
         p.y = safeGroundRef.current.y;
         p.vy = 0;
         p.jumping = false;
+        p.canDoubleJump = false;
+        animRef.current.isDoubleJumping = false;
         const now = Date.now();
         if (now > plasmaToastCooldownRef.current) {
           plasmaToastCooldownRef.current = now + 1500;
@@ -676,6 +754,9 @@ export default function Stage2Platformer() {
               p.x = target.x + (target.w - PLAYER_W) / 2;
               p.y = target.y + target.h - PLAYER_H;
               p.vy = 0;
+              p.jumping = false;
+              p.canDoubleJump = false;
+              animRef.current.isDoubleJumping = false;
               teleportCooldownRef.current = now + 400;
               hasExitedPortalRef.current = false;
               setTeleportToast(`⚡ Teleport: ${portal.name} ➔ ${target.name}`);
@@ -702,8 +783,73 @@ export default function Stage2Platformer() {
         p.y = SPAWN_Y;
         p.vy = 0;
         p.jumping = false;
+        p.canDoubleJump = false;
+        animRef.current.isDoubleJumping = false;
         setTeleportToast("⚠️ Terjatuh ke ruang hampa! Kembali ke titik awal.");
       }
+
+      // Update State Animasi Sprite Pemain (Sama persis dengan Stage 1)
+      const ar = animRef.current;
+      const nowAnim = performance.now();
+      const isAirborne = p.jumping || Math.abs(p.vy) > 0.05;
+      const isFacingLeft = ar.facing === "left";
+      const walking = moveX !== 0;
+
+      let nextSprite = "/idle.png";
+
+      // PRIORITAS 1 - MELOMPAT / DI UDARA (!isGrounded)
+      if (isAirborne) {
+        const isDoubleJump = ar.isDoubleJumping || (!p.canDoubleJump && p.jumping);
+        if (isDoubleJump) {
+          // Animasi bergantian antara /jetpack-1.png dan /jetpack-2.png saat double jump
+          if (ar.action !== "jetpack") {
+            ar.action = "jetpack";
+            ar.frame = 1;
+            ar.lastFrameTime = nowAnim;
+          } else if (nowAnim - ar.lastFrameTime >= 100) {
+            ar.frame = ar.frame === 1 ? 2 : 1;
+            ar.lastFrameTime = nowAnim;
+          }
+          nextSprite = `/jetpack-${ar.frame}.png`;
+        } else {
+          // Lompat pertama biasa: /jump-1.png
+          ar.action = "jump";
+          ar.frame = 1;
+          nextSprite = "/jump-1.png";
+        }
+      }
+      // PRIORITAS 2 - BERJALAN KE KANAN (isWalking && !facingLeft)
+      else if (walking && !isFacingLeft) {
+        if (ar.action !== "walk_r") {
+          ar.action = "walk_r";
+          ar.frame = 1;
+          ar.lastFrameTime = nowAnim;
+        } else if (nowAnim - ar.lastFrameTime >= 120) {
+          ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+          ar.lastFrameTime = nowAnim;
+        }
+        nextSprite = `/walk-r-${ar.frame}.png`;
+      }
+      // PRIORITAS 3 - BERJALAN KE KIRI (isWalking && facingLeft)
+      else if (walking && isFacingLeft) {
+        if (ar.action !== "walk_l") {
+          ar.action = "walk_l";
+          ar.frame = 1;
+          ar.lastFrameTime = nowAnim;
+        } else if (nowAnim - ar.lastFrameTime >= 120) {
+          ar.frame = (ar.frame % 6) + 1; // 1 s.d. 6
+          ar.lastFrameTime = nowAnim;
+        }
+        nextSprite = `/walk-l-${ar.frame}.png`;
+      }
+      // PRIORITAS 4 - DIAM / IDLE (!isWalking && isGrounded)
+      else {
+        ar.action = "idle";
+        ar.frame = 0;
+        nextSprite = "/idle.png";
+      }
+
+      setPlayerSprite(nextSprite);
 
       // Update State
       setPlayerX(p.x);
@@ -887,135 +1033,155 @@ export default function Stage2Platformer() {
         {/* Lapisan Tipis untuk Keterbacaan Visual */}
         <div className="absolute inset-0 bg-black/25 pointer-events-none" />
 
-        {/* 1. Kotak Penanda Putus-Putus MATERI di Area Atas */}
+        {/* 1. Garis Penghalang Laser Permanen (Merah Neon) - Visual transparan penuh (Collision tetap aktif) */}
+
+        {/* Gerbang Kuning (Energy Shield / Blast Door Gaya Industrial) */}
         <div
-          className="absolute z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-purple-400/80 bg-purple-950/30 backdrop-blur-xs pointer-events-none"
+          className="absolute z-15 select-none pointer-events-none"
           style={{
-            left: `${markerMateri.x}px`,
-            top: `${markerMateri.y}px`,
-            width: `${markerMateri.w}px`,
-            height: `${markerMateri.h}px`,
+            left: `${yellowGateObj.x}px`,
+            top: `${yellowGateObj.y}px`,
+            width: `${yellowGateObj.w}px`,
+            height: `${yellowGateObj.h}px`,
           }}
         >
-          <span className="font-mono text-xs font-bold text-purple-300">
-            {markerMateri.label}
-          </span>
-        </div>
-
-        {/* 2. Kotak Penanda Putus-Putus MINI GAME di Area Atas */}
-        <div
-          className="absolute z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-cyan-400/80 bg-cyan-950/30 backdrop-blur-xs pointer-events-none"
-          style={{
-            left: `${markerMiniGame.x}px`,
-            top: `${markerMiniGame.y}px`,
-            width: `${markerMiniGame.w}px`,
-            height: `${markerMiniGame.h}px`,
-          }}
-        >
-          <span className="font-mono text-xs font-bold text-cyan-300">
-            {markerMiniGame.label}
-          </span>
-        </div>
-
-        {/* 3. Pijakan (Platforms) Hijau Transparan */}
-        {platforms.map(plat => (
+          {/* Top Hazard Emitter */}
           <div
-            key={plat.id}
-            className="absolute z-10 flex items-center justify-center rounded-md border-2 border-green-400 bg-green-500/50 shadow-[0_0_15px_rgba(74,222,128,0.4)] backdrop-blur-xs select-none"
+            className="absolute -top-1 left-1/2 -translate-x-1/2 w-[22px] h-[12px] rounded-t-sm z-20 flex items-center justify-center border border-amber-600/90 shadow-[0_2px_6px_rgba(0,0,0,0.7)]"
             style={{
-              left: `${plat.x}px`,
-              top: `${plat.y}px`,
-              width: `${plat.w}px`,
-              height: `${plat.h}px`,
+              backgroundImage: "repeating-linear-gradient(45deg, #eab308, #eab308 3px, #18181b 3px, #18181b 6px)",
             }}
           >
-            <span className="font-mono text-[10px] font-bold text-green-100 drop-shadow">
-              {plat.label} ({plat.w}x{plat.h})
-            </span>
+            <div className="w-3 h-3 rounded-full bg-black/80 flex items-center justify-center border border-amber-700/60">
+              <div
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                  tasks.plate
+                    ? "bg-amber-950/80 border border-amber-900/60 opacity-30 shadow-none"
+                    : "bg-amber-400 shadow-[0_0_8px_#f59e0b] animate-pulse"
+                }`}
+              />
+            </div>
           </div>
-        ))}
 
-        {/* 4. Ramp Zone (Bidang Miring Penghubung Lantai Kiri & Kanan) */}
-        <div
-          className="absolute z-10 pointer-events-none select-none"
-          style={{
-            left: `${ramp.xStart}px`,
-            top: `${ramp.yStart}px`,
-            width: `${ramp.xEnd - ramp.xStart}px`,
-            height: `${ramp.yEnd + ramp.hRight - ramp.yStart}px`,
-          }}
-        >
-          <svg
-            width="100%"
-            height="100%"
-            viewBox={`0 0 ${ramp.xEnd - ramp.xStart} ${ramp.yEnd + ramp.hRight - ramp.yStart}`}
-            className="overflow-visible"
-          >
-            <polygon
-              points={`0,0 ${ramp.xEnd - ramp.xStart},${ramp.yEnd - ramp.yStart} ${ramp.xEnd - ramp.xStart},${ramp.yEnd + ramp.hRight - ramp.yStart} 0,${ramp.hLeft}`}
-              className="fill-green-500/50 stroke-green-400"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-
-        {/* 5. Garis Penghalang Laser Permanen (Merah Neon) */}
-        {barriers.map(bar => (
-          <div
-            key={bar.id}
-            className="absolute z-15 flex flex-col items-center justify-center select-none overflow-hidden rounded-md border-2 border-rose-500 bg-rose-950/70 shadow-[0_0_20px_rgba(244,63,94,0.7)] backdrop-blur-xs"
-            style={{
-              left: `${bar.x}px`,
-              top: `${bar.y}px`,
-              width: `${bar.w}px`,
-              height: `${bar.h}px`,
-            }}
-          >
-            <div className="absolute inset-y-0 w-1 bg-rose-400 shadow-[0_0_8px_#f43f5e] animate-pulse" />
-            <span
-              className="z-10 font-mono text-[8px] font-black uppercase tracking-wider text-rose-200 drop-shadow whitespace-nowrap opacity-90 [writing-mode:vertical-rl]"
+          {/* Energy Shield Panel (Buka/Tutup dengan scaleY origin bottom) */}
+          <div className="absolute inset-x-0 top-[10px] bottom-[10px] overflow-hidden">
+            <div
+              className="w-full h-full relative border-x-2 border-amber-400/90 shadow-[0_0_18px_rgba(251,191,36,0.75),inset_0_0_12px_rgba(217,119,6,0.5)]"
+              style={{
+                backgroundColor: "rgba(120, 53, 15, 0.4)",
+                backgroundImage:
+                  "linear-gradient(rgba(251, 191, 36, 0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(251, 191, 36, 0.35) 1px, transparent 1px)",
+                backgroundSize: "6px 6px",
+                transform: tasks.plate ? "scaleY(0)" : "scaleY(1)",
+                opacity: tasks.plate ? 0 : 1,
+                transformOrigin: "bottom center",
+                transition: "transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
             >
-              ⛔ {bar.label}
-            </span>
+              {/* Shimmer Light Bar */}
+              <div
+                className="absolute inset-x-0 h-16 pointer-events-none animate-shield-shimmer"
+                style={{
+                  background: "linear-gradient(180deg, transparent 0%, rgba(254, 240, 138, 0.5) 50%, transparent 100%)",
+                }}
+              />
+              {/* Core Filament */}
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-amber-200/90 shadow-[0_0_8px_#fde047]" />
+            </div>
           </div>
-        ))}
 
-        {/* Gerbang Kuning (Laser Vertikal di Ramp) — Hilang saat plate selesai */}
-        {!tasks.plate && (
+          {/* Bottom Hazard Emitter */}
           <div
-            className="absolute z-15 flex flex-col items-center justify-center select-none overflow-hidden rounded-md border-2 border-amber-400 bg-amber-950/70 shadow-[0_0_20px_rgba(251,191,36,0.8)] backdrop-blur-xs"
+            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-[22px] h-[12px] rounded-b-sm z-20 flex items-center justify-center border border-amber-600/90 shadow-[0_2px_6px_rgba(0,0,0,0.7)]"
             style={{
-              left: `${yellowGateObj.x}px`,
-              top: `${yellowGateObj.y}px`,
-              width: `${yellowGateObj.w}px`,
-              height: `${yellowGateObj.h}px`,
+              backgroundImage: "repeating-linear-gradient(45deg, #eab308, #eab308 3px, #18181b 3px, #18181b 6px)",
             }}
           >
-            <div className="absolute inset-y-0 w-1 bg-amber-300 shadow-[0_0_8px_#fcd34d] animate-pulse" />
-            <span className="z-10 font-mono text-[8px] font-black uppercase tracking-wider text-amber-200 drop-shadow whitespace-nowrap opacity-90 [writing-mode:vertical-rl]">
-              🔒 GERBANG KUNING
-            </span>
+            <div className="w-3 h-3 rounded-full bg-black/80 flex items-center justify-center border border-amber-700/60">
+              <div
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                  tasks.plate
+                    ? "bg-amber-950/80 border border-amber-900/60 opacity-30 shadow-none"
+                    : "bg-amber-400 shadow-[0_0_8px_#f59e0b] animate-pulse"
+                }`}
+              />
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* Gerbang Ungu (Laser Vertikal di Platform 2) — Hilang saat lever ditarik */}
-        {!tasks.lever && (
+        {/* Gerbang Ungu (Force Field Gate Bergaya Teknologi) */}
+        <div
+          className="absolute z-15 select-none pointer-events-none"
+          style={{
+            left: `${purpleGateObj.x}px`,
+            top: `${purpleGateObj.y}px`,
+            width: `${purpleGateObj.w}px`,
+            height: `${purpleGateObj.h}px`,
+          }}
+        >
+          {/* Top High-Tech Emitter */}
           <div
-            className="absolute z-15 flex flex-col items-center justify-center select-none overflow-hidden rounded-md border-2 border-purple-400 bg-purple-950/70 shadow-[0_0_20px_rgba(192,132,252,0.8)] backdrop-blur-xs"
+            className="absolute -top-1 left-1/2 -translate-x-1/2 w-[22px] h-[12px] rounded-t-sm z-20 flex items-center justify-center border border-purple-500/90 shadow-[0_2px_6px_rgba(0,0,0,0.7)]"
             style={{
-              left: `${purpleGateObj.x}px`,
-              top: `${purpleGateObj.y}px`,
-              width: `${purpleGateObj.w}px`,
-              height: `${purpleGateObj.h}px`,
+              background: "linear-gradient(180deg, #4c1d95 0%, #0f172a 100%)",
             }}
           >
-            <div className="absolute inset-y-0 w-1 bg-purple-300 shadow-[0_0_8px_#d8b4fe] animate-pulse" />
-            <span className="z-10 font-mono text-[8px] font-black uppercase tracking-wider text-purple-200 drop-shadow whitespace-nowrap opacity-90 [writing-mode:vertical-rl]">
-              🔒 GERBANG UNGU
-            </span>
+            <div className="w-3 h-3 rounded-full bg-black/80 flex items-center justify-center border border-purple-700/60">
+              <div
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                  tasks.lever
+                    ? "bg-purple-950/80 border border-purple-900/60 opacity-30 shadow-none"
+                    : "bg-fuchsia-400 shadow-[0_0_10px_#e879f9,0_0_16px_#c084fc] animate-pulse"
+                }`}
+              />
+            </div>
           </div>
-        )}
+
+          {/* Force Field Panel (Buka/Tutup dengan scaleY origin bottom) */}
+          <div className="absolute inset-x-0 top-[10px] bottom-[10px] overflow-hidden">
+            <div
+              className="w-full h-full relative border-x-2 border-purple-400/90 shadow-[0_0_22px_rgba(192,132,252,0.85),inset_0_0_14px_rgba(147,51,234,0.55)] animate-wave-pulse"
+              style={{
+                backgroundColor: "rgba(88, 28, 135, 0.45)",
+                backgroundImage:
+                  "radial-gradient(circle, rgba(232, 121, 249, 0.7) 1px, transparent 1px), linear-gradient(180deg, rgba(168, 85, 247, 0.25) 0%, rgba(192, 132, 252, 0.45) 50%, rgba(168, 85, 247, 0.25) 100%)",
+                backgroundSize: "6px 10px, 100% 100%",
+                transform: tasks.lever ? "scaleY(0)" : "scaleY(1)",
+                opacity: tasks.lever ? 0 : 1,
+                transformOrigin: "bottom center",
+                transition: "transform 0.65s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.65s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            >
+              {/* Subtle Scanning Light */}
+              <div
+                className="absolute inset-x-0 h-12 pointer-events-none animate-scanline"
+                style={{
+                  background: "linear-gradient(180deg, transparent 0%, rgba(232, 121, 249, 0.4) 50%, transparent 100%)",
+                }}
+              />
+              {/* Core Energy Filament */}
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] bg-purple-200/90 shadow-[0_0_10px_#d8b4fe,0_0_18px_#c084fc]" />
+            </div>
+          </div>
+
+          {/* Bottom High-Tech Emitter */}
+          <div
+            className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-[22px] h-[12px] rounded-b-sm z-20 flex items-center justify-center border border-purple-500/90 shadow-[0_2px_6px_rgba(0,0,0,0.7)]"
+            style={{
+              background: "linear-gradient(180deg, #0f172a 0%, #4c1d95 100%)",
+            }}
+          >
+            <div className="w-3 h-3 rounded-full bg-black/80 flex items-center justify-center border border-purple-700/60">
+              <div
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                  tasks.lever
+                    ? "bg-purple-950/80 border border-purple-900/60 opacity-30 shadow-none"
+                    : "bg-fuchsia-400 shadow-[0_0_10px_#e879f9,0_0_16px_#c084fc] animate-pulse"
+                }`}
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Tombol Lantai Kuning (Pressure Plate) di Lantai Kanan */}
         <div
@@ -1030,11 +1196,7 @@ export default function Stage2Platformer() {
             width: `${pressurePlateObj.w}px`,
             height: `${pressurePlateObj.h}px`,
           }}
-        >
-          <span className="text-[7px] font-mono font-black text-black">
-            {tasks.plate ? "AKTIF" : "TOMBOL"}
-          </span>
-        </div>
+        />
 
         {/* Kotak Kargo (Bisa Didorong Kiri-Kanan) */}
         <div
@@ -1052,7 +1214,7 @@ export default function Stage2Platformer() {
           </span>
         </div>
 
-        {/* Tuas di Platform 1 */}
+        {/* Tuas di Lantai Kiri (Setelah Plasma) */}
         <div
           className="absolute z-20 flex flex-col items-center cursor-pointer select-none"
           style={{
@@ -1099,7 +1261,7 @@ export default function Stage2Platformer() {
           </div>
         )}
 
-        {/* 2 Kolam Plasma Hijau Neon di Lantai Kiri */}
+        {/* Kolam Plasma Hijau Neon di Lantai Kiri */}
         {plasmaPools.map(pool => (
           <div
             key={pool.id}
@@ -1110,11 +1272,7 @@ export default function Stage2Platformer() {
               width: `${pool.w}px`,
               height: `${pool.h}px`,
             }}
-          >
-            <span className="text-[7px] font-mono font-black text-black tracking-tight">
-              ☣ PLASMA
-            </span>
-          </div>
+          />
         ))}
 
         {/* Zona Tabung Materi (Tabung Hologram ke-2 di Platform 2) */}
@@ -1291,7 +1449,7 @@ export default function Stage2Platformer() {
           </div>
         )}
 
-        {/* 8. Karakter Pemain (Astronaut) */}
+        {/* 8. Karakter Pemain */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{
@@ -1307,20 +1465,39 @@ export default function Stage2Platformer() {
             }`}
             style={{
               transformOrigin: "bottom center",
-              transform: !isSuctioning
-                ? isJumping
-                  ? `${facingRight ? "scaleX(0.88)" : "scaleX(-0.88)"} scaleY(1.12)`
-                  : `${facingRight ? "scaleX(1)" : "scaleX(-1)"} scaleY(1)`
-                : undefined,
             }}
           >
-            <img
-              src="/astronaut-front.png"
-              alt="Astronaut"
-              className={`h-full w-full object-contain drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)] ${
-                isWalking && !isJumping && !isSuctioning ? "animate-waddle" : ""
-              }`}
-            />
+            {/* Kontainer visual VISUAL_W x VISUAL_H terpusat pada hitbox */}
+            <div
+              className="absolute"
+              style={{
+                left: `${(PLAYER_W - VISUAL_W) / 2}px`,
+                bottom: "0px",
+                width: `${VISUAL_W}px`,
+                height: `${VISUAL_H}px`,
+              }}
+            >
+              {/* Elemen sprite utama persegi (VISUAL_H x VISUAL_H) */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={playerSprite}
+                alt="Player"
+                draggable={false}
+                className="absolute select-none pointer-events-none drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
+                style={{
+                  width: `${VISUAL_H}px`,
+                  height: `${VISUAL_H}px`,
+                  bottom: 0,
+                  left: "50%",
+                  objectFit: "contain",
+                  objectPosition: "center bottom",
+                  transform: ((isJumping || !isWalking) && facingLeft)
+                    ? "translateX(-50%) scaleX(-1)"
+                    : "translateX(-50%)",
+                  transformOrigin: "center bottom",
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -1826,6 +2003,70 @@ export default function Stage2Platformer() {
         }
         .animate-suction {
           animation: suctionAscend 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes laserFlicker {
+          0%, 100% {
+            opacity: 0.95;
+            filter: brightness(1);
+          }
+          20% {
+            opacity: 0.82;
+            filter: brightness(0.9);
+          }
+          40% {
+            opacity: 1;
+            filter: brightness(1.15);
+          }
+          65% {
+            opacity: 0.88;
+            filter: brightness(0.95);
+          }
+          85% {
+            opacity: 0.98;
+            filter: brightness(1.05);
+          }
+        }
+        .animate-laser-flicker {
+          animation: laserFlicker 2s ease-in-out infinite;
+        }
+
+        @keyframes scanlineFlow {
+          0% {
+            background-position: 0 0;
+          }
+          100% {
+            background-position: 0 40px;
+          }
+        }
+        .animate-scanline {
+          animation: scanlineFlow 2.5s linear infinite;
+        }
+
+        @keyframes shieldShimmer {
+          0% {
+            transform: translateY(-100%);
+          }
+          100% {
+            transform: translateY(200%);
+          }
+        }
+        .animate-shield-shimmer {
+          animation: shieldShimmer 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes wavePulse {
+          0%, 100% {
+            opacity: 0.85;
+            filter: drop-shadow(0 0 6px rgba(192, 132, 252, 0.6));
+          }
+          50% {
+            opacity: 1;
+            filter: drop-shadow(0 0 12px rgba(216, 180, 254, 0.9));
+          }
+        }
+        .animate-wave-pulse {
+          animation: wavePulse 1.8s ease-in-out infinite;
         }
       `}</style>
     </main>
