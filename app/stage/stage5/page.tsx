@@ -347,10 +347,11 @@ export default function Stage5Page() {
   // Load konfigurasi kustom dari localStorage agar platform buatan user tetap aktif
   useEffect(() => {
     try {
-      const savedCompleted = localStorage.getItem("stage5_minigame_completed");
-      if (savedCompleted === "true") {
-        setIsMiniGameCompleted(true);
-      }
+      // Status "mini game selesai" TIDAK disimpan/dipulihkan lagi: setiap kali stage 5 dibuka,
+      // portal selalu terkunci sampai pemain mengerjakan Directory Architect di sesi itu.
+      // Sisa kunci lama dibersihkan agar tidak ada status "selesai" yang tertinggal.
+      localStorage.removeItem("stage5_minigame_completed");
+      localStorage.removeItem("stage5_directory_challenge_done");
 
       // Bersihkan data custom localStorage lama agar semua client (termasuk teman saat git pull)
       // selalu tersinkron 100% menggunakan data resmi dari file Git ini
@@ -456,11 +457,11 @@ export default function Stage5Page() {
   };
 
   const handleMiniGameComplete = () => {
+    // Portal hanya boleh terbuka bila terminal Directory Architect memang sedang dibuka
+    // (dan kunci sudah diambil). Sinyal "selesai" dari tempat lain diabaikan.
+    if (!hasArchitectKeyRef.current || !showArchitectTerminal) return;
     setIsMiniGameCompleted(true);
     isMiniGameCompletedRef.current = true;
-    try {
-      localStorage.setItem("stage5_minigame_completed", "true");
-    } catch (_) {}
     triggerAlert("🎉 MINI GAME SELESAI! Directory Architect berhasil tervalidasi. Portal Stage 6 kini TELAH TERBUKA!");
   };
 
