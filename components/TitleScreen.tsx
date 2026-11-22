@@ -49,7 +49,7 @@ type Props = {
   nextHref?: string;
 };
 
-export default function TitleScreen({ nextHref = "/stage/stage1" }: Props) {
+export default function TitleScreen({ nextHref = "/story/prologue" }: Props) {
   const router = useRouter();
   const [visible, setVisible] = useState(0); // jumlah baris boot yang sudah tampil
   const [launching, setLaunching] = useState(false);

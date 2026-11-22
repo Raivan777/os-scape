@@ -1,13 +1,19 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 export default function GlobalBGMPlayer() {
+  const pathname = usePathname();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(0.35); // Default volume 35% agar tidak terlalu keras
   const [hasInteracted, setHasInteracted] = useState<boolean>(false);
+
+  // Jika di halaman prolog cerita (atau halaman awal /), putar prolog.mp3. Di stage lain, putar bgm.mp3.
+  const isPrologue = pathname === "/" || pathname?.startsWith("/story/prologue");
+  const targetTrack = isPrologue ? "/prolog.mp3" : "/bgm.mp3";
 
   // Inisialisasi audio & restore preferensi mute dari localStorage
   useEffect(() => {
@@ -17,7 +23,7 @@ export default function GlobalBGMPlayer() {
       setIsMuted(muted);
     }
 
-    const audio = new Audio("/bgm.mp3");
+    const audio = new Audio(targetTrack);
     audio.loop = true;
     audio.volume = 0.35;
     audioRef.current = audio;
@@ -29,9 +35,7 @@ export default function GlobalBGMPlayer() {
         audioRef.current
           .play()
           .then(() => setIsPlaying(true))
-          .catch(() => {
-            // Browser mungkin masih menahan jika belum cukup gesture
-          });
+          .catch(() => {});
       }
       window.removeEventListener("pointerdown", handleFirstInteraction);
       window.removeEventListener("keydown", handleFirstInteraction);
@@ -47,6 +51,23 @@ export default function GlobalBGMPlayer() {
       audioRef.current = null;
     };
   }, []);
+
+  // Berganti lagu secara mulus saat rute berpindah
+  useEffect(() => {
+    if (!audioRef.current) return;
+    const currentSrc = audioRef.current.getAttribute("src");
+    if (currentSrc !== targetTrack) {
+      audioRef.current.setAttribute("src", targetTrack);
+      audioRef.current.src = targetTrack;
+      audioRef.current.load();
+      if (!isMuted && hasInteracted) {
+        audioRef.current
+          .play()
+          .then(() => setIsPlaying(true))
+          .catch(() => {});
+      }
+    }
+  }, [targetTrack, isMuted, hasInteracted]);
 
   // Sinkronisasi status mute & volume ke elemen audio
   useEffect(() => {
@@ -87,31 +108,17 @@ export default function GlobalBGMPlayer() {
       <button
         type="button"
         onClick={toggleMute}
-        className={`group flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-mono font-bold backdrop-blur-md transition-all duration-200 shadow-lg cursor-pointer ${
+        className={`flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 shadow-lg cursor-pointer ${
           isPlaying && !isMuted
-            ? "border-cyan-400/60 bg-black/85 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.35)] hover:border-cyan-300"
-            : "border-white/20 bg-black/80 text-gray-400 hover:border-white/40 hover:text-white"
+            ? "border-cyan-400/50 bg-black/75 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.3)] hover:scale-105 hover:border-cyan-300 hover:bg-black/90"
+            : "border-white/15 bg-black/70 text-gray-400 hover:border-white/30 hover:text-white"
         }`}
         title={isMuted ? "Nyalakan Musik Latar (BGM)" : "Bisukan Musik Latar (Mute BGM)"}
+        aria-label={isMuted ? "Nyalakan Musik Latar" : "Bisukan Musik Latar"}
       >
-        {/* Ikon Suara / Gelombang */}
         <span className="text-sm">
-          {isMuted || !isPlaying ? "🔇" : "🔊"}
+          {isMuted || !isPlaying ? "🔇" : isPrologue ? "🎵" : "🔊"}
         </span>
-
-        {/* Teks Status */}
-        <span>
-          {isMuted || !isPlaying ? "BGM OFF" : "BGM ON"}
-        </span>
-
-        {/* Indikator Animasi Bar Musik Saat Berbunyi */}
-        {isPlaying && !isMuted && (
-          <span className="flex items-end gap-0.5 h-3 ml-0.5">
-            <span className="w-0.5 h-2 bg-cyan-400 rounded-full animate-pulse" />
-            <span className="w-0.5 h-3 bg-cyan-300 rounded-full animate-bounce" />
-            <span className="w-0.5 h-1.5 bg-cyan-400 rounded-full animate-pulse" />
-          </span>
-        )}
       </button>
     </div>
   );

@@ -1,5 +1,5 @@
-import TitleScreen from "../components/TitleScreen";
+import ProloguePage from "./story/prologue/page";
 
 export default function Home() {
-  return <TitleScreen />;
+  return <ProloguePage />;
 }
