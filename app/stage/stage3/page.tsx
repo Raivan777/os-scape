@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import PagingLabPanel from "@/components/PagingLabPanel";
 import {
   type PageSizeMode,
   type FrameItem,
@@ -255,6 +256,7 @@ export default function Stage3Page() {
   const [showMapperModal, setShowMapperModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [showMetricsModal, setShowMetricsModal] = useState(false);
+  const [showLabModal, setShowLabModal] = useState(false);
   const [hasAutoOpenedMetrics, setHasAutoOpenedMetrics] = useState(false);
 
   // Cek apakah seluruh 3 mode telah selesai
@@ -534,7 +536,7 @@ export default function Stage3Page() {
       // Interaksi tombol E
       if (key === "e") {
         // 1. Komputer Tengah Kanan (Membuka Tembok Kuning di Kiri)
-        if (isNearMidRightSwitch && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearMidRightSwitch && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (!isWallCenterOpen) {
             setIsWallCenterOpen(true);
             triggerAlert("🔓 Tembok Kuning Terbuka! Akses menuju Komputer Kiri sekarang terbuka.");
@@ -545,7 +547,7 @@ export default function Stage3Page() {
         }
 
         // 2. Komputer Kiri (Membuka Tembok Merah di Catwalk Kanan)
-        if (isNearMidLeftSwitch && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearMidLeftSwitch && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (!isWallMaterialOpen) {
             setIsWallMaterialOpen(true);
             triggerAlert("🔓 Tembok Merah Terbuka! Akses Catwalk menuju Komputer Materi (Kanan Atas) sekarang terbuka.");
@@ -556,14 +558,14 @@ export default function Stage3Page() {
         }
 
         // 3. Komputer Materi (Kanan Atas)
-        if (isNearConsole && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearConsole && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           setShowManualModal(true);
           setHasReadMaterial(true);
           return;
         }
 
         // 4. Komputer Tengah (Page Mapper)
-        if (isNearTerminal && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearTerminal && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (!hasReadMaterial) {
             triggerAlert("🔒 Terminal Terkunci! Buka dan pelajari Manual OMNI di komputer kanan atas terlebih dahulu.");
           } else {
@@ -573,7 +575,7 @@ export default function Stage3Page() {
         }
 
         // 5. Portal Keluar (Kiri Atas)
-        if (isNearPortal && !showManualModal && !showMapperModal && !showMetricsModal) {
+        if (isNearPortal && !showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           if (isAllModesCompleted) {
             router.push("/stage/stage4");
           } else {
@@ -585,12 +587,17 @@ export default function Stage3Page() {
 
       // Tombol ESC menutup modal
       if (key === "escape") {
+        if (showLabModal) {
+          setShowLabModal(false);
+          return;
+        }
         if (showManualModal && !isAllModesCompleted) {
           triggerAlert("✅ Log Manual OMNI dipelajari! Terminal Page Mapper di meja tengah sekarang terbuka.");
         }
         setShowManualModal(false);
         setShowMapperModal(false);
         setShowMetricsModal(false);
+        setShowLabModal(false);
         return;
       }
 
@@ -600,7 +607,7 @@ export default function Stage3Page() {
 
       // Handler Lompatan (Lompatan Pertama & Double Jump)
       if (key === "w" || key === "arrowup" || key === " ") {
-        if (!showManualModal && !showMapperModal && !showMetricsModal) {
+        if (!showManualModal && !showMapperModal && !showMetricsModal && !showLabModal) {
           const p = playerRef.current;
           if (!p.jumping) {
             // Kondisi 1: Lompatan Pertama dari tanah/platform
@@ -672,6 +679,7 @@ export default function Stage3Page() {
     showManualModal,
     showMapperModal,
     showMetricsModal,
+    showLabModal,
     isAllModesCompleted,
     hasReadMaterial,
     router,
@@ -682,7 +690,7 @@ export default function Stage3Page() {
     let animId: number;
 
     const gameLoop = () => {
-      const isPaused = showManualModal || showMapperModal || showMetricsModal;
+      const isPaused = showManualModal || showMapperModal || showMetricsModal || showLabModal;
 
       if (!isPaused) {
         const p = { ...playerRef.current };
@@ -1025,7 +1033,7 @@ export default function Stage3Page() {
 
     animId = requestAnimationFrame(gameLoop);
     return () => cancelAnimationFrame(animId);
-  }, [showManualModal, showMapperModal, showMetricsModal, isAllModesCompleted]);
+  }, [showManualModal, showMapperModal, showMetricsModal, showLabModal, isAllModesCompleted]);
 
   // ============================================================================
   // RENDER UTAMA
@@ -1101,6 +1109,13 @@ export default function Stage3Page() {
 
         {/* Right: Controls */}
         <div className="flex items-center gap-2 text-[10px] font-mono">
+          <button
+            type="button"
+            onClick={() => setShowLabModal(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-950/60 px-2.5 py-1 text-[10px] font-mono font-bold text-cyan-300 hover:bg-cyan-900/70 transition shadow-[0_0_12px_rgba(34,211,238,0.35)] cursor-pointer"
+          >
+            <span>🧪 Lab Paging</span>
+          </button>
           <Link
             href="/stage/stage2"
             className="rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-400 hover:text-white hover:border-white/20 transition"
@@ -1553,6 +1568,15 @@ export default function Stage3Page() {
                     📊 Laporan Metrik
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowLabModal(true)}
+                  className="flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-mono font-bold border border-cyan-400/50 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/30 transition shadow-[0_0_12px_rgba(34,211,238,0.3)]"
+                  title="Buka Lab Paging dengan Input Bebas"
+                >
+                  🧪 Lab Kustom
+                </button>
 
                 <button
                   type="button"
@@ -2379,6 +2403,14 @@ export default function Stage3Page() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => setShowLabModal(true)}
+                  className="rounded-xl border border-cyan-400/60 bg-cyan-950/70 px-4 py-1.5 font-mono text-xs font-bold text-cyan-300 hover:bg-cyan-900/80 transition shadow-[0_0_15px_rgba(34,211,238,0.4)] flex items-center gap-1.5"
+                >
+                  <span>🧪 Buka Lab Paging Kustom</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => {
                     setShowMetricsModal(false);
                     setShowMapperModal(true);
@@ -2401,6 +2433,11 @@ export default function Stage3Page() {
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════════════════ */}
+      {/* MODAL 4: LAB PAGING (INTERACTIVE CUSTOM SIMULATOR)      */}
+      {/* ═══════════════════════════════════════════════════════ */}
+      {showLabModal && <PagingLabPanel onClose={() => setShowLabModal(false)} />}
 
     </main>
   );
