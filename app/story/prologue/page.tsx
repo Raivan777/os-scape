@@ -5,9 +5,9 @@ const PROLOGUE_SCENES: StoryScene[] = [
   {
     id: 1,
     title: "Ruang Kuliah Sistem Operasi",
-    speaker: "Mahasiswa Informatika",
+    speaker: "Mahasiswa",
     narration:
-      "Jam perkuliahan terasa panjang. Dari barisan depan ruang kelas, aku memperhatikan dosen yang sedang menerangkan mekanisme inti sistem operasi di papan tulis. Di sekitarku, beberapa teman sudah mulai menahan kantuk...",
+      "Dosen masih menerangkan materi Sistem Operasi di depan kelas. Suasana kelas tenang, tapi kepala rasanya mulai berat mendengarkan teori dari tadi.",
     image: "/story/prolog-1.png",
     altImage: "/story/prolog-1.jpg",
     emoji: "🏫",
@@ -15,29 +15,29 @@ const PROLOGUE_SCENES: StoryScene[] = [
   {
     id: 2,
     title: "Langkah Pulang Menuruni Tangga",
-    speaker: "Mahasiswa Informatika",
+    speaker: "Mahasiswa",
     narration:
-      "Mata kuliah akhirnya selesai. Aku segera membereskan laptop ke dalam tas ransel, lalu bergegas menuruni anak tangga gedung fakultas. Angin malam berhembus sejuk saat aku melangkah di trotoar sepi menuju rumah...",
+      "Kuliah akhirnya selesai. Beres-beres laptop masuk ke dalam tas, lalu turun tangga kampus dan jalan santai pulang ke rumah.",
     image: "/story/prolog-2.png",
     altImage: "/story/prolog-2.jpg",
     emoji: "🎒",
   },
   {
     id: 3,
-    title: "Cahaya Traktor Alien Menyilaukan",
-    speaker: "Mahasiswa Informatika",
+    title: "Cahaya Traktor Alien",
+    speaker: "Mahasiswa",
     narration:
-      "Tiba-tiba langit malam bergetar hebat dengan dengungan mesin kosmik! Sebuah piring terbang raksasa muncul membelah kegelapan, menembakkan berkas cahaya traktor cyan menyilaukan yang seketika mengangkat tubuhku melayang ke angkasa!",
+      "Pas lagi jalan di jalanan yang sepi, tiba-tiba ada cahaya terang menyorot dari atas dan sebuah pesawat asing langsung mengangkatku ke atas.",
     image: "/story/prolog-3.png",
     altImage: "/story/prolog-3.jpg",
     emoji: "🛸",
   },
   {
     id: 4,
-    title: "Ruang Kargo Kapal Induk OMNI",
-    speaker: "Mahasiswa Informatika",
+    title: "Ruang Kargo Kapal Alien",
+    speaker: "Mahasiswa",
     narration:
-      "Aku terbangun di dalam kapal induk alien OMNI yang mencekam. Terdengar derap langkah patroli alien di luar! Beruntung, di sudut ruang kargo ini tersimpan setelan baju astronot lengkap dengan jetpack portabel... Aku harus memakainya dan meretas modul OMNI untuk kabur!",
+      "Tiba-tiba sudah ada di dalam pesawat alien. Banyak alien berlalu-lalang, jadi aku langsung sembunyi ke sebuah ruangan. Di sini ada setelan baju luar angkasa... aku pakai dulu buat cari jalan kabur.",
     image: "/story/prolog-4.png",
     altImage: "/story/prolog-4.jpg",
     emoji: "👨‍🚀",

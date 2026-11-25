@@ -5,9 +5,9 @@ const EPILOGUE_SCENES: StoryScene[] = [
   {
     id: 1,
     title: "Hangar Kapsul Pelarian",
-    speaker: "Mahasiswa Informatika",
+    speaker: "Mahasiswa",
     narration:
-      "Setelah berhasil meretas 6 modul pertahanan OMNI dan merekonstruksi fragmen sistem file, aku akhirnya menemukan ruang hangar pelarian! Sebuah pesawat kecil tampak terparkir siap pakai. Tanpa ragu, aku melompat masuk ke dalam ruang kemudi...",
+      "Setelah berhasil melewati ruangan demi ruangan, akhirnya nemu hanggar dengan pesawat kecil untuk kabur. Langsung naik, tapi agak bingung cara mengoperasikannya.",
     image: "/story/epilog-1.png",
     altImage: "/story/epilog-1.jpg",
     emoji: "🚀",
@@ -15,29 +15,29 @@ const EPILOGUE_SCENES: StoryScene[] = [
   {
     id: 2,
     title: "Tombol Merah & Ledakan Kapal OMNI",
-    speaker: "Mahasiswa Informatika",
+    speaker: "Mahasiswa",
     narration:
-      "Panel kemudi alien dipenuhi tuas dan tombol holografik yang membingungkan. Karena panik dikejar alien, aku asal menekan tombol merah besar yang paling menyala! Tak terduga, meriam laser kapal menembak lurus ke reaktor kapal induk OMNI! Ledakan dahsyat membakar kapal induk alien itu, dan pesawat kecilku terpental melesat di angkasa!",
+      "Karena bingung, asal pencet tombol yang ada. Malah kepencet tombol laser yang bikin kapal induk alien meledak, dan pesawat kecilku terpental keluar.",
     image: "/story/epilog-2.png",
     altImage: "/story/epilog-2.jpg",
     emoji: "💥",
   },
   {
     id: 3,
-    title: "Terbangun Kaget di Meja Belajar",
-    speaker: "Mahasiswa Informatika",
+    title: "Terbangun di Kamar Tidur",
+    speaker: "Mahasiswa",
     narration:
-      "HAHH!! Aku tersentak kaget dengan napas terengah-engah dan dada berdegup kencang. Saat pandanganku mulai jernih... aku tidak sedang melayang di ruang hampa luar angkasa. Aku berada di kamar tidurku sendiri di rumah, tertidur di atas meja belajar!",
+      "Tiba-tiba terbangun kaget di kamar tidur rumah. Ternyata dari tadi ketiduran di depan laptop yang masih menyala.",
     image: "/story/epilog-3.png",
     altImage: "/story/epilog-3.jpg",
     emoji: "🛏️",
   },
   {
     id: 4,
-    title: "Semua Hanyalah Bunga Tidur",
-    speaker: "Mahasiswa Informatika",
+    title: "Ternyata Cuma Mimpi",
+    speaker: "Mahasiswa",
     narration:
-      "Di depanku, layar laptop masih menyala menampilkan slide materi Sistem Operasi, ditemani buku catatan dan cangkir kopi. Aku tersenyum lega sambil menghela napas panjang... Semua petualangan kosmik melarikan diri dari alien tadi hanyalah mimpi karena ketiduran sehabis belajar matkul Sistem Operasi sampai larut malam!",
+      "Melihat buku catatan Sistem Operasi yang masih terbuka di meja, ternyata semua petualangan tadi cuma mimpi gara-gara seharian mikirin materi kuliah.",
     image: "/story/epilog-4.png",
     altImage: "/story/epilog-4.jpg",
     emoji: "☕",
@@ -90,7 +90,7 @@ export default function EpiloguePage() {
       scenes={EPILOGUE_SCENES}
       targetHref="/"
       skipHref="/"
-      completeButtonText="Tim Pembuat (Credits)"
+      completeButtonText="Lihat Tim Pembuat (Credits) 🏆"
       credits={TEAM_CREDITS}
     />
   );
