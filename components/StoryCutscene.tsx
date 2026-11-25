@@ -176,7 +176,7 @@ export default function StoryCutscene({
 
           <div className="mb-8">
             <h2 className="text-center text-xs font-mono uppercase tracking-widest text-gray-400 mb-4">
-              ✨ KELOMPOK INFINITY (6 MAHASISWA) ✨
+               KELOMPOK 7 PIZZA ROLL 
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {credits.map((member, i) => (
@@ -214,7 +214,7 @@ export default function StoryCutscene({
               href="/"
               className="text-xs font-mono font-bold text-cyan-300 hover:text-cyan-100 uppercase tracking-wider transition underline underline-offset-4"
             >
-              🏠 Kembali ke Menu Awal
+             Kembali ke Menu Awal
             </Link>
           </div>
         </div>

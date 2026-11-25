@@ -61,7 +61,7 @@ const TEAM_CREDITS: CreditMember[] = [
     name: "Rama Morista Pratama",
     npm: "088",
     role: "Ketua Kelompok & Dev",
-    task: "Stage 3 Paging (Translasi MMU, Page Frame Mapper, Lab 3-Ukuran Page) & Animasi",
+    task: "Stage 3 Paging (Translasi MMU, Page Frame Mapper, Lab 3-Ukuran Page) & story",
   },
   {
     name: "Diana Ardelia",
@@ -79,7 +79,7 @@ const TEAM_CREDITS: CreditMember[] = [
     name: "Gemmy Dwirismariyan Hagi",
     npm: "074",
     role: "Integrasi & QA Lead",
-    task: "Stage 6 File System & Fragmen Blok, Pengujian End-to-End, Laporan & Dokumentasi",
+    task: "Stage 6 File System & Fragmen Blok",
   },
 ];
 
@@ -90,7 +90,7 @@ export default function EpiloguePage() {
       scenes={EPILOGUE_SCENES}
       targetHref="/"
       skipHref="/"
-      completeButtonText="Lihat Tim Pembuat (Credits) 🏆"
+      completeButtonText="Tim Pembuat (Credits)"
       credits={TEAM_CREDITS}
     />
   );
