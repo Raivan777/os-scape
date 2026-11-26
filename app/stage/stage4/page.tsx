@@ -112,8 +112,12 @@ export default function Stage4Page() {
   // 5. Platform kanan atas area Level 5 (permukaan y = 205, x: 745..1024)
   const rightUpperPlatform = { x: 745, y: 205, w: 279, h: 22 };
 
+  // 6. Platform penghubung menuju Portal Level 5 (menyambung dari midPlatform y = 340 hingga dinding kanan)
+  const portalBridgePlatform = { x: 850, y: 340, w: 174, h: 22 };
+
   const allPlatforms = [
     midPlatform,
+    portalBridgePlatform,
     leftUpperPlatform,
     rightLowerPlatform,
     rightUpperPlatform,
@@ -133,8 +137,8 @@ export default function Stage4Page() {
   const laser2 = { x: 818, y: 205, w: 14, h: 135 };
 
   // ─── KOORDINAT OBJEK INTERAKTIF ─────────────────────────────
-  // Tombol terminal kiri (Lingkaran Merah di platform kiri) — membuka Laser Merah 1
-  const button1Obj = { x: 55, y: 358, w: 50, h: 50 };
+  // Tombol terminal kiri (Tengah layar monitor konsol di sebelah kiri L3) — membuka Laser Merah 1
+  const button1Obj = { x: 227, y: 336, w: 50, h: 32 };
 
   // Modul: Stage 4 — hologram kuis di platform tengah atas
   const hologramObj = { x: 490, y: 268, w: 70, h: 70 };
@@ -142,8 +146,8 @@ export default function Stage4Page() {
   // Life-Support Banker — di platform kanan bawah dekat tangga
   const bankerObj = { x: 865, y: 378, w: 60, h: 60 };
 
-  // Portal Level 5 — di platform kanan atas
-  const portalObj = { x: 920, y: 120, w: 65, h: 85 };
+  // Portal Level 5 — sejajar ketinggian platform/modul utama (y = 340, 255 + 85 = 340)
+  const portalObj = { x: 920, y: 255, w: 65, h: 85 };
 
   // Portal siap hanya jika quiz selesai DAN banker selesai
   const isPortalReady = quizPassed && bankerDone;
@@ -234,6 +238,7 @@ export default function Stage4Page() {
     isDoubleJumping: false,
     facing: "right" as "right" | "left",
   });
+  const lastTimeRef = useRef<number>(0);
 
   playerRef.current = { ...playerRef.current, x: playerX, y: playerY, vy: velocityY, jumping: isJumping };
   laser1ActiveRef.current = isLaser1Active;
@@ -361,22 +366,55 @@ export default function Stage4Page() {
   // ─── GAME LOOP FISIKA 60 FPS ─────────────────────────────────
   useEffect(() => {
     let animId: number;
+    lastTimeRef.current = 0;
+
+    const MIN_X = 5;
+    const MAX_X = GAME_WIDTH - PLAYER_W - 5;
+    const MIN_Y = 0;
+    const MAX_Y = GROUND_Y - PLAYER_H;
 
     const gameLoop = () => {
       if (!showQuizModal && !showMiniGameModal) {
+        const now = performance.now();
+        if (lastTimeRef.current === 0) {
+          lastTimeRef.current = now;
+        }
+        const rawDt = (now - lastTimeRef.current) / 1000;
+        lastTimeRef.current = now;
+        // Clamp dt agar perpindahan tidak meloncat ekstrem saat lag atau pindah tab
+        const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+        const dtScale = dt * 60;
+
         const p = { ...playerRef.current };
         const keys = keysPressed.current;
+
+        // Fallback recovery jika posisi sebelumnya tidak valid / keluar batas map
+        if (
+          !Number.isFinite(p.x) ||
+          !Number.isFinite(p.y) ||
+          p.x < -PLAYER_W ||
+          p.x > GAME_WIDTH ||
+          p.y < -PLAYER_H ||
+          p.y > GAME_HEIGHT
+        ) {
+          p.x = SPAWN_X;
+          p.y = SPAWN_Y;
+          p.vy = 0;
+          p.jumping = false;
+          p.canDoubleJump = false;
+          animRef.current.isDoubleJumping = false;
+        }
 
         // 1. GERAKAN HORIZONTAL
         let moveX = 0;
         if (keys.has("a") || keys.has("arrowleft")) {
-          moveX -= MOVE_SPEED;
+          moveX -= MOVE_SPEED * dtScale;
           setFacingLeft(true);
           setFacingRight(false);
           animRef.current.facing = "left";
         }
         if (keys.has("d") || keys.has("arrowright")) {
-          moveX += MOVE_SPEED;
+          moveX += MOVE_SPEED * dtScale;
           setFacingLeft(false);
           setFacingRight(true);
           animRef.current.facing = "right";
@@ -392,21 +430,26 @@ export default function Stage4Page() {
           animRef.current.isDoubleJumping = false;
         }
 
-        // 3. GRAVITASI
-        p.vy += GRAVITY;
-        p.y += p.vy;
+        // 3. GRAVITASI (dengan batas atas agar tidak keluar kanvas)
+        p.vy += GRAVITY * dtScale;
+        p.y += p.vy * dtScale;
+
+        if (p.y < MIN_Y) {
+          p.y = MIN_Y;
+          if (p.vy < 0) p.vy = 0;
+        }
 
         // 4. LANTAI DASAR
-        if (p.y + PLAYER_H >= GROUND_Y) {
-          p.y = GROUND_Y - PLAYER_H;
-          p.vy = 0;
+        if (p.y >= MAX_Y) {
+          p.y = MAX_Y;
+          if (p.vy > 0) p.vy = 0;
           p.jumping = false;
           p.canDoubleJump = false;
           animRef.current.isDoubleJumping = false;
         }
 
         // 5. TABRAKAN PLATFORM (Mendarat dari atas)
-        let nextPlayerX = p.x + moveX;
+        let nextPlayerX = Math.max(MIN_X, Math.min(p.x + moveX, MAX_X));
 
         for (const plat of allPlatforms) {
           const horizontallyOver =
@@ -417,7 +460,7 @@ export default function Stage4Page() {
           // Mendarat dari ATAS (toleransi mulus agar tidak nyangkut saat melompat atau mendarat)
           if (p.vy >= 0) {
             const footY = p.y + PLAYER_H;
-            const prevFootY = footY - p.vy;
+            const prevFootY = footY - p.vy * dtScale;
             if (footY >= plat.y && prevFootY <= plat.y + 16) {
               p.y = plat.y - PLAYER_H;
               p.vy = 0;
@@ -443,7 +486,7 @@ export default function Stage4Page() {
               animRef.current.isDoubleJumping = false;
             }
           } else if (p.vy >= 0) {
-            if (footY >= stairsGroundY && footY - p.vy <= stairsGroundY + 16) {
+            if (footY >= stairsGroundY && footY - p.vy * dtScale <= stairsGroundY + 16) {
               p.y = stairsGroundY - PLAYER_H;
               p.vy = 0;
               p.jumping = false;
@@ -492,11 +535,12 @@ export default function Stage4Page() {
           }
         }
 
-        // 8. BATAS LAYAR HORIZONTAL
-        p.x = Math.max(5, Math.min(nextPlayerX, GAME_WIDTH - PLAYER_W - 5));
+        // 8. BOUNDARY CLAMPING HORIZONTAL & VERTIKAL
+        p.x = Math.max(MIN_X, Math.min(nextPlayerX, MAX_X));
+        p.y = Math.max(MIN_Y, Math.min(p.y, MAX_Y));
 
-        // 9. BATAS BAWAH LAYAR (jatuh dari kanvas)
-        if (p.y > GAME_HEIGHT) {
+        // 9. FALLBACK RECOVERY (jika melewati batas bawah/luar arena)
+        if (p.y > GAME_HEIGHT || p.x < 0 || p.x + PLAYER_W > GAME_WIDTH) {
           p.x = SPAWN_X;
           p.y = SPAWN_Y;
           p.vy = 0;
@@ -686,18 +730,19 @@ export default function Stage4Page() {
           <div className="mt-1 h-16 w-14 rounded-t-lg border border-dashed border-cyan-500/20 bg-gradient-to-t from-cyan-500/10 to-transparent" />
         </div>
 
-        {/* ─── TOMBOL TERMINAL KIRI (Lingkaran Merah — buka L1) ─── */}
+        {/* ─── TOMBOL TERMINAL KIRI (Monitor biru di platform kiri — buka L1) ─── */}
         <div
-          className={`absolute z-20 flex flex-col items-center justify-center cursor-pointer rounded-xl border-2 transition-all ${
+          className={`absolute z-20 flex flex-col items-center justify-center cursor-pointer rounded-lg border backdrop-blur-[1px] transition-colors ${
             !isLaser1Active
-              ? "border-gray-500/40 bg-gray-900/40 opacity-50"
-              : "border-red-400 bg-red-950/80 shadow-[0_0_20px_rgba(239,68,68,0.6)] hover:scale-105 hover:shadow-[0_0_30px_rgba(239,68,68,0.9)]"
+              ? "border-emerald-400/50 bg-emerald-950/55 opacity-80"
+              : "border-red-400/85 bg-red-950/65 shadow-[0_0_14px_rgba(239,68,68,0.55)] hover:border-red-300 hover:shadow-[0_0_20px_rgba(239,68,68,0.85)]"
           }`}
           style={{
-            left: `${button1Obj.x}px`,
+            left: `${button1Obj.x + button1Obj.w / 2}px`,
             top: `${button1Obj.y}px`,
             width: `${button1Obj.w}px`,
             height: `${button1Obj.h}px`,
+            transform: "translateX(-50%)",
           }}
           onClick={handlePressButton1}
         >
@@ -708,8 +753,18 @@ export default function Stage4Page() {
               </span>
             </div>
           )}
-          <span className="text-lg select-none">{!isLaser1Active ? "✅" : "🔴"}</span>
-          <span className="text-[8px] font-mono font-bold text-red-200 mt-0.5 uppercase tracking-wider">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              !isLaser1Active
+                ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.85)]"
+                : "bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.95)] animate-pulse"
+            }`}
+          />
+          <span
+            className={`text-[7.5px] font-mono font-bold mt-0.5 uppercase tracking-wider leading-none ${
+              !isLaser1Active ? "text-emerald-200" : "text-red-100"
+            }`}
+          >
             {!isLaser1Active ? "OPEN" : "BTN 1"}
           </span>
         </div>
@@ -813,16 +868,16 @@ export default function Stage4Page() {
             </div>
           )}
           <div
-            className={`absolute inset-0 rounded-full border-2 transition-all duration-500 ${
+            className={`absolute inset-0 rounded-full border-2 ${
               isPortalReady
-                ? "border-emerald-400 bg-emerald-500/30 shadow-[0_0_35px_rgba(52,211,153,0.9)] animate-pulse"
+                ? "transition-all duration-500 border-emerald-400 bg-emerald-500/30 shadow-[0_0_35px_rgba(52,211,153,0.9)] animate-pulse"
                 : "border-purple-400 bg-purple-600/30 shadow-[0_0_20px_rgba(168,85,247,0.5)] opacity-70"
             }`}
           />
           <div className="relative z-10 text-center pointer-events-none">
             <span
-              className="text-2xl animate-spin inline-block"
-              style={{ animationDuration: "8s" }}
+              className={isPortalReady ? "text-2xl animate-spin inline-block" : "text-2xl inline-block"}
+              style={isPortalReady ? { animationDuration: "8s" } : undefined}
             >
               {isPortalReady ? "🌀" : "🔒"}
             </span>
